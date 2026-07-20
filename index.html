@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LIFF検証</title>
+  <!-- LIFF SDK -->
+  <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 24px; max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 18px; }
+    .box { background: #f5f5f5; border-radius: 8px; padding: 16px; margin: 12px 0; word-break: break-all; font-size: 14px; }
+    .ok { color: #188038; font-weight: bold; }
+    .ng { color: #c5221f; font-weight: bold; }
+    button { font-size: 16px; padding: 12px 20px; border-radius: 8px; border: none; background: #06c755; color: #fff; width: 100%; margin-top: 12px; }
+    #log { font-size: 12px; color: #555; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>LIFF検証（最小）</h1>
+  <div class="box" id="status">初期化中…</div>
+  <div class="box">userId: <span id="uid">-</span></div>
+  <div class="box">表示名: <span id="dname">-</span></div>
+  <button id="sendBtn" onclick="sendToGas()" disabled>GASへテスト送信</button>
+  <div class="box" id="result">送信結果: -</div>
+  <div class="box"><div id="log"></div></div>
+
+  <script>
+    // ★★ ここを、あなたのLIFF IDに（前回のIDが有効）
+    var LIFF_ID = '2010751229-9u6958G7';
+    // ★★ ここを、GASのWebアプリ実行URL（後で貼り替え）に
+    var GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
+
+    var myUid = null, myName = null;
+
+    function log(msg) {
+      var el = document.getElementById('log');
+      el.textContent += msg + '\n';
+    }
+
+    function init() {
+      log('liff.init 開始 LIFF_ID=' + LIFF_ID);
+      liff.init({ liffId: LIFF_ID })
+        .then(function() {
+          log('liff.init 成功');
+          document.getElementById('status').innerHTML = '<span class="ok">LIFF初期化OK（ループしていません）</span>';
+          if (!liff.isLoggedIn()) {
+            log('未ログイン → liff.login() 実行');
+            liff.login();   // 初回のみトークン取得のため
+            return;
+          }
+          log('ログイン済み → プロフィール取得');
+          return liff.getProfile().then(function(p) {
+            myUid = p.userId;
+            myName = p.displayName;
+            document.getElementById('uid').textContent = p.userId;
+            document.getElementById('dname').textContent = p.displayName;
+            document.getElementById('sendBtn').disabled = false;
+            log('プロフィール取得OK: ' + p.displayName);
+          });
+        })
+        .catch(function(err) {
+          document.getElementById('status').innerHTML = '<span class="ng">LIFF初期化エラー: ' + err + '</span>';
+          log('エラー: ' + JSON.stringify(err));
+        });
+    }
+
+    // GASへ JSONP で送信（POSTのリダイレクト問題を回避）
+    function sendToGas() {
+      if (!myUid) { alert('userId未取得'); return; }
+      if (GAS_URL.indexOf('http') !== 0) { alert('GAS_URLを設定してください'); return; }
+      document.getElementById('result').textContent = '送信結果: 送信中…';
+      var cb = 'cb_' + Date.now();
+      window[cb] = function(res) {
+        document.getElementById('result').innerHTML = '送信結果: <span class="ok">' + JSON.stringify(res) + '</span>';
+        log('GAS応答: ' + JSON.stringify(res));
+        delete window[cb];
+      };
+      var url = GAS_URL + '?mode=test'
+              + '&userId=' + encodeURIComponent(myUid)
+              + '&name=' + encodeURIComponent(myName || '')
+              + '&callback=' + cb;
+      var s = document.createElement('script');
+      s.src = url;
+      s.onerror = function() {
+        document.getElementById('result').innerHTML = '送信結果: <span class="ng">送信失敗（GAS_URL/公開設定を確認）</span>';
+      };
+      document.body.appendChild(s);
+    }
+
+    init();
+  </script>
+</body>
+</html>
