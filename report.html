@@ -149,7 +149,7 @@
 <script>
 // ===== 設定 =====
 const LIFF_ID = '2010751229-dOTJoOzI';                 // 報告メニュー用(立替と同一・同一チャネル)
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec'; // ★現行有効デプロイ(バージョン36)
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec'; // ★現行有効デプロイ(バージョン37 / v3.27)
 
 const $ = (id) => document.getElementById(id);
 let me = null;                 // {userId, name}
@@ -216,17 +216,6 @@ function resizeImage(file, maxDim=1600, quality=0.72){
   });
 }
 
-function currentJob(){
-  const sel = document.querySelector('#v-'+curFormView()+' .jobsel');
-  const jk = sel ? sel.value : '';
-  return { jobKey: jk, job: jobsMap[jk]||{} };
-}
-function curFormView(){
-  if(!$('v-expense').classList.contains('hidden')) return 'expense';
-  if(!$('v-photo').classList.contains('hidden')) return 'photo';
-  if(!$('v-text').classList.contains('hidden')) return 'text';
-  return 'menu';
-}
 function showErr(id, text){ const m=$(id); m.className='msg err'; m.textContent=text; }
 function finishDone(){ showView('done'); setTimeout(()=>{ if(window.liff && liff.isInClient()) liff.closeWindow(); }, 1800); }
 
