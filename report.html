@@ -76,7 +76,6 @@
       <div class="mbtn" onclick="go('handover')"><div class="ico">📝</div>引き継ぎ</div>
       <div class="mbtn" id="mycal-btn" onclick="openMyCalendar(this)"><div class="ico">📅</div>マイカレンダー</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
-      <div class="mbtn soon" onclick="go('hand')"><div class="ico">✋</div>挙手<span class="tag">準備中</span></div>
     </div>
   </div>
 
@@ -141,17 +140,6 @@
     </div>
   </div>
 
-  <!-- 挙手(準備中) -->
-  <div id="v-hand" class="hidden">
-    <button class="back" onclick="go('menu')">← 戻る</button>
-    <h1>✋ 挙手</h1>
-    <div class="card center">
-      <div style="font-size:38px">🚧</div>
-      <div style="font-weight:700;margin:8px 0">準備中です</div>
-      <div>担当エリアの募集通知に手を挙げる機能は<br>現在準備中です。もう少々お待ちください。</div>
-    </div>
-  </div>
-
   <!-- 完了 -->
   <div id="v-done" class="center hidden">
     <div style="font-size:40px;">✅</div>
@@ -175,7 +163,7 @@ const TEXT_META = {
 };
 
 function showView(name){
-  ['loading','menu','expense','photo','text','cancel','hand','done'].forEach(function(v){
+  ['loading','menu','expense','photo','text','cancel','done'].forEach(function(v){
     const el = $('v-'+v) || (v==='loading'?$('loading'):null);
     if (el) el.classList.add('hidden');
   });
@@ -331,7 +319,7 @@ async function submitText(){
     });
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
-    if(type && ['expense','photo','overtime','supply','handover','hand'].indexOf(type)>=0) go(type);
+    if(type && ['expense','photo','overtime','supply','handover'].indexOf(type)>=0) go(type);
     else showView('menu');
   }catch(e){ $('loading').innerHTML='<div class="center">LIFFの初期化に失敗しました。時間をおいて再度お試しください。</div>'; }
 })();
