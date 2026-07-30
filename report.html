@@ -52,6 +52,7 @@
   .back{ background:none; border:none; color:var(--green); font-size:14px; padding:8px 0; cursor:pointer; margin-bottom:4px; }
   .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none; }
   .msg.err{ background:#fdecea; color:#b71c1c; display:block; }
+  .msg.ok{ background:#e8f5e9; color:var(--green-d); display:block; } /* ★v3.39 取消の成功表示 */
   .center{ text-align:center; padding:40px 16px; color:var(--sub); }
   .spinner{ width:26px; height:26px; border:3px solid #ddd; border-top-color:var(--green);
     border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 12px; }
@@ -129,15 +130,21 @@
     <button class="submit" onclick="submitText()">この内容で送信する</button>
   </div>
 
-  <!-- 報告の取消(LINEトークへ案内) -->
+  <!-- 報告の取消(★v3.39 LIFFで完結。旧: LINEトークへの案内文のみ) -->
   <div id="v-cancel" class="hidden">
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>↩️ 報告の取消</h1>
-    <div class="card center">
-      <div style="font-size:38px">💬</div>
-      <div style="font-weight:700;margin:8px 0">LINEのトークから取り消せます</div>
-      <div>この画面を閉じて、LINEのトークで<br><b>「報告」</b>と送信し、<br><b>「↩️ 報告の取消」</b>を選んでください。<br>取り消せる報告が一覧で表示されます。</div>
+    <div id="msg-cancel" class="msg"></div>
+    <div class="card">
+      <!-- 読み込み中 / 候補0件 のときだけ表示 -->
+      <div id="c-note" class="center" style="padding:20px 8px">読み込み中…</div>
+      <div id="c-form" class="hidden">
+        <label class="req">取り消す報告</label>
+        <select id="c-target"></select>
+        <div class="hint">本日ご自身が報告したもののうち、まだ取り消していないものだけが表示されます。</div>
+      </div>
     </div>
+    <button id="c-btn" class="submit hidden" onclick="submitCancel()">この報告を取り消す</button>
   </div>
 
   <!-- 完了 -->
@@ -180,6 +187,7 @@ function go(name){
     $('v-text').dataset.type = name;
   }
   showView(name);
+  if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
 }
 
 // JSONP GET
@@ -298,6 +306,64 @@ async function submitText(){
       cleanDate:job.cleanDate||'', kind:meta.kind, content:content });
     finishDone();
   }catch(err){ btn.disabled=false; btn.textContent='この内容で送信する'; showErr('msg-text','送信に失敗しました。再度お試しください。'); }
+}
+
+// ---- 報告の取消(★v3.39 LIFFで完結) ----
+// ★jobsMap は流用しない。母集合が違う。
+//   jobsMap(exp_jobs)   = 本日 自分に割り当てられた清掃物件
+//   att_cancel_list     = 本日 自分が実際に報告した物件(未取消のみ)
+// ★postGas(no-cors)は使わない。取消は結果が分からないと困る操作なので JSONP GET で応答を読む。
+async function loadCancelList(){
+  const note=$('c-note'), form=$('c-form'), btn=$('c-btn'), sel=$('c-target');
+  const m=$('msg-cancel'); m.className='msg'; m.textContent='';
+  form.classList.add('hidden'); btn.classList.add('hidden');
+  btn.disabled=false; btn.textContent='この報告を取り消す';
+  note.classList.remove('hidden'); note.textContent='読み込み中…';
+  try{
+    const res=await jsonp(GAS_URL+'?mode=att_cancel_list&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){
+      note.classList.add('hidden');
+      showErr('msg-cancel',(res&&res.message)||'取消候補の取得に失敗しました。');
+      return;
+    }
+    const jobs=res.jobs||[];
+    if(!jobs.length){ note.textContent='本日 取り消せる報告はありません。'; return; }
+    sel.innerHTML='';
+    const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+    jobs.forEach(function(j){
+      const o=document.createElement('option'); o.value=j.jobKey;
+      o.textContent=(j.name||j.jobKey)+'（'+(j.hadDone?'完了':'開始')+'報告を取り消す）';
+      sel.appendChild(o);
+    });
+    note.classList.add('hidden');
+    form.classList.remove('hidden'); btn.classList.remove('hidden');
+  }catch(err){
+    note.classList.add('hidden');
+    showErr('msg-cancel','取消候補の取得に失敗しました。電波の良い場所で再度お試しください。');
+  }
+}
+
+async function submitCancel(){
+  const jk=$('c-target').value;
+  if(!jk) return showErr('msg-cancel','取り消す報告を選んでください。');
+  const btn=$('c-btn'); btn.disabled=true; btn.textContent='送信中…';
+  try{
+    const res=await jsonp(GAS_URL+'?mode=att_cancel&userId='+encodeURIComponent(me.userId)
+      +'&jobKey='+encodeURIComponent(jk));
+    if(res && res.ok){
+      // 成功: GASからの message をそのまま出し、二重押しを防ぐため入力を隠す。
+      const m=$('msg-cancel'); m.className='msg ok'; m.textContent=res.message||'取り消しました。';
+      $('c-form').classList.add('hidden'); btn.classList.add('hidden');
+      setTimeout(()=>{ if(window.liff && liff.isInClient()) liff.closeWindow(); }, 2600);
+      return;
+    }
+    // 失敗: GASの message をそのまま画面に出し、押し直せるよう戻す。
+    showErr('msg-cancel',(res&&res.message)||'取り消せませんでした。');
+    btn.disabled=false; btn.textContent='この報告を取り消す';
+  }catch(err){
+    showErr('msg-cancel','送信に失敗しました。電波の良い場所で再度お試しください。取消が済んだかどうかはLINEの通知でご確認ください。');
+    btn.disabled=false; btn.textContent='この報告を取り消す';
+  }
 }
 
 // ---- 起動 ----
