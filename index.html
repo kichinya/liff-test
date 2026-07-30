@@ -10,7 +10,7 @@
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; }
-  .wrap{ max-width:480px; margin:0 auto; padding:16px 14px 96px; }
+  .wrap{ max-width:480px; margin:0 auto; padding:12px 14px 120px; }
   .hello{ font-size:16px; font-weight:700; margin:6px 2px 2px; }
   .lead{ font-size:13px; color:var(--sub); margin:0 2px 14px; line-height:1.6; }
   .card{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px 12px; margin-bottom:14px; }
@@ -41,26 +41,78 @@
   .msg.err{ color:#c62828; }
   .loading{ text-align:center; color:var(--sub); font-size:14px; padding:40px 0; }
   .hint{ font-size:12px; color:#999; margin:2px 2px 12px; }
+  .hidden{ display:none !important; }
+
+  /* ★v3.46 タブ */
+  .tabs{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 12px; }
+  .tab{ padding:11px 6px; border:1px solid var(--line); background:#fff; color:var(--sub);
+    border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; }
+  .tab.on{ background:var(--green); border-color:var(--green); color:#fff; }
+
+  /* ★v3.46 挙手リスト */
+  .dateHead{ font-size:14px; font-weight:700; margin:14px 2px 6px; color:var(--ink); }
+  .job{ display:flex; align-items:flex-start; gap:10px; background:#fff; border:1px solid var(--line);
+    border-radius:11px; padding:11px 12px; margin-bottom:7px; }
+  .job.on{ border-color:var(--green); background:var(--green-l); }
+  .job.done{ background:#fafafa; color:#999; }
+  .job input[type=checkbox]{ width:20px; height:20px; margin-top:2px; flex:none; }
+  .job .body{ flex:1; min-width:0; }
+  .job .nm{ font-size:14px; font-weight:700; line-height:1.4; }
+  .job .sub{ font-size:12px; color:var(--sub); margin-top:3px; }
+  .job .warn{ color:#c62828; }
+  .job select{ margin-top:7px; width:100%; padding:8px; font-size:14px;
+    border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .noteBox{ width:100%; padding:10px; font-size:14px; border:1px solid var(--line);
+    border-radius:10px; background:#fff; margin-top:6px; font-family:inherit; }
+  .secTitle{ font-size:13px; font-weight:700; margin:18px 2px 4px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div id="app">
-    <div class="loading" id="loading">読み込み中…</div>
+  <!-- ★v3.46 タブ切替 -->
+  <div class="tabs" id="tabs" style="display:none;">
+    <button class="tab on" id="tab-shift" onclick="showTab('shift')">清掃希望日</button>
+    <button class="tab" id="tab-hand" onclick="showTab('hand')">挙手する</button>
+  </div>
+
+  <!-- シフト提出（既存） -->
+  <div id="view-shift">
+    <div id="app">
+      <div class="loading" id="loading">読み込み中…</div>
+    </div>
+  </div>
+
+  <!-- ★v3.46 挙手 -->
+  <div id="view-hand" class="hidden">
+    <div class="loading" id="h-note">読み込み中…</div>
+    <div id="h-list"></div>
+    <div id="h-noteWrap" class="hidden">
+      <div class="secTitle">連絡事項（任意）</div>
+      <textarea class="noteBox" id="h-memo" rows="2" placeholder="例）8/3は13時以降なら入れます"></textarea>
+    </div>
   </div>
 </div>
 
+<!-- シフト提出のフッタ（既存） -->
 <div class="bar" id="bar" style="display:none;">
   <div class="count">稼働できる日：<b id="cnt">0</b> 日</div>
   <button class="btn" id="send" onclick="submitShift()">送信する</button>
   <div class="msg" id="msg"></div>
 </div>
 
+<!-- ★v3.46 挙手のフッタ -->
+<div class="bar hidden" id="h-bar">
+  <div class="count">選んだ案件：<b id="h-cnt">0</b> 件</div>
+  <button class="btn" id="h-send" onclick="submitHand()">挙手する</button>
+  <div class="msg" id="h-msg"></div>
+</div>
+
 <script>
   // ============================================================
-  //  清掃希望を送信(シフト提出)  index.html  v3.31
-  //  - LIFF初期化・jsonpパターンは report.html と同一
-  //  - GAS: ?mode=shift_get で前回提出取得 / ?mode=shift_set で差分送信
+  //  清掃希望を送信  index.html  v3.46
+  //  ・タブ1「清掃希望日」= シフト提出（v3.31のまま。ロジック不変）
+  //  ・タブ2「挙手する」  = 未アサイン案件へ挙手（★v3.46 新規）
+  //  - GAS: ?mode=shift_get / shift_set / hand_list / hand_submit
   // ============================================================
   var LIFF_ID = '2010751229-9u6958G7';   // 挙手/清掃希望 LIFF(既存)
   var GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
@@ -69,6 +121,11 @@
   var ME = null;                          // { userId, name }
   var selected = {};                      // { 'YYYY-MM-DD': true }
 
+  var HAND_ITEMS = [];                    // ★v3.46 hand_list の結果
+  var handSel = {};                       // ★v3.46 { jobKey: 'HHMM' or '' }
+  var handLoaded = false;
+
+  function $(id){ return document.getElementById(id); }
   function closeLiff(){ if (window.liff && liff.isInClient && liff.isInClient()) liff.closeWindow(); }
 
   // ---- JSONP(report.html と同一パターン) ----
@@ -93,9 +150,26 @@
   }
   function startOfToday(){ var d=new Date(); d.setHours(0,0,0,0); return d; }
 
-  // ---- カレンダー描画(今日〜RANGE_DAYS先。月ごとにブロック) ----
+  // ============================================================
+  //  ★v3.46 タブ切替
+  // ============================================================
+  function showTab(name){
+    var isShift = (name === 'shift');
+    $('view-shift').classList.toggle('hidden', !isShift);
+    $('view-hand').classList.toggle('hidden', isShift);
+    $('tab-shift').classList.toggle('on', isShift);
+    $('tab-hand').classList.toggle('on', !isShift);
+    $('bar').style.display = isShift ? 'block' : 'none';
+    $('h-bar').classList.toggle('hidden', isShift);
+    // 挙手タブは開くたびに取り直す（他の人に決まった案件を出さないため）
+    if (!isShift) loadHandList();
+  }
+
+  // ============================================================
+  //  タブ1: シフト提出（v3.31 のまま・ロジック不変）
+  // ============================================================
   function renderCalendar(){
-    var app = document.getElementById('app');
+    var app = $('app');
     app.innerHTML = '';
 
     var hello = document.createElement('div');
@@ -119,7 +193,8 @@
       cur.setMonth(cur.getMonth()+1);
     }
     updateCount();
-    document.getElementById('bar').style.display='block';
+    $('tabs').style.display = 'grid';     // ★v3.46 準備できてからタブを出す
+    $('bar').style.display='block';
   }
 
   function buildMonth(year, month, today, end){
@@ -174,11 +249,11 @@
 
   function updateCount(){
     var n = Object.keys(selected).length;
-    document.getElementById('cnt').textContent = n;
+    $('cnt').textContent = n;
   }
 
   function setMsg(text, cls){
-    var m = document.getElementById('msg');
+    var m = $('msg');
     m.textContent = text || '';
     m.className = 'msg' + (cls? ' '+cls : '');
   }
@@ -186,7 +261,7 @@
   // ---- 送信(shift_set) ----
   function submitShift(){
     if (!ME || !ME.userId){ setMsg('ユーザー情報が取得できていません。', 'err'); return; }
-    var btn = document.getElementById('send');
+    var btn = $('send');
     btn.disabled = true; setMsg('送信中…','');
     var days = Object.keys(selected).sort().join(',');
     var url = GAS_URL + '?mode=shift_set&userId=' + encodeURIComponent(ME.userId)
@@ -201,6 +276,176 @@
     }).catch(function(){
       btn.disabled = false;
       setMsg('通信エラーが発生しました。もう一度お試しください。', 'err');
+    });
+  }
+
+  // ============================================================
+  //  ★v3.46 タブ2: 挙手
+  // ============================================================
+  function setHandMsg(text, cls){
+    var m = $('h-msg');
+    m.textContent = text || '';
+    m.className = 'msg' + (cls? ' '+cls : '');
+  }
+
+  function loadHandList(){
+    if (!ME || !ME.userId){ $('h-note').textContent = 'ユーザー情報が取得できていません。'; return; }
+    handSel = {};
+    handLoaded = false;
+    $('h-list').innerHTML = '';
+    $('h-noteWrap').classList.add('hidden');
+    $('h-note').classList.remove('hidden');
+    $('h-note').textContent = '読み込み中…';
+    $('h-send').classList.add('hidden');
+    setHandMsg('');
+    updateHandCount();
+
+    jsonp(GAS_URL + '?mode=hand_list&userId=' + encodeURIComponent(ME.userId))
+      .then(function(res){
+        if (!res || res.ok !== true){
+          $('h-note').textContent = (res && res.message) ? res.message : '取得に失敗しました。';
+          return;
+        }
+        HAND_ITEMS = res.items || [];
+        handLoaded = true;
+        renderHandList();
+      })
+      .catch(function(){
+        $('h-note').textContent = '通信エラーが発生しました。開き直してください。';
+      });
+  }
+
+  function renderHandList(){
+    var list = $('h-list');
+    list.innerHTML = '';
+
+    if (!HAND_ITEMS.length){
+      $('h-note').textContent = '今は担当が決まっていない案件がありません。';
+      return;
+    }
+    $('h-note').classList.add('hidden');
+
+    var lead = document.createElement('div');
+    lead.className = 'lead';
+    lead.textContent = '入れる案件にチェックを入れて「挙手する」を押してください。担当が決まりましたらご連絡します。';
+    list.appendChild(lead);
+
+    var lastDate = '';
+    HAND_ITEMS.forEach(function(it){
+      if (it.dateLabel !== lastDate){
+        var h = document.createElement('div');
+        h.className = 'dateHead';
+        h.textContent = it.dateLabel;
+        list.appendChild(h);
+        lastDate = it.dateLabel;
+      }
+      list.appendChild(buildJobRow(it));
+    });
+
+    $('h-noteWrap').classList.remove('hidden');
+    $('h-send').classList.remove('hidden');
+    updateHandCount();
+  }
+
+  function buildJobRow(it){
+    var row = document.createElement('div');
+    row.className = 'job' + (it.raised ? ' done' : '');
+
+    var cbx = document.createElement('input');
+    cbx.type = 'checkbox';
+    cbx.disabled = !!it.raised;
+
+    var body = document.createElement('div');
+    body.className = 'body';
+
+    var nm = document.createElement('div');
+    nm.className = 'nm';
+    nm.textContent = it.propName;
+    body.appendChild(nm);
+
+    var sub = document.createElement('div');
+    sub.className = 'sub' + (it.sameDay ? ' warn' : '');
+    sub.textContent = it.timeLabel +
+      (it.sameDay ? ('　⚠️同日IN' + (it.nextIn ? ' ' + it.nextIn : '') + ' に次のお客様') : '');
+    body.appendChild(sub);
+
+    if (it.raised){
+      var done = document.createElement('div');
+      done.className = 'sub';
+      done.textContent = '挙手済み';
+      body.appendChild(done);
+    }
+
+    // 同日INは前倒しが必要なため、希望時刻を選ばせない
+    var sel = null;
+    if (!it.raised && !it.sameDay){
+      sel = document.createElement('select');
+      sel.className = 'hidden';
+      sel.appendChild(new Option('開始時刻：おまかせ', ''));
+      for (var h=8; h<=16; h++){
+        for (var m=0; m<60; m+=30){
+          var v = ('0'+h).slice(-2) + ('0'+m).slice(-2);
+          var lb = ('0'+h).slice(-2) + ':' + ('0'+m).slice(-2);
+          sel.appendChild(new Option(lb + ' から希望', v));
+        }
+      }
+      sel.addEventListener('change', function(){
+        if (handSel[it.key] !== undefined) handSel[it.key] = sel.value;
+      });
+      body.appendChild(sel);
+    }
+
+    cbx.addEventListener('change', function(){
+      if (cbx.checked){
+        handSel[it.key] = sel ? sel.value : '';
+        row.classList.add('on');
+        if (sel) sel.classList.remove('hidden');
+      } else {
+        delete handSel[it.key];
+        row.classList.remove('on');
+        if (sel) sel.classList.add('hidden');
+      }
+      updateHandCount();
+    });
+
+    row.appendChild(cbx);
+    row.appendChild(body);
+    return row;
+  }
+
+  function updateHandCount(){
+    $('h-cnt').textContent = Object.keys(handSel).length;
+  }
+
+  function submitHand(){
+    if (!ME || !ME.userId){ setHandMsg('ユーザー情報が取得できていません。', 'err'); return; }
+    var keys = Object.keys(handSel);
+    if (!keys.length){ setHandMsg('入れる案件にチェックを入れてください。', 'err'); return; }
+
+    var btn = $('h-send');
+    btn.disabled = true; setHandMsg('送信中…','');
+
+    var items = keys.map(function(k){ return k + '|' + (handSel[k] || ''); }).join(',');
+    var note = ($('h-memo').value || '').trim().slice(0, 200);
+
+    var url = GAS_URL + '?mode=hand_submit&userId=' + encodeURIComponent(ME.userId)
+            + '&items=' + encodeURIComponent(items)
+            + '&note=' + encodeURIComponent(note);
+
+    jsonp(url).then(function(res){
+      btn.disabled = false;
+      if (res && res.ok){
+        setHandMsg(res.message || '挙手を受け付けました。', 'ok');
+        $('h-list').classList.add('hidden');
+        $('h-noteWrap').classList.add('hidden');
+        btn.classList.add('hidden');
+        setTimeout(closeLiff, 2600);
+      } else {
+        setHandMsg((res && res.message) ? res.message : '送信に失敗しました。', 'err');
+      }
+    }).catch(function(){
+      btn.disabled = false;
+      setHandMsg('送信に失敗しました。電波の良い場所で再度お試しください。\n受付できたかどうかはLINEの通知でご確認ください。', 'err');
     });
   }
 
@@ -219,7 +464,7 @@
           res.days.forEach(function(d){ selected[d] = true; });
         } else if (res && res.ok === false){
           // スタッフ未登録など。カレンダーは出すが注意表示。
-          document.getElementById('loading').innerHTML =
+          $('loading').innerHTML =
             (res.message || 'スタッフ情報が確認できませんでした。マネージャーへご連絡ください。');
           return;
         }
@@ -227,7 +472,7 @@
 
       renderCalendar();
     }catch(e){
-      document.getElementById('loading').innerHTML =
+      $('loading').innerHTML =
         'LINEアプリ内で開いてください。<br>（このページはLINEのリッチメニューから開きます）';
     }
   })();
