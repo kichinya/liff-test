@@ -109,9 +109,10 @@
 
 <script>
   // ============================================================
-  //  清掃希望を送信  index.html  v3.46
+  //  清掃希望を送信  index.html  v3.53
   //  ・タブ1「清掃希望日」= シフト提出（v3.31のまま。ロジック不変）
   //  ・タブ2「挙手する」  = 未アサイン案件へ挙手（★v3.46 新規）
+  //  ・★v3.53 希望開始時刻は「チェックアウト時刻〜22:00」に限定
   //  - GAS: ?mode=shift_get / shift_set / hand_list / hand_submit
   // ============================================================
   var LIFF_ID = '2010751229-9u6958G7';   // 挙手/清掃希望 LIFF(既存)
@@ -382,28 +383,43 @@
       sel = document.createElement('select');
       sel.className = 'hidden';
       sel.appendChild(new Option('開始時刻：おまかせ', ''));
-      for (var h=8; h<=16; h++){
-        for (var m=0; m<60; m+=30){
-          var v = ('0'+h).slice(-2) + ('0'+m).slice(-2);
-          var lb = ('0'+h).slice(-2) + ':' + ('0'+m).slice(-2);
-          sel.appendChild(new Option(lb + ' から希望', v));
-        }
-      }
+
+      // ★v3.53 選べるのは「ゲストのチェックアウト時刻 〜 22:00 開始」まで。
+      //   チェックアウト前は前のお客様がいるため清掃に入れない。
+      //   サーバから outMin(分) が来なければ 10:00 を既定にする。
+      var FROM = (typeof it.outMin === 'number' && it.outMin >= 0) ? it.outMin : 600;
+      var TO   = 22 * 60;
+      var mins = [];
+      for (var t = FROM; t <= TO; t += 30) mins.push(t);
+      if (mins.length === 0 || mins[mins.length-1] !== TO) mins.push(TO);
+      mins.forEach(function(t){
+        var hh = ('0' + Math.floor(t/60)).slice(-2);
+        var mm = ('0' + (t%60)).slice(-2);
+        sel.appendChild(new Option(hh + ':' + mm + ' から希望', hh + mm));
+      });
+
       sel.addEventListener('change', function(){
         if (handSel[it.key] !== undefined) handSel[it.key] = sel.value;
       });
       body.appendChild(sel);
+
+      // チェックアウト時刻の案内（選択欄と一緒に出す）
+      var hint = document.createElement('div');
+      hint.className = 'sub hidden';
+      hint.textContent = 'チェックアウト' + (it.outLabel ? '（' + it.outLabel + '）' : '') + '以降で選べます';
+      body.appendChild(hint);
+      sel._hint = hint;
     }
 
     cbx.addEventListener('change', function(){
       if (cbx.checked){
         handSel[it.key] = sel ? sel.value : '';
         row.classList.add('on');
-        if (sel) sel.classList.remove('hidden');
+        if (sel){ sel.classList.remove('hidden'); if (sel._hint) sel._hint.classList.remove('hidden'); }
       } else {
         delete handSel[it.key];
         row.classList.remove('on');
-        if (sel) sel.classList.add('hidden');
+        if (sel){ sel.classList.add('hidden'); if (sel._hint) sel._hint.classList.add('hidden'); }
       }
       updateHandCount();
     });
