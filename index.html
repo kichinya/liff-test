@@ -124,11 +124,12 @@
 
 <script>
   // ============================================================
-  //  清掃希望を送信  index.html  v3.58
+  //  清掃希望を送信  index.html  v3.69
   //  ・タブ1「清掃希望日」= シフト提出（v3.31のまま。ロジック不変）
   //  ・タブ2「挙手する」  = 未アサイン案件へ挙手（★v3.46 新規）
   //  ・★v3.53 希望開始時刻は「チェックアウト時刻〜22:00」に限定
   //  ・★v3.58 清掃希望日タブに、担当が決まっている予定を表示（印＋一覧）
+  //  ・★v3.69 挙手に滞在期間・宿泊人数を表示。同日INも間に合う範囲で時刻を選べる
   //  - GAS: ?mode=shift_get / shift_set / hand_list / hand_submit
   // ============================================================
   var LIFF_ID = '2010751229-9u6958G7';   // 挙手/清掃希望 LIFF(既存)
@@ -441,6 +442,17 @@
       (it.sameDay ? ('　⚠️同日IN' + (it.nextIn ? ' ' + it.nextIn : '') + ' に次のお客様') : '');
     body.appendChild(sub);
 
+    // ★v3.69 汚れ具合の目安（滞在期間・宿泊人数）
+    var memo = [];
+    if (it.stayLabel) memo.push('滞在 ' + it.stayLabel);
+    if (it.guests !== '' && it.guests != null) memo.push('宿泊 ' + it.guests + '名');
+    if (memo.length){
+      var mm = document.createElement('div');
+      mm.className = 'sub';
+      mm.textContent = memo.join(' ／ ');
+      body.appendChild(mm);
+    }
+
     if (it.raised){
       var done = document.createElement('div');
       done.className = 'sub';
@@ -448,18 +460,20 @@
       body.appendChild(done);
     }
 
-    // 同日INは前倒しが必要なため、希望時刻を選ばせない
+    // ★v3.69 希望開始時刻の範囲は、チェックアウト 〜 上限（サーバが計算）。
+    //   同日IN … 次のお客様のIN時刻から標準清掃時間を引いた「間に合う最も遅い開始」
+    //   それ以外 … 22:00
+    //   上限が取れない／チェックアウトより早い場合は、時刻を選ばせない。
+    var FROM = (typeof it.outMin === 'number' && it.outMin >= 0) ? it.outMin : 600;
+    var TO   = (typeof it.maxStartMin === 'number') ? it.maxStartMin : 22 * 60;
+    var canPick = (!it.raised && TO >= FROM);
+
     var sel = null;
-    if (!it.raised && !it.sameDay){
+    if (canPick){
       sel = document.createElement('select');
       sel.className = 'hidden';
       sel.appendChild(new Option('開始時刻：おまかせ', ''));
 
-      // ★v3.53 選べるのは「ゲストのチェックアウト時刻 〜 22:00 開始」まで。
-      //   チェックアウト前は前のお客様がいるため清掃に入れない。
-      //   サーバから outMin(分) が来なければ 10:00 を既定にする。
-      var FROM = (typeof it.outMin === 'number' && it.outMin >= 0) ? it.outMin : 600;
-      var TO   = 22 * 60;
       var mins = [];
       for (var t = FROM; t <= TO; t += 30) mins.push(t);
       if (mins.length === 0 || mins[mins.length-1] !== TO) mins.push(TO);
@@ -474,12 +488,20 @@
       });
       body.appendChild(sel);
 
-      // チェックアウト時刻の案内（選択欄と一緒に出す）
       var hint = document.createElement('div');
       hint.className = 'sub hidden';
-      hint.textContent = 'チェックアウト' + (it.outLabel ? '（' + it.outLabel + '）' : '') + '以降で選べます';
+      var hi = ('0' + Math.floor(TO/60)).slice(-2) + ':' + ('0' + (TO%60)).slice(-2);
+      hint.textContent = it.sameDay
+        ? ('次のお客様に間に合うのは ' + hi + ' 開始まで'
+           + (it.stdMin ? '（標準' + (it.stdMin % 60 === 0 ? (it.stdMin/60) + '時間' : it.stdMin + '分') + '）' : ''))
+        : ('チェックアウト' + (it.outLabel ? '（' + it.outLabel + '）' : '') + '以降で選べます');
       body.appendChild(hint);
       sel._hint = hint;
+    } else if (!it.raised && it.sameDay){
+      var ng = document.createElement('div');
+      ng.className = 'sub warn';
+      ng.textContent = '時間の調整はできません（表示の時間でお願いします）';
+      body.appendChild(ng);
     }
 
     cbx.addEventListener('change', function(){
