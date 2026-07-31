@@ -43,6 +43,21 @@
   .hint{ font-size:12px; color:#999; margin:2px 2px 12px; }
   .hidden{ display:none !important; }
 
+  /* ★v3.58 担当が決まっている日の印 */
+  .cell{ position:relative; }
+  .cell .dot{ position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+    width:5px; height:5px; border-radius:50%; background:var(--green); }
+  .cell.on .dot{ background:#fff; }
+  .legend{ font-size:12px; color:var(--sub); margin:2px 2px 12px; display:flex; align-items:center; gap:6px; }
+  .legend i{ width:10px; height:10px; border-radius:50%; background:var(--green); display:inline-block; }
+  .asgTitle{ font-size:14px; font-weight:700; margin:16px 2px 8px; }
+  .asgDay{ font-size:13px; font-weight:700; margin:10px 2px 4px; }
+  .asgItem{ background:#fff; border:1px solid var(--line); border-left:3px solid var(--green);
+    border-radius:9px; padding:9px 11px; margin-bottom:6px; }
+  .asgItem .nm{ font-size:13px; font-weight:700; }
+  .asgItem .tm{ font-size:12px; color:var(--sub); margin-top:2px; }
+  .asgItem .wn{ color:#c62828; }
+
   /* ★v3.46 タブ */
   .tabs{ display:grid; grid-template-columns:1fr 1fr; gap:6px; margin:2px 0 12px; }
   .tab{ padding:11px 6px; border:1px solid var(--line); background:#fff; color:var(--sub);
@@ -109,10 +124,11 @@
 
 <script>
   // ============================================================
-  //  清掃希望を送信  index.html  v3.53
+  //  清掃希望を送信  index.html  v3.58
   //  ・タブ1「清掃希望日」= シフト提出（v3.31のまま。ロジック不変）
   //  ・タブ2「挙手する」  = 未アサイン案件へ挙手（★v3.46 新規）
   //  ・★v3.53 希望開始時刻は「チェックアウト時刻〜22:00」に限定
+  //  ・★v3.58 清掃希望日タブに、担当が決まっている予定を表示（印＋一覧）
   //  - GAS: ?mode=shift_get / shift_set / hand_list / hand_submit
   // ============================================================
   var LIFF_ID = '2010751229-9u6958G7';   // 挙手/清掃希望 LIFF(既存)
@@ -122,6 +138,7 @@
   var ME = null;                          // { userId, name }
   var selected = {};                      // { 'YYYY-MM-DD': true }
 
+  var ASSIGNED = {};                      // ★v3.58 { 'YYYY-MM-DD': [{prop,time,state,sameDay}] }
   var HAND_ITEMS = [];                    // ★v3.46 hand_list の結果
   var handSel = {};                       // ★v3.46 { jobKey: 'HHMM' or '' }
   var handLoaded = false;
@@ -183,6 +200,16 @@
     lead.textContent = '清掃に入れる日をタップして選び、「送信する」を押してください。いつでも変更できます。';
     app.appendChild(lead);
 
+    // ★v3.58 凡例（担当が決まっている日がある時だけ出す）
+    if (Object.keys(ASSIGNED).length){
+      var lg = document.createElement('div');
+      lg.className = 'legend';
+      var ic = document.createElement('i');
+      lg.appendChild(ic);
+      lg.appendChild(document.createTextNode('担当が決まっている日'));
+      app.appendChild(lg);
+    }
+
     var today = startOfToday();
     var end = new Date(today.getTime()); end.setDate(today.getDate() + RANGE_DAYS - 1);
 
@@ -193,6 +220,7 @@
       app.appendChild(buildMonth(cur.getFullYear(), cur.getMonth(), today, end));
       cur.setMonth(cur.getMonth()+1);
     }
+    renderAssignedList(app);              // ★v3.58 カレンダーの下に担当予定の一覧
     updateCount();
     $('tabs').style.display = 'grid';     // ★v3.46 準備できてからタブを出す
     $('bar').style.display='block';
@@ -229,6 +257,13 @@
       if (dow2===6) cell.classList.add('sat');
       cell.textContent = d;
 
+      // ★v3.58 担当が決まっている日は緑の点を付ける（過去・範囲外にも付ける）
+      if (ASSIGNED[ymd(dt)]){
+        var dot = document.createElement('span');
+        dot.className = 'dot';
+        cell.appendChild(dot);
+      }
+
       if (dt < today || dt > end){
         cell.classList.add('past');       // 範囲外/過去は選択不可
       } else {
@@ -246,6 +281,42 @@
     }
     card.appendChild(grid);
     return card;
+  }
+
+  // ★v3.58 担当が決まっている予定を日付順に並べる
+  function renderAssignedList(app){
+    var keys = Object.keys(ASSIGNED).sort();
+    if (!keys.length) return;
+
+    var t = document.createElement('div');
+    t.className = 'asgTitle';
+    t.textContent = '担当が決まっている予定';
+    app.appendChild(t);
+
+    var W = ['日','月','火','水','木','金','土'];
+    keys.forEach(function(k){
+      var p = k.split('-');
+      var dt = new Date(Number(p[0]), Number(p[1])-1, Number(p[2]));
+      var h = document.createElement('div');
+      h.className = 'asgDay';
+      h.textContent = (dt.getMonth()+1) + '/' + dt.getDate() + '(' + W[dt.getDay()] + ')';
+      app.appendChild(h);
+
+      ASSIGNED[k].forEach(function(it){
+        var box = document.createElement('div');
+        box.className = 'asgItem';
+        var nm = document.createElement('div');
+        nm.className = 'nm';
+        nm.textContent = it.prop;
+        box.appendChild(nm);
+        var tm = document.createElement('div');
+        tm.className = 'tm' + (it.sameDay ? ' wn' : '');
+        tm.textContent = it.time + (it.sameDay ? '　⚠️同日IN' : '')
+                       + (it.state && it.state !== '確定' ? '　※' + it.state : '');
+        box.appendChild(tm);
+        app.appendChild(box);
+      });
+    });
   }
 
   function updateCount(){
@@ -485,6 +556,12 @@
           return;
         }
       }catch(e){ /* 取得失敗でも空で続行 */ }
+
+      // ★v3.58 担当が決まっている予定を取得（失敗しても画面は出す）
+      try{
+        var ra = await jsonp(GAS_URL + '?mode=assign_get&userId=' + encodeURIComponent(ME.userId));
+        if (ra && ra.ok && ra.days) ASSIGNED = ra.days;
+      }catch(e2){ /* 取得失敗でも空で続行 */ }
 
       renderCalendar();
     }catch(e){
