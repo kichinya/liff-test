@@ -61,6 +61,8 @@
   .pname{ font-weight:700; font-size:15px; line-height:1.4; }
   .paddr{ color:var(--sub); font-size:12px; margin-top:4px; line-height:1.5; word-break:break-all; }
   .paddr a{ color:#1565c0; text-decoration:none; }
+  .ppark{ font-size:12px; margin-top:4px; color:#1b5e20; background:#eef7ef;
+          border-radius:6px; padding:3px 8px; display:inline-block; }
   .ppill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
           background:#fff1d6; color:#a06a00; margin-left:6px; vertical-align:middle; font-weight:700; }
   .psw{ position:relative; width:52px; height:30px; flex:0 0 52px; margin-top:2px; }
@@ -404,6 +406,7 @@ function renderProps(){
        +     '<div class="pname">'+esc(p.name)+(p.status?'<span class="ppill">'+esc(p.status)+'</span>':'')+'</div>'
        +     (p.addr?'<div class="paddr">'+esc(p.addr)
               +(p.map?' <a href="'+esc(p.map)+'" target="_blank" rel="noopener">地図</a>':'')+'</div>':'')
+       +     (p.parking?'<div class="ppark">🅿️ '+esc(p.parking)+'</div>':'')
        +   '</div>'
        +   '<label class="psw"><input type="checkbox" data-i="'+i+'"'+(p.on?' checked':'')+'><span class="pslider"></span></label>'
        + '</div>';
