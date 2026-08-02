@@ -70,6 +70,13 @@
     border-radius:11px; padding:11px 12px; margin-bottom:7px; }
   .job.on{ border-color:var(--green); background:var(--green-l); }
   .job.done{ background:#fafafa; color:#999; }
+  /* ★v4.17 対応可物件の対象外 */
+  .job.oos{ border-color:#ffd8a8; background:#fffdf7; }
+  .oospill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+            background:#fff1d6; color:#a06a00; margin-left:6px; vertical-align:middle; font-weight:700; }
+  .oosbtn{ display:block; width:100%; margin:14px 0 4px; padding:12px; font-size:14px; font-weight:700;
+           background:#fff; color:#2e7d32; border:1px dashed #2e7d32; border-radius:10px; cursor:pointer; }
+  .oosnote{ font-size:12px; color:var(--sub); line-height:1.6; margin:6px 2px 0; }
   .job input[type=checkbox]{ width:20px; height:20px; margin-top:2px; flex:none; }
   .job .body{ flex:1; min-width:0; }
   .job .nm{ font-size:14px; font-weight:700; line-height:1.4; }
@@ -141,6 +148,8 @@
 
   var ASSIGNED = {};                      // ★v3.58 { 'YYYY-MM-DD': [{prop,time,state,sameDay}] }
   var HAND_ITEMS = [];                    // ★v3.46 hand_list の結果
+  var HAND_SHOW_ALL = false;              // ★v4.17 対応可物件の対象外も表示するか
+  var HAND_OUT_COUNT = 0;                 // ★v4.17 対象外の件数（切替ボタンに出す）
   var handSel = {};                       // ★v3.46 { jobKey: 'HHMM' or '' }
   var handLoaded = false;
 
@@ -373,13 +382,15 @@
     setHandMsg('');
     updateHandCount();
 
-    jsonp(GAS_URL + '?mode=hand_list&userId=' + encodeURIComponent(ME.userId))
+    jsonp(GAS_URL + '?mode=hand_list&userId=' + encodeURIComponent(ME.userId)
+      + (HAND_SHOW_ALL ? '&all=1' : ''))
       .then(function(res){
         if (!res || res.ok !== true){
           $('h-note').textContent = (res && res.message) ? res.message : '取得に失敗しました。';
           return;
         }
         HAND_ITEMS = res.items || [];
+        HAND_OUT_COUNT = res.outCount || 0;   // ★v4.17
         handLoaded = true;
         renderHandList();
       })
@@ -393,7 +404,11 @@
     list.innerHTML = '';
 
     if (!HAND_ITEMS.length){
-      $('h-note').textContent = '今は担当が決まっていない案件がありません。';
+      $('h-note').textContent = HAND_SHOW_ALL
+        ? '今は担当が決まっていない案件がありません。'
+        : '担当できる物件に、今は空いている案件がありません。';
+      $('h-note').classList.remove('hidden');
+      list.appendChild(buildScopeToggle());     // ★v4.17 0件でも切替は出す
       return;
     }
     $('h-note').classList.add('hidden');
@@ -415,14 +430,36 @@
       list.appendChild(buildJobRow(it));
     });
 
+    list.appendChild(buildScopeToggle());       // ★v4.17
     $('h-noteWrap').classList.remove('hidden');
     $('h-send').classList.remove('hidden');
     updateHandCount();
   }
 
+  // ★v4.17 対応可物件の対象外を表示するかの切替
+  //   通知（募集LINE）は対応可物件で絞ったまま。挙手画面だけ広く見せる。
+  //   交通費割増つきの緊急募集など「普段は行かないが今回は行ける」を拾うため。
+  function buildScopeToggle(){
+    var wrap = document.createElement('div');
+    var b = document.createElement('button');
+    b.className = 'oosbtn';
+    b.textContent = HAND_SHOW_ALL
+      ? '− 担当できる物件だけ表示する'
+      : '＋ 対応していない物件も表示する' + (HAND_OUT_COUNT ? '（' + HAND_OUT_COUNT + '件）' : '');
+    b.onclick = function(){ HAND_SHOW_ALL = !HAND_SHOW_ALL; loadHandList(); };
+    wrap.appendChild(b);
+    var n = document.createElement('div');
+    n.className = 'oosnote';
+    n.textContent = HAND_SHOW_ALL
+      ? '「対応外」は、あなたが登録していない物件です。行ける場合は挙手していただけます。'
+      : '登録していない物件も、行ける場合は挙手できます。';
+    wrap.appendChild(n);
+    return wrap;
+  }
+
   function buildJobRow(it){
     var row = document.createElement('div');
-    row.className = 'job' + (it.raised ? ' done' : '');
+    row.className = 'job' + (it.raised ? ' done' : '') + (it.outOfScope ? ' oos' : '');
 
     var cbx = document.createElement('input');
     cbx.type = 'checkbox';
@@ -434,6 +471,12 @@
     var nm = document.createElement('div');
     nm.className = 'nm';
     nm.textContent = it.propName;
+    if (it.outOfScope){                          // ★v4.17
+      var pill = document.createElement('span');
+      pill.className = 'oospill';
+      pill.textContent = '対応外';
+      nm.appendChild(pill);
+    }
     body.appendChild(nm);
 
     var sub = document.createElement('div');
