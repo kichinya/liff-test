@@ -50,6 +50,30 @@
     color:#fff; background:var(--green); border:none; border-radius:12px; }
   button.submit:disabled{ background:#a5d6a7; }
   .back{ background:none; border:none; color:var(--green); font-size:14px; padding:8px 0; cursor:pointer; margin-bottom:4px; }
+  /* ★対応できる物件 */
+  .pnote{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:10px; padding:11px 12px;
+          font-size:13px; line-height:1.6; margin-bottom:12px; }
+  .parea{ font-size:12px; color:var(--sub); font-weight:700; margin:16px 2px 6px; }
+  .pcard{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:12px 14px;
+          margin-bottom:8px; display:flex; align-items:flex-start; gap:12px; }
+  .pcard.on{ background:#e8f5e9; border-color:#a5d6a7; }
+  .pbody{ flex:1; min-width:0; }
+  .pname{ font-weight:700; font-size:15px; line-height:1.4; }
+  .paddr{ color:var(--sub); font-size:12px; margin-top:4px; line-height:1.5; word-break:break-all; }
+  .paddr a{ color:#1565c0; text-decoration:none; }
+  .ppill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+          background:#fff1d6; color:#a06a00; margin-left:6px; vertical-align:middle; font-weight:700; }
+  .psw{ position:relative; width:52px; height:30px; flex:0 0 52px; margin-top:2px; }
+  .psw input{ opacity:0; width:0; height:0; }
+  .pslider{ position:absolute; inset:0; background:#cfd4da; border-radius:30px; transition:.18s; cursor:pointer; }
+  .pslider:before{ content:''; position:absolute; height:24px; width:24px; left:3px; top:3px;
+                   background:#fff; border-radius:50%; transition:.18s; }
+  .psw input:checked + .pslider{ background:var(--green); }
+  .psw input:checked + .pslider:before{ transform:translateX(22px); }
+  .psub{ display:flex; gap:8px; margin:10px 0 4px; }
+  .psub button{ flex:1; background:#fff; color:var(--ink); border:1px solid var(--line);
+                border-radius:8px; padding:9px; font-size:13px; cursor:pointer; }
+  .pcnt{ font-size:12px; color:var(--sub); text-align:center; margin-top:10px; }
   .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none; }
   .msg.err{ background:#fdecea; color:#b71c1c; display:block; }
   .msg.ok{ background:#e8f5e9; color:var(--green-d); display:block; } /* ★v3.39 取消の成功表示 */
@@ -76,6 +100,7 @@
       <div class="mbtn" onclick="go('supply')"><div class="ico">📦</div>備品発注</div>
       <div class="mbtn" onclick="go('handover')"><div class="ico">📝</div>引き継ぎ</div>
       <div class="mbtn" id="mycal-btn" onclick="openMyCalendar(this)"><div class="ico">📅</div>マイカレンダー</div>
+      <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
     </div>
   </div>
@@ -131,6 +156,23 @@
   </div>
 
   <!-- 報告の取消(★v3.39 LIFFで完結。旧: LINEトークへの案内文のみ) -->
+  <!-- 対応できる物件 -->
+  <div id="v-props" class="hidden">
+    <button class="back" onclick="go('menu')">← 戻る</button>
+    <h1>🏠 対応できる物件</h1>
+    <div id="msg-props" class="msg"></div>
+    <div class="pnote">
+      行ける物件をオンにしてください。<br>
+      <b>オフにしても、すでに担当が決まっている清掃はそのまま実施をお願いします。</b><br>
+      オフにした物件は、以後の募集のお知らせが届かなくなります。<br>
+      <span style="color:#a06a00">「スポット」「準備中」は今は定期清掃がない物件です。対応できる場合はオンにしておいてください。</span>
+    </div>
+    <div class="psub"><button onclick="propsAll(true)">すべてオン</button><button onclick="propsAll(false)">すべてオフ</button></div>
+    <div id="p-list"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+    <div class="pcnt" id="p-cnt"></div>
+    <button id="p-btn" class="submit" onclick="submitProps()">この内容で保存する</button>
+  </div>
+
   <div id="v-cancel" class="hidden">
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>↩️ 報告の取消</h1>
@@ -170,7 +212,7 @@ const TEXT_META = {
 };
 
 function showView(name){
-  ['loading','menu','expense','photo','text','cancel','done'].forEach(function(v){
+  ['loading','menu','expense','photo','text','props','cancel','done'].forEach(function(v){
     const el = $('v-'+v) || (v==='loading'?$('loading'):null);
     if (el) el.classList.add('hidden');
   });
@@ -188,6 +230,7 @@ function go(name){
   }
   showView(name);
   if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
+  if (name==='props')  loadProps();        // ★対応できる物件: 開くたびに最新を取り直す
 }
 
 // JSONP GET
@@ -313,6 +356,102 @@ async function submitText(){
 //   jobsMap(exp_jobs)   = 本日 自分に割り当てられた清掃物件
 //   att_cancel_list     = 本日 自分が実際に報告した物件(未取消のみ)
 // ★postGas(no-cors)は使わない。取消は結果が分からないと困る操作なので JSONP GET で応答を読む。
+// ============================================================
+// 対応できる物件（スタッフマスタの「対応可物件」「エリアID」を本人が更新する）
+//   ・GAS側は MyProperties.gs（?mode=props_get / props_set）
+//   ・保存すると管理者グループへ通知が飛ぶ
+//   ・0件で保存すると募集のお知らせが届かなくなる → 画面で必ず知らせる
+// ============================================================
+let PROPS = [];
+
+async function loadProps(){
+  $('msg-props').className='msg';
+  $('p-list').innerHTML='<div class="center" style="padding:20px 8px">読み込み中…</div>';
+  $('p-btn').disabled = true;
+  try{
+    const res = await jsonp(GAS_URL+'?mode=props_get&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){ showErr('msg-props', (res&&res.message)||'読み込みに失敗しました。'); $('p-list').innerHTML=''; return; }
+    PROPS = res.props || [];
+    if(!PROPS.length){ $('p-list').innerHTML='<div class="center" style="padding:20px 8px">対象の物件がありません。</div>'; return; }
+    renderProps();
+    $('p-btn').disabled = false;
+    if(res.firstTime){
+      const m=$('msg-props'); m.className='msg'; m.style.display='block';
+      m.style.background='#e3f2fd'; m.style.color='#0d47a1';
+      m.textContent='まだ個別の設定がありません。いまはエリアの物件をオンにして表示しています。内容を確認して保存してください。';
+    }
+  }catch(e){ showErr('msg-props','通信に失敗しました。電波の良い場所で再度お試しください。'); $('p-list').innerHTML=''; }
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+function renderProps(){
+  const byArea={}, order=[];
+  PROPS.forEach(function(p){
+    const k=p.areaId||'その他';
+    if(!byArea[k]){ byArea[k]=[]; order.push(k); }
+    byArea[k].push(p);
+  });
+  let h='';
+  order.forEach(function(a){
+    const an=byArea[a][0].areaName||'';
+    h+='<div class="parea">'+esc(a)+(an?' '+esc(an):'')+'</div>';
+    byArea[a].forEach(function(p){
+      const i=PROPS.indexOf(p);
+      h+='<div class="pcard'+(p.on?' on':'')+'" id="pc'+i+'">'
+       +   '<div class="pbody">'
+       +     '<div class="pname">'+esc(p.name)+(p.status?'<span class="ppill">'+esc(p.status)+'</span>':'')+'</div>'
+       +     (p.addr?'<div class="paddr">'+esc(p.addr)
+              +(p.map?' <a href="'+esc(p.map)+'" target="_blank" rel="noopener">地図</a>':'')+'</div>':'')
+       +   '</div>'
+       +   '<label class="psw"><input type="checkbox" data-i="'+i+'"'+(p.on?' checked':'')+'><span class="pslider"></span></label>'
+       + '</div>';
+    });
+  });
+  $('p-list').innerHTML=h;
+  Array.prototype.forEach.call($('p-list').querySelectorAll('input[type=checkbox]'), function(cb){
+    cb.addEventListener('change', function(){
+      const i=Number(cb.getAttribute('data-i'));
+      PROPS[i].on=cb.checked;
+      $('pc'+i).className='pcard'+(cb.checked?' on':'');
+      countProps();
+    });
+  });
+  countProps();
+}
+
+function countProps(){
+  const n=PROPS.filter(function(p){return p.on;}).length;
+  $('p-cnt').textContent=n+' / '+PROPS.length+' 件を選択中'+(n===0?'（0件だと募集のお知らせが届きません）':'');
+}
+
+function propsAll(v){ PROPS.forEach(function(p){ p.on=v; }); renderProps(); }
+
+async function submitProps(){
+  const pids=PROPS.filter(function(p){return p.on;}).map(function(p){return p.pid;});
+  const btn=$('p-btn'); btn.disabled=true; btn.textContent='保存しています…';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=props_set&userId='+encodeURIComponent(me.userId)
+      +'&pids='+encodeURIComponent(pids.join(',')));
+    btn.disabled=false; btn.textContent='この内容で保存する';
+    if(!res || !res.ok){ showErr('msg-props',(res&&res.message)||'保存に失敗しました。'); return; }
+    let t='保存しました（'+res.count+'件）';
+    if(res.keep && res.keep.length){
+      t+='\n※担当が決まっている清掃が残っています: '
+        + res.keep.map(function(k){return k.name+' '+k.n+'件';}).join(' / ')
+        + '\nこちらは予定どおりお願いします。';
+    }
+    if(res.none){ t+='\n0件のため、今後の募集のお知らせは届きません。'; }
+    const m=$('msg-props'); m.className='msg'; m.style.display='block';
+    m.style.background='#e8f5e9'; m.style.color='#1b5e20'; m.style.whiteSpace='pre-line';
+    m.textContent=t;
+  }catch(e){
+    btn.disabled=false; btn.textContent='この内容で保存する';
+    showErr('msg-props','通信に失敗しました。電波の良い場所で再度お試しください。');
+  }
+}
+
 async function loadCancelList(){
   const note=$('c-note'), form=$('c-form'), btn=$('c-btn'), sel=$('c-target');
   const m=$('msg-cancel'); m.className='msg'; m.textContent='';
@@ -385,7 +524,7 @@ async function submitCancel(){
     });
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
-    if(type && ['expense','photo','overtime','supply','handover'].indexOf(type)>=0) go(type);
+    if(type && ['expense','photo','overtime','supply','handover','props'].indexOf(type)>=0) go(type);
     else showView('menu');
   }catch(e){ $('loading').innerHTML='<div class="center">LIFFの初期化に失敗しました。時間をおいて再度お試しください。</div>'; }
 })();
