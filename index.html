@@ -148,6 +148,7 @@
 
   var ASSIGNED = {};                      // ★v3.58 { 'YYYY-MM-DD': [{prop,time,state,sameDay}] }
   var HAND_ITEMS = [];                    // ★v3.46 hand_list の結果
+  var handDate = {};                      // ★v4.18 ジョブキー -> 希望清掃日(yyyy-MM-dd)
   var HAND_SHOW_ALL = false;              // ★v4.17 対応可物件の対象外も表示するか
   var HAND_OUT_COUNT = 0;                 // ★v4.17 対象外の件数（切替ボタンに出す）
   var handSel = {};                       // ★v3.46 { jobKey: 'HHMM' or '' }
@@ -511,20 +512,56 @@
     var TO   = (typeof it.maxStartMin === 'number') ? it.maxStartMin : 22 * 60;
     var canPick = (!it.raised && TO >= FROM);
 
+    // ★v4.18 清掃日を選べる案件は日付セレクタを出す。
+    //   下限=本来の清掃日／上限=次回IN日 or アウト+3日（サーバが計算）。
+    //   日付を変えると「間に合う最も遅い開始」が変わるので、時刻の選択肢を作り直す。
+    var dsel = null;
+    var DATES = (it.dates && it.dates.length) ? it.dates : [];
+    if (!it.raised && DATES.length > 1){
+      dsel = document.createElement('select');
+      dsel.className = 'hidden';
+      DATES.forEach(function(d, i){
+        var label = d.label + (i === 0 ? '（本来の清掃日）' : '（後ろ倒し）')
+                  + (d.nextInDay ? ' ※次のお客様の到着日' : '');
+        dsel.appendChild(new Option(label, d.ymd));
+      });
+      body.appendChild(dsel);
+      var dhint = document.createElement('div');
+      dhint.className = 'sub hidden';
+      dhint.textContent = '入れる日を選べます。日をずらす場合は、後ほど変更のご連絡をすることがあります。';
+      body.appendChild(dhint);
+      dsel._hint = dhint;
+    }
+
     var sel = null;
     if (canPick){
       sel = document.createElement('select');
       sel.className = 'hidden';
       sel.appendChild(new Option('開始時刻：おまかせ', ''));
 
-      var mins = [];
-      for (var t = FROM; t <= TO; t += 30) mins.push(t);
-      if (mins.length === 0 || mins[mins.length-1] !== TO) mins.push(TO);
-      mins.forEach(function(t){
-        var hh = ('0' + Math.floor(t/60)).slice(-2);
-        var mm = ('0' + (t%60)).slice(-2);
-        sel.appendChild(new Option(hh + ':' + mm + ' から希望', hh + mm));
-      });
+      function fillTimes(to){
+        while (sel.options.length > 1) sel.remove(1);
+        var mins = [];
+        for (var t = FROM; t <= to; t += 30) mins.push(t);
+        if (mins.length === 0 || mins[mins.length-1] !== to) mins.push(to);
+        mins.forEach(function(t){
+          var hh = ('0' + Math.floor(t/60)).slice(-2);
+          var mm = ('0' + (t%60)).slice(-2);
+          sel.appendChild(new Option(hh + ':' + mm + ' から希望', hh + mm));
+        });
+      }
+      fillTimes(TO);
+      // ★v4.18 日付を変えたら、その日の上限で時刻を作り直す
+      if (dsel){
+        dsel.addEventListener('change', function(){
+          handDate[it.key] = dsel.value;
+          var d = null;
+          for (var i2 = 0; i2 < DATES.length; i2++) if (DATES[i2].ymd === dsel.value) d = DATES[i2];
+          var to2 = (d && typeof d.maxStartMin === 'number') ? d.maxStartMin : TO;
+          sel.value = '';
+          fillTimes(to2);
+        });
+      }
 
       sel.addEventListener('change', function(){
         if (handSel[it.key] !== undefined) handSel[it.key] = sel.value;
@@ -550,12 +587,16 @@
     cbx.addEventListener('change', function(){
       if (cbx.checked){
         handSel[it.key] = sel ? sel.value : '';
+        handDate[it.key] = dsel ? dsel.value : (DATES.length ? DATES[0].ymd : '');   // ★v4.18
         row.classList.add('on');
         if (sel){ sel.classList.remove('hidden'); if (sel._hint) sel._hint.classList.remove('hidden'); }
+        if (dsel){ dsel.classList.remove('hidden'); if (dsel._hint) dsel._hint.classList.remove('hidden'); }
       } else {
         delete handSel[it.key];
+        delete handDate[it.key];                                                     // ★v4.18
         row.classList.remove('on');
         if (sel){ sel.classList.add('hidden'); if (sel._hint) sel._hint.classList.add('hidden'); }
+        if (dsel){ dsel.classList.add('hidden'); if (dsel._hint) dsel._hint.classList.add('hidden'); }
       }
       updateHandCount();
     });
@@ -577,7 +618,8 @@
     var btn = $('h-send');
     btn.disabled = true; setHandMsg('送信中…','');
 
-    var items = keys.map(function(k){ return k + '|' + (handSel[k] || ''); }).join(',');
+    // ★v4.18 ジョブキー|希望開始時刻|希望清掃日
+    var items = keys.map(function(k){ return k + '|' + (handSel[k] || '') + '|' + (handDate[k] || ''); }).join(',');
     var note = ($('h-memo').value || '').trim().slice(0, 200);
 
     var url = GAS_URL + '?mode=hand_submit&userId=' + encodeURIComponent(ME.userId)
