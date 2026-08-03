@@ -64,6 +64,40 @@
     border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; }
   .tab.on{ background:var(--green); border-color:var(--green); color:#fff; }
 
+  /* ★v4.44 マイ予定（自分で順番と時間を変える） */
+  .tabs{ grid-template-columns:1fr 1fr 1fr; }
+  .tab{ font-size:13px; padding:11px 4px; }
+  .pLead{ font-size:12px; color:var(--sub); line-height:1.7; margin:0 2px 12px; }
+  .pDay{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 11px; margin-bottom:14px; }
+  .pDay.ng{ border-color:#ef9a9a; }
+  .pHead{ display:flex; justify-content:space-between; align-items:center; font-size:15px; font-weight:700; }
+  .pBadge{ font-size:11px; font-weight:700; padding:3px 8px; border-radius:99px;
+    background:var(--green-l); color:var(--green); }
+  .pBadge.ng{ background:#ffebee; color:#c62828; }
+  .pWhy{ font-size:12px; color:#c62828; line-height:1.7; margin:8px 0 0; white-space:pre-wrap; }
+  .pItem{ display:flex; gap:9px; align-items:flex-start; border-top:1px solid var(--line); padding:11px 0 9px; }
+  .pMove{ display:flex; flex-direction:column; gap:4px; flex:none; }
+  .pMove button{ width:36px; height:27px; border:1px solid var(--line); background:#fff; border-radius:7px;
+    font-size:12px; color:var(--sub); cursor:pointer; padding:0; }
+  .pMove button:disabled{ color:#ddd; }
+  .pBody{ flex:1; min-width:0; }
+  .pNm{ font-size:14px; font-weight:700; line-height:1.4; }
+  .pSub{ font-size:11px; color:var(--sub); margin-top:3px; line-height:1.6; }
+  .pSub .wn{ color:#c62828; }
+  .pLock{ font-size:11px; color:#c62828; margin-top:5px; }
+  .pItem select{ margin-top:6px; width:100%; padding:9px; font-size:15px;
+    border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .pItem select:disabled{ background:#f2f2f2; color:#999; }
+  .pActs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
+  .pActs button{ padding:11px 4px; border-radius:10px; font-size:13px; font-weight:700;
+    cursor:pointer; border:1px solid var(--green); background:#fff; color:var(--green); }
+  .pActs button:disabled{ opacity:.4; }
+  .pSave{ margin-top:8px; }
+  .pMsg{ font-size:12px; margin-top:9px; text-align:center; min-height:16px;
+    white-space:pre-wrap; line-height:1.7; }
+  .pMsg.ok{ color:var(--green); }
+  .pMsg.err{ color:#c62828; }
+
   /* ★v3.46 挙手リスト */
   .dateHead{ font-size:14px; font-weight:700; margin:14px 2px 6px; color:var(--ink); }
   .job{ display:flex; align-items:flex-start; gap:10px; background:#fff; border:1px solid var(--line);
@@ -95,6 +129,7 @@
   <div class="tabs" id="tabs" style="display:none;">
     <button class="tab on" id="tab-shift" onclick="showTab('shift')">清掃希望日</button>
     <button class="tab" id="tab-hand" onclick="showTab('hand')">挙手する</button>
+    <button class="tab" id="tab-plan" onclick="showTab('plan')">マイ予定</button>
   </div>
 
   <!-- シフト提出（既存） -->
@@ -112,6 +147,16 @@
       <div class="secTitle">連絡事項（任意）</div>
       <textarea class="noteBox" id="h-memo" rows="2" placeholder="例）8/3は13時以降なら入れます"></textarea>
     </div>
+  </div>
+
+  <!-- ★v4.44 マイ予定 -->
+  <div id="view-plan" class="hidden">
+    <div class="pLead">
+      担当が決まっている予定です。<b>順番と開始時刻をご自分で変えられます。</b><br>
+      回れない並び（重なる／チェックアウト前／同日INに間に合わない）は保存できません。
+    </div>
+    <div class="loading" id="p-note">読み込み中…</div>
+    <div id="p-list"></div>
   </div>
 </div>
 
@@ -185,16 +230,35 @@
   // ============================================================
   //  ★v3.46 タブ切替
   // ============================================================
+  // ★v4.44 LINEから ?tab=plan で開かれたら【マイ予定】を最初に出す。
+  //   LIFFは liff.line.me/<id>?tab=plan を ?liff.state=%3Ftab%3Dplan の形で渡すことがあるため両対応。
+  function initialTab(){
+    try{
+      var qs = location.search || '';
+      var st = /[?&]liff\.state=([^&]*)/.exec(qs);
+      if (st) qs = decodeURIComponent(st[1]);
+      var m = /[?&]tab=([a-z]+)/.exec(qs);
+      if (!m) m = /^\??tab=([a-z]+)/.exec(qs);
+      return m ? m[1] : 'shift';
+    }catch(e){ return 'shift'; }
+  }
+
+  // ★v4.44 3タブ化（清掃希望日 / 挙手する / マイ予定）
   function showTab(name){
-    var isShift = (name === 'shift');
-    $('view-shift').classList.toggle('hidden', !isShift);
-    $('view-hand').classList.toggle('hidden', isShift);
-    $('tab-shift').classList.toggle('on', isShift);
-    $('tab-hand').classList.toggle('on', !isShift);
-    $('bar').style.display = isShift ? 'block' : 'none';
-    $('h-bar').classList.toggle('hidden', isShift);
-    // 挙手タブは開くたびに取り直す（他の人に決まった案件を出さないため）
-    if (!isShift) loadHandList();
+    var t = { shift:false, hand:false, plan:false };
+    if (!(name in t)) name = 'shift';
+    t[name] = true;
+    $('view-shift').classList.toggle('hidden', !t.shift);
+    $('view-hand').classList.toggle('hidden', !t.hand);
+    $('view-plan').classList.toggle('hidden', !t.plan);
+    $('tab-shift').classList.toggle('on', t.shift);
+    $('tab-hand').classList.toggle('on', t.hand);
+    $('tab-plan').classList.toggle('on', t.plan);
+    $('bar').style.display = t.shift ? 'block' : 'none';
+    $('h-bar').classList.toggle('hidden', !t.hand);
+    // 挙手・マイ予定は開くたびに取り直す（他の人に決まった案件・変わった予定を出さないため）
+    if (t.hand) loadHandList();
+    if (t.plan) loadMyPlan();
   }
 
   // ============================================================
@@ -646,6 +710,247 @@
     });
   }
 
+  // ============================================================
+  //  ★v4.44 タブ3: マイ予定
+  //    ・自分の担当の【順番】と【開始時刻】を、この画面で直接変える
+  //    ・▲▼で順番を入れ替えると、時刻は自動で詰め直す（移動時間を挟む）
+  //    ・回れない並びは保存させない（サーバ側でも同じ検査をする）
+  //    ・2名で入る予定／開始を報告済みの予定は動かせない（🔒）
+  //  GAS: ?mode=myplan_get / myplan_set
+  // ============================================================
+  var PLAN_DAYS = [];       // myplan_get の days
+  var PLAN_TRAVEL = 30;     // 現場間の移動時間(分)
+  var PLAN_STEP = 15;       // 時刻の刻み(分)
+  var planBusy = false;
+
+  function hm2m(v){
+    var m = String(v||'').match(/^(\d{1,2}):(\d{2})$/);
+    return m ? (Number(m[1])*60 + Number(m[2])) : null;
+  }
+  function m2hm(v){
+    var t = ((Math.round(v) % 1440) + 1440) % 1440;
+    return ('0'+Math.floor(t/60)).slice(-2) + ':' + ('0'+(t%60)).slice(-2);
+  }
+  function esc(s){
+    return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function loadMyPlan(){
+    $('p-note').classList.remove('hidden');
+    $('p-note').textContent = '読み込み中…';
+    $('p-list').innerHTML = '';
+    jsonp(GAS_URL + '?mode=myplan_get&userId=' + encodeURIComponent(ME.userId))
+      .then(function(res){
+        if (!res || !res.ok){
+          $('p-note').innerHTML = esc((res && res.message) || '読み込みに失敗しました。');
+          return;
+        }
+        PLAN_DAYS = res.days || [];
+        if (res.travel) PLAN_TRAVEL = res.travel;
+        if (res.step) PLAN_STEP = res.step;
+        if (!PLAN_DAYS.length){
+          $('p-note').innerHTML = 'いまのところ、担当が決まっている予定はありません。<br>「挙手する」から希望を出せます。';
+          return;
+        }
+        $('p-note').classList.add('hidden');
+        renderPlan();
+      })
+      .catch(function(){
+        $('p-note').textContent = '通信に失敗しました。電波の良い場所で開き直してください。';
+      });
+  }
+
+  // 現在の並びが回れるか（サーバ側 _spWhyBad_ と同じ判定）
+  function planCheck(d){
+    var arr = d.items.slice().sort(function(a,b){
+      return (hm2m(a.start)==null?9999:hm2m(a.start)) - (hm2m(b.start)==null?9999:hm2m(b.start));
+    });
+    var out = [], prevEnd = null, prevNm = '';
+    for (var i=0;i<arr.length;i++){
+      var it = arr[i], cur = hm2m(it.start);
+      if (cur == null){ out.push('・' + it.prop + ' の開始時刻が入っていません'); continue; }
+      var early = hm2m(it.min);
+      if (early != null && cur < early){
+        out.push('・' + it.prop + ' はチェックアウト前（' + it.min + '）に始まる予定です');
+      }
+      var late = hm2m(it.max);
+      if (it.dur > 0 && late != null && cur > late){
+        out.push(it.sameDay
+          ? ('・' + it.prop + ' は同日IN ' + it.inTime + ' に間に合いません（' + m2hm(cur+it.dur) + ' 終了予定）')
+          : ('・' + it.prop + ' の開始が遅すぎます'));
+      }
+      if (prevEnd != null && cur < prevEnd + PLAN_TRAVEL){
+        out.push('・' + prevNm + ' と ' + it.prop + ' が重なっています（移動 ' + PLAN_TRAVEL +
+                 '分を含めて ' + m2hm(prevEnd + PLAN_TRAVEL) + ' 以降）');
+      }
+      prevEnd = cur + (it.dur>0?it.dur:0);
+      prevNm = it.prop;
+    }
+    return out.join('\n');
+  }
+
+  // いまの並び順のまま、時刻を先頭から詰め直す（🔒は動かさない）
+  function planReflow(di){
+    var d = PLAN_DAYS[di], t = null;
+    d.items.forEach(function(it, i){
+      var early = hm2m(it.min);
+      if (early == null) early = 0;
+      var s;
+      if (it.locked){
+        s = hm2m(it.start);
+        if (s == null) s = early;
+      } else {
+        var want = (i === 0) ? (hm2m(it.start) == null ? early : hm2m(it.start)) : t;
+        s = Math.max(want, early, (t == null ? 0 : t));
+        s = Math.ceil(s / PLAN_STEP) * PLAN_STEP;
+      }
+      it.start = m2hm(s);
+      it.end = (it.dur > 0) ? m2hm(s + it.dur) : '';
+      t = s + (it.dur > 0 ? it.dur : 0) + PLAN_TRAVEL;
+    });
+    renderPlan(di);
+  }
+
+  // サーバが出した「おすすめ」を入れる
+  function planSuggest(di){
+    var d = PLAN_DAYS[di];
+    if (!d.suggest || !d.suggest.length){ setPlanMsg(di, 'おすすめを計算できませんでした。', 'err'); return; }
+    var by = {};
+    d.suggest.forEach(function(s){ by[s.key] = s.start; });
+    d.items.forEach(function(it){
+      if (it.locked) return;
+      if (by[it.key]) { it.start = by[it.key]; it.end = (it.dur>0) ? m2hm(hm2m(by[it.key]) + it.dur) : ''; }
+    });
+    d.items.sort(function(a,b){ return hm2m(a.start) - hm2m(b.start); });
+    renderPlan(di);
+    setPlanMsg(di, 'おすすめの順番を入れました。内容を確認して保存してください。', 'ok');
+  }
+
+  function planMove(di, i, dir){
+    var d = PLAN_DAYS[di], j = i + dir;
+    if (j < 0 || j >= d.items.length) return;
+    var tmp = d.items[i]; d.items[i] = d.items[j]; d.items[j] = tmp;
+    planReflow(di);
+  }
+
+  function planTime(di, i, val){
+    var it = PLAN_DAYS[di].items[i];
+    it.start = val || '';
+    it.end = (val && it.dur > 0) ? m2hm(hm2m(val) + it.dur) : '';
+    renderPlan(di);
+  }
+
+  function setPlanMsg(di, text, cls){
+    var m = $('p-msg-' + di);
+    if (!m) return;
+    m.textContent = text || '';
+    m.className = 'pMsg' + (cls ? ' ' + cls : '');
+  }
+
+  function planOptions(it){
+    var lo = hm2m(it.min); if (lo == null) lo = 6*60;
+    var hi = hm2m(it.max); if (hi == null) hi = 22*60;
+    if (hi < lo) hi = lo;
+    var cur = hm2m(it.start);
+    var vals = [];
+    for (var v = Math.floor(lo/PLAN_STEP)*PLAN_STEP; v <= hi; v += PLAN_STEP) vals.push(v);
+    if (cur != null && vals.indexOf(cur) < 0) { vals.push(cur); vals.sort(function(a,b){return a-b;}); }
+    // ★開始時刻が未定のときは「選んでください」を先頭に出す。
+    //   これを出さないと、見た目は先頭の時刻が選ばれているのに中身は空、という食い違いになる。
+    var head = (cur == null) ? '<option value="" selected>― 時刻を選んでください ―</option>' : '';
+    return head + vals.map(function(v){
+      return '<option value="' + m2hm(v) + '"' + (v===cur?' selected':'') + '>' + m2hm(v) +
+             (it.dur>0 ? ' 〜 ' + m2hm(v+it.dur) : '') + '</option>';
+    }).join('');
+  }
+
+  function renderPlan(only){
+    var host = $('p-list');
+    if (only == null) host.innerHTML = '';
+    PLAN_DAYS.forEach(function(d, di){
+      if (only != null && only !== di) return;
+      var why = planCheck(d);
+      var html = '';
+      html += '<div class="pHead"><span>' + esc(d.label) + '</span>' +
+              '<span class="pBadge' + (why?' ng':'') + '">' + (why ? '⚠️ 回れません' : '✅ 回れます') + '</span></div>';
+      if (why) html += '<div class="pWhy">' + esc(why) + '</div>';
+
+      d.items.forEach(function(it, i){
+        var sub = [];
+        if (it.durLabel) sub.push('所要 ' + esc(it.durLabel));
+        if (it.out) sub.push('OUT ' + esc(it.out));
+        if (it.sameDay && it.inTime) sub.push('<span class="wn">同日IN ' + esc(it.inTime) + '</span>');
+        html += '<div class="pItem">' +
+          '<div class="pMove">' +
+            '<button onclick="planMove(' + di + ',' + i + ',-1)"' + (i===0?' disabled':'') + '>▲</button>' +
+            '<button onclick="planMove(' + di + ',' + i + ',1)"' + (i===d.items.length-1?' disabled':'') + '>▼</button>' +
+          '</div>' +
+          '<div class="pBody">' +
+            '<div class="pNm">' + (i+1) + '. ' + esc(it.prop) + '</div>' +
+            '<div class="pSub">' + sub.join('　/　') + '</div>' +
+            '<select ' + (it.locked?'disabled':'') +
+              ' onchange="planTime(' + di + ',' + i + ',this.value)">' + planOptions(it) + '</select>' +
+            (it.locked ? '<div class="pLock">🔒 ' + esc(it.lockReason) + '</div>' : '') +
+          '</div></div>';
+      });
+
+      html += '<div class="pActs">' +
+        '<button onclick="planSuggest(' + di + ')">✨ おすすめの順番</button>' +
+        '<button onclick="planReflow(' + di + ')">⏱ 時間を詰め直す</button>' +
+        '</div>' +
+        '<button class="btn pSave" id="p-save-' + di + '" onclick="planSave(' + di + ')">この日の予定を保存する</button>' +
+        '<div class="pMsg" id="p-msg-' + di + '"></div>';
+
+      var box = (only != null) ? $('p-day-' + di) : document.createElement('div');
+      if (only == null){
+        box.id = 'p-day-' + di;
+        host.appendChild(box);
+      }
+      box.className = 'pDay' + (why ? ' ng' : '');
+      box.innerHTML = html;
+    });
+  }
+
+  function planSave(di){
+    if (planBusy) return;
+    var d = PLAN_DAYS[di];
+    // システム上のキーが無い案件があると、どの行を直せばよいか特定できない
+    var noKey = d.items.filter(function(it){ return !it.key; });
+    if (noKey.length){
+      setPlanMsg(di, 'この日の案件にシステム上の不備があるため保存できません。\n清掃スタッフグループへご連絡ください。', 'err');
+      return;
+    }
+    var why = planCheck(d);
+    if (why){ setPlanMsg(di, 'この並びでは回れません。\n' + why, 'err'); return; }
+
+    var plan = d.items.slice().sort(function(a,b){ return hm2m(a.start) - hm2m(b.start); })
+      .map(function(it){ return it.key + ':' + String(it.start).replace(':',''); }).join(',');
+
+    planBusy = true;
+    var btn = $('p-save-' + di);
+    if (btn){ btn.disabled = true; btn.textContent = '保存しています…'; }
+    setPlanMsg(di, '', '');
+
+    jsonp(GAS_URL + '?mode=myplan_set&userId=' + encodeURIComponent(ME.userId)
+        + '&ymd=' + encodeURIComponent(d.ymd)
+        + '&plan=' + encodeURIComponent(plan))
+      .then(function(res){
+        planBusy = false;
+        if (btn){ btn.disabled = false; btn.textContent = 'この日の予定を保存する'; }
+        if (!res || !res.ok){
+          setPlanMsg(di, (res && res.message) || '保存に失敗しました。', 'err');
+          return;
+        }
+        setPlanMsg(di, res.message || '保存しました。', 'ok');
+      })
+      .catch(function(){
+        planBusy = false;
+        if (btn){ btn.disabled = false; btn.textContent = 'この日の予定を保存する'; }
+        setPlanMsg(di, '通信に失敗しました。保存できたかどうかは、画面を開き直してご確認ください。', 'err');
+      });
+  }
+
   // ---- 起動(report.html と同じ初期化フロー) ----
   (async function init(){
     try{
@@ -674,6 +979,12 @@
       }catch(e2){ /* 取得失敗でも空で続行 */ }
 
       renderCalendar();
+
+      // ★v4.44 ?tab=plan で開かれたらマイ予定を表示する
+      try{
+        var t0 = initialTab();
+        if (t0 === 'plan' || t0 === 'hand') showTab(t0);
+      }catch(eT){ /* 失敗しても既定タブのまま */ }
     }catch(e){
       $('loading').innerHTML =
         'LINEアプリ内で開いてください。<br>（このページはLINEのリッチメニューから開きます）';
