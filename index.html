@@ -900,6 +900,8 @@
         if (it.durLabel) sub.push('所要 ' + esc(it.durLabel));
         if (it.out) sub.push('OUT ' + esc(it.out));
         if (it.sameDay && it.inTime) sub.push('<span class="wn">同日IN ' + esc(it.inTime) + '</span>');
+        // ★v4.47 自分が挙手で出した希望時刻。こちらの組み直しでは動かさない印。
+        if (it.wish) sub.push('希望 ' + esc(it.wish));
         html += '<div class="pItem">' +
           '<div class="pMove">' +
             '<button onclick="planMove(' + di + ',' + i + ',-1)"' + (i===0?' disabled':'') + '>▲</button>' +
