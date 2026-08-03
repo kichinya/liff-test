@@ -202,7 +202,10 @@
 <script>
 // ===== 設定 =====
 const LIFF_ID = '2010751229-dOTJoOzI';                 // 報告メニュー用(立替と同一・同一チャネル)
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec'; // ★現行有効デプロイ(バージョン37 / v3.27)
+  // ★このURLは【バージョン固定デプロイ】。clasp push だけでは本番に反映されない。
+  //   GAS側を直したら必ず:  clasp deploy -i AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg -d "<説明>"
+  //   現行: バージョン63 / v4.33 (2026-08-03)  ※-i を省略すると新URLが生成されLIFFが全滅する
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
 
 const $ = (id) => document.getElementById(id);
 let me = null;                 // {userId, name}
