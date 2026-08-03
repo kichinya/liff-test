@@ -720,7 +720,6 @@
   // ============================================================
   var PLAN_DAYS = [];       // myplan_get の days
   var PLAN_TRAVEL = 30;     // 現場間の移動時間(分)
-  var PLAN_TRAVEL_SAME = 10; // ★v4.45 同じ建物の中を移動するとき(分)
   var PLAN_STEP = 15;       // 時刻の刻み(分)
   var planBusy = false;
 
@@ -749,7 +748,6 @@
         }
         PLAN_DAYS = res.days || [];
         if (res.travel) PLAN_TRAVEL = res.travel;
-        if (res.travelSame != null) PLAN_TRAVEL_SAME = res.travelSame;
         if (res.step) PLAN_STEP = res.step;
         if (!PLAN_DAYS.length){
           $('p-note').innerHTML = 'いまのところ、担当が決まっている予定はありません。<br>「挙手する」から希望を出せます。';
@@ -763,10 +761,16 @@
       });
   }
 
-  // ★v4.45 2件のあいだの移動時間。同じ建物（建物ID一致）なら短くする。
-  //   これが無いと「第一A → 第一B」でも60分あける判定になり、提案が信用されなくなる。
-  function travelBetween(a, b){
-    if (a && b && a.bldg && b.bldg && a.bldg === b.bldg) return PLAN_TRAVEL_SAME;
+  // ★v4.46 2件のあいだの移動時間。
+  //   サーバが Googleマップの実測（移動手段ぶんも反映済み）を tmap で渡してくる。
+  //   実測が取れなかった組だけ、保険の定数を使う。
+  //   一律の定数だと「第一A → 第一B」でも60分あける判定になり、提案が信用されなくなる。
+  function travelBetween(d, a, b){
+    if (!a || !b) return PLAN_TRAVEL;
+    if (d && d.tmap && a.key && b.key){
+      var v = d.tmap[a.key + '>' + b.key];
+      if (v != null && isFinite(v)) return v;
+    }
     return PLAN_TRAVEL;
   }
 
@@ -789,7 +793,7 @@
           ? ('・' + it.prop + ' は同日IN ' + it.inTime + ' に間に合いません（' + m2hm(cur+it.dur) + ' 終了予定）')
           : ('・' + it.prop + ' の開始が遅すぎます'));
       }
-      var tv = travelBetween(prevIt, it);
+      var tv = travelBetween(d, prevIt, it);
       if (prevEnd != null && cur < prevEnd + tv){
         out.push('・' + prevNm + ' と ' + it.prop + ' が重なっています（移動 ' + tv +
                  '分を含めて ' + m2hm(prevEnd + tv) + ' 以降）');
@@ -822,7 +826,7 @@
       prevIt = it;
       // 次の現場までの移動は「次がどこか」で変わる
       var nx = d.items[i+1];
-      if (nx) t += travelBetween(prevIt, nx);
+      if (nx) t += travelBetween(d, prevIt, nx);
     });
     renderPlan(di);
   }
