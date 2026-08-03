@@ -118,8 +118,10 @@
       <label class="req">金額</label>
       <div class="amount-wrap"><span class="yen">¥</span><input id="e-amount" type="number" inputmode="numeric" min="1" placeholder="例）1200"></div>
       <label class="req">用途</label><input id="e-purpose" type="text" placeholder="例）トイレットペーパー・洗剤">
-      <label>領収書の写真</label>
-      <label class="photo-btn">📷 領収書を撮影 / 選択<input id="e-photo" type="file" accept="image/*" capture="environment"></label>
+      <label>領収書の写真（複数可・最大4枚）</label>
+      <!-- ★v4.50 capture="environment" を外した。これが付いているとカメラが直接起動し、
+           すでに撮ってある写真をライブラリから選べない。領収書は後から出すことが多い。 -->
+      <label class="photo-btn">📷 領収書を撮影 / 選択<input id="e-photo" type="file" accept="image/*" multiple></label>
       <div id="e-prev" style="margin-top:10px;text-align:center"></div>
     </div>
     <button class="submit" onclick="submitExpense()">この内容で送信する</button>
@@ -138,7 +140,8 @@
         <label><input type="radio" name="pk" value="after"><span>清掃後</span></label>
       </div>
       <label class="req">写真（複数可・最大6枚）</label>
-      <label class="photo-btn">📷 写真を撮影 / 選択<input id="p-photo" type="file" accept="image/*" capture="environment" multiple></label>
+      <!-- ★v4.50 capture を外した。撮り直しや、あとから出す場合にライブラリを使えるようにする -->
+      <label class="photo-btn">📷 写真を撮影 / 選択<input id="p-photo" type="file" accept="image/*" multiple></label>
       <div id="photoPreview"></div>
       <div class="hint">撮影後、自動で縮小して送信します。</div>
     </div>
@@ -321,9 +324,14 @@ async function openMyCalendar(btn){
 }
 
 // ---- 立替 ----
-$('e-photo').addEventListener('change', (e)=>{ const f=e.target.files[0]; const p=$('e-prev'); p.innerHTML='';
-  if(!f) return; const im=new Image(); im.src=URL.createObjectURL(f); im.style.maxWidth='100%'; im.style.maxHeight='200px'; im.style.borderRadius='10px';
-  im.onload=()=>URL.revokeObjectURL(im.src); p.appendChild(im); });
+// ★v4.50 複数枚のプレビュー
+$('e-photo').addEventListener('change', (e)=>{ const p=$('e-prev'); p.innerHTML='';
+  const files=Array.prototype.slice.call(e.target.files,0,4);
+  files.forEach(function(f){ const im=new Image(); im.src=URL.createObjectURL(f);
+    im.style.maxWidth='48%'; im.style.maxHeight='160px'; im.style.borderRadius='10px'; im.style.margin='2px';
+    im.onload=()=>URL.revokeObjectURL(im.src); p.appendChild(im); });
+  if(e.target.files.length>4){ const d=document.createElement('div'); d.className='hint';
+    d.textContent='※ 4枚までです。先頭の4枚を送ります。'; p.appendChild(d); } });
 
 async function submitExpense(){
   const jk=document.querySelector('#v-expense .jobsel').value;
@@ -333,11 +341,12 @@ async function submitExpense(){
   if(!purpose) return showErr('msg-expense','用途を入力してください。');
   const btn=event.target; btn.disabled=true; btn.textContent='送信中…';
   try{
-    let base64=''; const f=$('e-photo').files[0];
-    if(f){ base64=(await resizeImage(f)).split(',')[1]||''; }
+    const files=Array.prototype.slice.call($('e-photo').files,0,4);
+    const receipts=[]; for(const f of files){ receipts.push((await resizeImage(f)).split(',')[1]||''); }
     const job=jobsMap[jk]||{};
     await postGas({ mode:'exp_submit', userId:me.userId, jobKey:jk, pid:job.pid||'', propName:job.name||'',
-      cleanDate:job.cleanDate||'', amount:amount, purpose:purpose, receiptBase64:base64, receiptMime: base64?'image/jpeg':'' });
+      cleanDate:job.cleanDate||'', amount:amount, purpose:purpose,
+      receipts:receipts, receiptMime: receipts.length?'image/jpeg':'' });
     finishDone();
   }catch(err){ btn.disabled=false; btn.textContent='この内容で送信する'; showErr('msg-expense','送信に失敗しました。電波の良い場所で再度お試しください。'); }
 }
@@ -579,16 +588,37 @@ async function submitCancel(){
     await liff.init({ liffId: LIFF_ID });
     if(!liff.isLoggedIn()){ liff.login(); return; }
     const prof=await liff.getProfile(); me={ userId:prof.userId, name:prof.displayName };
-    const res=await jsonp(GAS_URL+'?mode=exp_jobs&userId='+encodeURIComponent(me.userId));
+    // ★v4.50 立替は数日あとに出すことがあるので、過去31日ぶんを選べるようにする
+    const res=await jsonp(GAS_URL+'?mode=exp_jobs&days=31&userId='+encodeURIComponent(me.userId));
     if(!res || !res.ok){ $('loading').innerHTML='<div class="center">'+((res&&res.message)||'情報の取得に失敗しました。')+'</div>'; return; }
     if(res.staff && res.staff.name){ $('who').textContent=res.staff.name+' さん'; }
     const jobs=res.jobs||[];
-    document.querySelectorAll('.jobsel').forEach(function(sel){
+    // ★v4.50 立替だけ過去31日ぶんを出す。
+    //   写真報告・超過/備品/引き継ぎ は当日の作業についての報告なので、
+    //   同じ長いリストを出すと当日の物件を探せなくなる。ここで分ける。
+    const W=['日','月','火','水','木','金','土'];
+    const todayY=(function(){ const d=new Date();
+      return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); })();
+    jobs.forEach(function(j){ jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:j.cleanDate}; });
+
+    function fillSel(sel, list, withDate, emptyMsg){
       sel.innerHTML='';
-      if(!jobs.length){ const o=document.createElement('option'); o.value=''; o.textContent='本日の清掃物件がありません'; sel.appendChild(o); return; }
+      if(!list.length){ const o=document.createElement('option'); o.value=''; o.textContent=emptyMsg; sel.appendChild(o); return; }
       const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
-      jobs.forEach(function(j){ jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:j.cleanDate};
-        const o=document.createElement('option'); o.value=j.jobKey; o.textContent=j.name; sel.appendChild(o); });
+      list.forEach(function(j){
+        let lbl=j.name;
+        if(withDate && j.cleanDate){ const p=j.cleanDate.split('-');
+          const dt=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+          lbl=(j.cleanDate===todayY?'本日 ':'')+(dt.getMonth()+1)+'/'+dt.getDate()+'('+W[dt.getDay()]+') '+j.name; }
+        const o=document.createElement('option'); o.value=j.jobKey; o.textContent=lbl; sel.appendChild(o); });
+    }
+
+    const todayJobs=jobs.filter(function(j){ return !j.cleanDate || j.cleanDate===todayY; });
+    const expSel=document.querySelector('#v-expense .jobsel');
+    if(expSel) fillSel(expSel, jobs, true, '選べる清掃物件がありません');
+    document.querySelectorAll('.jobsel').forEach(function(sel){
+      if(sel===expSel) return;
+      fillSel(sel, todayJobs, false, '本日の清掃物件がありません');
     });
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
