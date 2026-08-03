@@ -720,6 +720,7 @@
   // ============================================================
   var PLAN_DAYS = [];       // myplan_get の days
   var PLAN_TRAVEL = 30;     // 現場間の移動時間(分)
+  var PLAN_TRAVEL_SAME = 10; // ★v4.45 同じ建物の中を移動するとき(分)
   var PLAN_STEP = 15;       // 時刻の刻み(分)
   var planBusy = false;
 
@@ -748,6 +749,7 @@
         }
         PLAN_DAYS = res.days || [];
         if (res.travel) PLAN_TRAVEL = res.travel;
+        if (res.travelSame != null) PLAN_TRAVEL_SAME = res.travelSame;
         if (res.step) PLAN_STEP = res.step;
         if (!PLAN_DAYS.length){
           $('p-note').innerHTML = 'いまのところ、担当が決まっている予定はありません。<br>「挙手する」から希望を出せます。';
@@ -761,12 +763,19 @@
       });
   }
 
+  // ★v4.45 2件のあいだの移動時間。同じ建物（建物ID一致）なら短くする。
+  //   これが無いと「第一A → 第一B」でも60分あける判定になり、提案が信用されなくなる。
+  function travelBetween(a, b){
+    if (a && b && a.bldg && b.bldg && a.bldg === b.bldg) return PLAN_TRAVEL_SAME;
+    return PLAN_TRAVEL;
+  }
+
   // 現在の並びが回れるか（サーバ側 _spWhyBad_ と同じ判定）
   function planCheck(d){
     var arr = d.items.slice().sort(function(a,b){
       return (hm2m(a.start)==null?9999:hm2m(a.start)) - (hm2m(b.start)==null?9999:hm2m(b.start));
     });
-    var out = [], prevEnd = null, prevNm = '';
+    var out = [], prevEnd = null, prevNm = '', prevIt = null;
     for (var i=0;i<arr.length;i++){
       var it = arr[i], cur = hm2m(it.start);
       if (cur == null){ out.push('・' + it.prop + ' の開始時刻が入っていません'); continue; }
@@ -780,19 +789,21 @@
           ? ('・' + it.prop + ' は同日IN ' + it.inTime + ' に間に合いません（' + m2hm(cur+it.dur) + ' 終了予定）')
           : ('・' + it.prop + ' の開始が遅すぎます'));
       }
-      if (prevEnd != null && cur < prevEnd + PLAN_TRAVEL){
-        out.push('・' + prevNm + ' と ' + it.prop + ' が重なっています（移動 ' + PLAN_TRAVEL +
-                 '分を含めて ' + m2hm(prevEnd + PLAN_TRAVEL) + ' 以降）');
+      var tv = travelBetween(prevIt, it);
+      if (prevEnd != null && cur < prevEnd + tv){
+        out.push('・' + prevNm + ' と ' + it.prop + ' が重なっています（移動 ' + tv +
+                 '分を含めて ' + m2hm(prevEnd + tv) + ' 以降）');
       }
       prevEnd = cur + (it.dur>0?it.dur:0);
       prevNm = it.prop;
+      prevIt = it;
     }
     return out.join('\n');
   }
 
   // いまの並び順のまま、時刻を先頭から詰め直す（🔒は動かさない）
   function planReflow(di){
-    var d = PLAN_DAYS[di], t = null;
+    var d = PLAN_DAYS[di], t = null, prevIt = null;
     d.items.forEach(function(it, i){
       var early = hm2m(it.min);
       if (early == null) early = 0;
@@ -807,7 +818,11 @@
       }
       it.start = m2hm(s);
       it.end = (it.dur > 0) ? m2hm(s + it.dur) : '';
-      t = s + (it.dur > 0 ? it.dur : 0) + PLAN_TRAVEL;
+      t = s + (it.dur > 0 ? it.dur : 0);
+      prevIt = it;
+      // 次の現場までの移動は「次がどこか」で変わる
+      var nx = d.items[i+1];
+      if (nx) t += travelBetween(prevIt, nx);
     });
     renderPlan(di);
   }
