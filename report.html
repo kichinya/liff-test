@@ -114,6 +114,9 @@
     <h1>💰 立替精算</h1>
     <div id="msg-expense" class="msg"></div>
     <div class="card">
+      <!-- ★v4.51 日付を先に選ぶ。物件を先に出すと過去ぶんで数百件になり選べない -->
+      <label class="req">清掃日</label><select id="e-date"></select>
+      <div class="hint" id="e-range" style="margin:-4px 0 10px"></div>
       <label class="req">物件</label><select class="jobsel"></select>
       <label class="req">金額</label>
       <div class="amount-wrap"><span class="yen">¥</span><input id="e-amount" type="number" inputmode="numeric" min="1" placeholder="例）1200"></div>
@@ -324,6 +327,22 @@ async function openMyCalendar(btn){
 }
 
 // ---- 立替 ----
+// ★v4.51 清掃日 → 物件 の連動。EXP_DATES は起動時に受け取る [{ymd,label,jobs:[…]}]
+let EXP_DATES=[];
+function fillExpenseJobs(){
+  const sel=document.querySelector('#v-expense .jobsel');
+  const i=parseInt($('e-date').value,10);
+  const d=(i>=0 && EXP_DATES[i]) ? EXP_DATES[i] : null;
+  sel.innerHTML='';
+  if(!d || !d.jobs.length){
+    const o=document.createElement('option'); o.value=''; o.textContent='この日の清掃物件がありません';
+    sel.appendChild(o); return;
+  }
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+  d.jobs.forEach(function(j){ const o=document.createElement('option');
+    o.value=j.jobKey; o.textContent=j.name; sel.appendChild(o); });
+}
+
 // ★v4.50 複数枚のプレビュー
 $('e-photo').addEventListener('change', (e)=>{ const p=$('e-prev'); p.innerHTML='';
   const files=Array.prototype.slice.call(e.target.files,0,4);
@@ -336,6 +355,7 @@ $('e-photo').addEventListener('change', (e)=>{ const p=$('e-prev'); p.innerHTML=
 async function submitExpense(){
   const jk=document.querySelector('#v-expense .jobsel').value;
   const amount=parseInt($('e-amount').value,10); const purpose=$('e-purpose').value.trim();
+  if(!$('e-date').value) return showErr('msg-expense','清掃日を選んでください。');
   if(!jk) return showErr('msg-expense','物件を選んでください。');
   if(!(amount>0)) return showErr('msg-expense','金額を正しく入力してください。');
   if(!purpose) return showErr('msg-expense','用途を入力してください。');
@@ -588,8 +608,8 @@ async function submitCancel(){
     await liff.init({ liffId: LIFF_ID });
     if(!liff.isLoggedIn()){ liff.login(); return; }
     const prof=await liff.getProfile(); me={ userId:prof.userId, name:prof.displayName };
-    // ★v4.50 立替は数日あとに出すことがあるので、過去31日ぶんを選べるようにする
-    const res=await jsonp(GAS_URL+'?mode=exp_jobs&days=31&userId='+encodeURIComponent(me.userId));
+    // ★v4.51 1回で「今日の物件（写真・超過報告用）」と「立替で選べる清掃日＋その日の物件」を受ける
+    const res=await jsonp(GAS_URL+'?mode=exp_jobs&userId='+encodeURIComponent(me.userId));
     if(!res || !res.ok){ $('loading').innerHTML='<div class="center">'+((res&&res.message)||'情報の取得に失敗しました。')+'</div>'; return; }
     if(res.staff && res.staff.name){ $('who').textContent=res.staff.name+' さん'; }
     const jobs=res.jobs||[];
@@ -615,11 +635,28 @@ async function submitCancel(){
 
     const todayJobs=jobs.filter(function(j){ return !j.cleanDate || j.cleanDate===todayY; });
     const expSel=document.querySelector('#v-expense .jobsel');
-    if(expSel) fillSel(expSel, jobs, true, '選べる清掃物件がありません');
     document.querySelectorAll('.jobsel').forEach(function(sel){
       if(sel===expSel) return;
       fillSel(sel, todayJobs, false, '本日の清掃物件がありません');
     });
+
+    // ★v4.51 立替は 清掃日 → 物件 の2段。締切を過ぎた月は選択肢に出ない。
+    EXP_DATES = res.dates || [];
+    if(res.range && res.range.note) $('e-range').textContent = res.range.note;
+    const dsel=$('e-date');
+    dsel.innerHTML='';
+    if(!EXP_DATES.length){
+      const o=document.createElement('option'); o.value=''; o.textContent='選べる清掃日がありません'; dsel.appendChild(o);
+      if(expSel) fillSel(expSel, [], false, '先に清掃日を選んでください');
+    } else {
+      EXP_DATES.forEach(function(d,i){ EXP_DATES[i].jobs.forEach(function(j){
+        jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:d.ymd}; });
+        const o=document.createElement('option'); o.value=String(i); o.textContent=d.label+'（'+d.jobs.length+'件）';
+        dsel.appendChild(o); });
+      dsel.value='0';
+      fillExpenseJobs();
+    }
+    dsel.addEventListener('change', fillExpenseJobs);
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
     if(type && ['expense','photo','overtime','supply','handover','props','settings'].indexOf(type)>=0) go(type);
