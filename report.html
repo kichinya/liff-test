@@ -120,19 +120,23 @@
     <h1>📋 報告</h1>
     <p class="lead" id="who"></p>
     <div id="msg-menu" class="msg"></div>
+    <!-- ★v4.58 マイカレンダーだけ外した（【マイ予定】へ移動）。
+         予定を見る場所が「報告」と「清掃希望を送信」に分かれていて分かりにくかったため。 -->
     <div class="menu">
       <div class="mbtn" onclick="go('expense')"><div class="ico">💰</div>立替精算</div>
       <div class="mbtn" onclick="go('photo')"><div class="ico">📷</div>写真報告</div>
       <div class="mbtn" onclick="go('overtime')"><div class="ico">⏱</div>超過報告</div>
       <div class="mbtn" onclick="go('supply')"><div class="ico">📦</div>備品発注</div>
       <div class="mbtn" onclick="go('handover')"><div class="ico">📝</div>引き継ぎ</div>
-      <div class="mbtn" id="mycal-btn" onclick="openMyCalendar(this)"><div class="ico">📅</div>マイカレンダー</div>
       <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
       <div class="mbtn" onclick="go('late')"><div class="ico">⏰</div>打刻の後入れ</div>
       <div class="mbtn" onclick="go('help')"><div class="ico">❓</div>使い方</div>
     </div>
+    <p class="hint" style="margin-top:14px">
+      📅 予定の確認とカレンダーへの追加は「清掃希望を送信」→【マイ予定】へ移りました。
+    </p>
   </div>
 
   <!-- ★v4.55 打刻の後入れ -->
@@ -165,6 +169,12 @@
   <div id="v-help" class="hidden">
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>❓ 使い方</h1>
+    <div class="note" style="margin-bottom:14px">
+      <b>どこに何があるか</b><br>
+      📋 <b>報告</b>（このメニュー）… 立替精算／写真報告／超過報告／備品発注／引き継ぎ／
+      対応できる物件／移動手段・出発地／報告の取消／打刻の後入れ<br>
+      🙋 <b>清掃希望を送信</b> … 清掃希望日／挙手する／<b>マイ予定</b>（予定の確認・順番の変更・カレンダー追加）
+    </div>
     <p class="helpLead">
       知りたいところをタップすると開きます。<br>
       分からないときは、遠慮なく<b>このトークにそのままご返信ください</b>🙇<br>担当が確認してお返事します。
@@ -283,8 +293,9 @@
         <p>見かたは3つあります。</p>
         <ul>
           <li><b>毎日18時ごろのLINE</b> … 翌日の予定が届きます。順番どおりに回れる地図のリンク付きです</li>
-          <li><b>📅 マイカレンダー</b> … スマホのカレンダーアプリで見られます</li>
           <li><b>清掃希望を送信 →【マイ予定】</b> … 先の予定まで一覧で見られます</li>
+          <li>同じ【マイ予定】の上にある <span class="k">📅 スマホのカレンダーに追加する</span> を押すと、
+              <b>ふだんお使いのカレンダーアプリ</b>に予定が入ります</li>
         </ul>
       </div>
     </details>
@@ -531,6 +542,7 @@ function go(name){
   if (name==='settings') loadSettings();   // ★v4.41 移動手段・出発地
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
 }
+
 
 // JSONP GET
 function jsonp(url){

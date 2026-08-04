@@ -155,6 +155,11 @@
       担当が決まっている予定です。<b>順番と開始時刻をご自分で変えられます。</b><br>
       回れない並び（重なる／チェックアウト前／同日INに間に合わない）は保存できません。
     </div>
+    <!-- ★v4.58 マイカレンダーをここへ移した。
+         「報告」メニューにあったが、これは予定を見るためのもの。
+         自分の予定を見る場所が2か所に分かれているほうが分かりにくい。 -->
+    <button class="btn" id="p-cal" style="background:#fff;color:var(--green);border:1px solid var(--green);margin-bottom:14px"
+            onclick="openMyCalendar(this)">📅 スマホのカレンダーに追加する</button>
     <div class="loading" id="p-note">読み込み中…</div>
     <div id="p-list"></div>
   </div>
@@ -734,6 +739,23 @@
   function esc(s){
     return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ★v4.58 個人カレンダーのURLを取って開く（GAS: ?mode=mycal）
+  function openMyCalendar(btn){
+    var label = btn.textContent;
+    btn.disabled = true; btn.textContent = '読み込み中…';
+    jsonp(GAS_URL + '?mode=mycal&userId=' + encodeURIComponent(ME.userId))
+      .then(function(res){
+        btn.disabled = false; btn.textContent = label;
+        if (!res || !res.ok){ alert((res && res.message) || 'カレンダー情報の取得に失敗しました。'); return; }
+        if (window.liff && liff.isInClient && liff.isInClient()) liff.openWindow({ url: res.url, external: true });
+        else window.open(res.url, '_blank');
+      })
+      .catch(function(){
+        btn.disabled = false; btn.textContent = label;
+        alert('カレンダー情報の取得に失敗しました。電波の良い場所で再度お試しください。');
+      });
   }
 
   function loadMyPlan(){
