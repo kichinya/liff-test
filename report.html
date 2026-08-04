@@ -292,8 +292,8 @@
           7枚以上あるときは、その画面の下にある
           <span class="k">📱 LINEのトークからまとめて送る</span> を押してください。<br>
           受付が始まったら、<b>このトークに写真を送るだけ</b>です。アルバムからまとめて選べるので、何十枚でも数タップで送れます。<br><br>
-          <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、枚数をお知らせします。
-          すぐ確認したいときは <span class="k">✅ 送信おわり</span> を押してください。<br>
+          <!-- ★v5.21 「✅ 送信おわり」は廃止（クイックリプライのため、写真を送った時点で消えて押せなかった） -->
+          <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、枚数をお知らせします。<br>
           ※別の物件の写真を送るときは、もう一度 <span class="k">📷 写真報告</span> から選び直してください。
         </div>
         <div class="warn">
@@ -1096,7 +1096,13 @@ async function submitLate(){
       +'&jobKey='+encodeURIComponent(jk)
       +'&start='+encodeURIComponent(st.replace(':',''))
       +'&end='+encodeURIComponent(en.replace(':',''))
-      +'&kind='+encodeURIComponent(kind));
+      +'&kind='+encodeURIComponent(kind)
+      // ★v5.21【v5.04の欠落分】「実際に作業した日」を送っていなかった。
+      //   サーバ AttendanceLate.gs:176 は var wd = _alYmd_(p.workDate) || cd; で待っている。
+      //   送っていなかったため常に【清掃日】で記録され、しかも同じ時間帯だと
+      //   「時間が重なっています」で弾かれ、日を跨いだ作業を入れる手段が無かった。
+      //   （v5.16 で startPhotoIntake から消した &workDate= は、本来ここに置くものだった）
+      +'&workDate='+encodeURIComponent(wd));
     btn.disabled=false; btn.textContent='この内容で記録する';
     if(!res || !res.ok) return showErr('msg-late',(res&&res.message)||'記録できませんでした。');
     finishDone();
