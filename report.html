@@ -66,11 +66,11 @@
   .faq .body p:last-child{ margin-bottom:0; }
   .faq .body ol,.faq .body ul{ margin:0 0 10px; padding-left:1.3em; }
   .faq .body li{ margin-bottom:5px; }
-  /* ★v4.83 使い方に出てくる「押すボタン」の名前。実際の画面のボタンと同じ緑にする。
-     灰色だと本文に埋もれ、どれがボタン名なのか読み取れなかった。 */
-  .faq .body .k{ display:inline-block; background:var(--green); color:#fff;
-    border:1px solid var(--green-d); border-radius:6px; padding:2px 8px;
-    font-size:13px; font-weight:700; white-space:nowrap; }
+  /* 使い方に出てくる「押すボタン」の名前。
+     ★v4.86 緑にしたら本文が騒がしくなったので灰色に戻した。
+     ただし本文に埋もれないよう、余白と改行禁止だけは残す。 */
+  .faq .body .k{ display:inline-block; background:#eef3ee; border:1px solid var(--line);
+    border-radius:6px; padding:2px 8px; font-size:13px; font-weight:700; white-space:nowrap; }
   .faq .body .warn{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:9px;
     padding:10px 12px; font-size:13px; line-height:1.8; margin:10px 0 0; }
   .helpLead{ font-size:13px; color:var(--sub); line-height:1.8; margin:0 0 14px; }
@@ -183,7 +183,7 @@
       🙋 <b>清掃希望を送信</b> … 清掃希望日／挙手する／<b>マイ予定</b>（予定の確認・順番の変更・カレンダー追加）
     </div>
     <p class="helpLead">
-      ここに出てくる <span class="k" style="font-size:12px">緑色の名前</span> は、
+      ここに出てくる <span class="k" style="font-size:12px">囲んだ名前</span> は、
       LINEの画面にある<b>ボタンの名前</b>です。<br>
       知りたいところをタップすると開きます。<br>
       分からないときは、遠慮なく<b>このトークにそのままご返信ください</b>🙇<br>担当が確認してお返事します。
@@ -201,6 +201,11 @@
         <div class="warn">
           ⚠️ <b>開始を押し忘れたまま完了はできません。</b>「完了できる清掃が見つかりませんでした」と出たら、先に開始を押してください。<br>
           すでに開始した物件でもう一度開始を押すと「すでに開始を報告済みです」と出ます。二重に記録されることはありません。
+        </div>
+        <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
+          📷 <b>開始と完了のあとに、写真のお願いが出ます。</b>
+          清掃前・清掃後の写真は<b>全物件で必要</b>です。出てきたリンクをタップして送ってください。
+          くわしくは下の <b>📷 写真報告</b> をご覧ください。
         </div>
         <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
           ⏱ <b>予定より15分以上超過すると、完了のメッセージに超過分が出ます。</b>
@@ -224,12 +229,39 @@
     <details class="faq">
       <summary>📷 写真報告</summary>
       <div class="body">
-        <p>清掃の前後の写真を残せます。</p>
+        <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
+          📷 <b>2026年8月5日から、すべての物件で 清掃前・清掃後 の写真をお願いしています。</b><br>
+          オーナー様に清掃の状態をご確認いただくためのものです。お名前は出ません。
+        </div>
+        <p><b>いちばん簡単なのは、開始と完了のあとにそのまま送る方法です。</b></p>
         <ol>
-          <li><span class="k">報告</span> を開いて <span class="k">📷 写真報告</span> を選びます</li>
-          <li><b>清掃日</b>と物件、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選びます</li>
-          <li>写真を選んで送信します（<b>1回に6枚まで</b>）</li>
+          <li>現場に着いて <span class="k">開始</span> を押す</li>
+          <li>「清掃前の写真をお願いします」と出るので、<b>そのリンクをタップ</b></li>
+          <li>写真を選んで送信（<b>1回に6枚まで</b>）</li>
+          <li>終わって <span class="k">完了</span> を押す</li>
+          <li>同じように<b>清掃後</b>の写真を送る</li>
         </ol>
+        <p><b>あとから送るとき</b>は、<span class="k">報告</span> を開いて <span class="k">📷 写真報告</span> を選び、
+        <b>清掃日</b>と物件、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選んでください。</p>
+        <div class="warn" style="background:#fff8e1;border-color:#ffe4a1">
+          🔧 <b>破損・故障・汚損を見つけたときは、引き継ぎにも残してください</b><br>
+          写真だけだとフォルダに溜まるだけで、こちらから気づけないことがあります。
+          <span class="k">報告</span> の中の <span class="k">📝 引き継ぎ</span> に一言書いてください。
+          写真報告の画面にも <b>📝 引き継ぎを書く</b> のボタンがあります。<br>
+          <b>写真は先に送ってから</b>お願いします。
+        </div>
+        <div class="warn">
+          🔁 <b>あとから追加で送れます</b><br>
+          同じ物件・同じ区分でも<b>何度でも送れます</b>。先に送った写真が消えることはありません。<br>
+          清掃前の写真を送ったあとに破損を見つけたときは、<b>そのぶんだけ追加で送ってください</b>。
+          撮り直して全部送り直す必要はありません。
+        </div>
+        <div class="warn">
+          🖼 <b>撮っていただきたいもの</b><br>
+          ・<b>清掃前</b> … 汚れや傷みが分かるところ<br>
+          ・<b>清掃後</b> … お部屋ごとの全体（寝室／リビング／水まわり／玄関）<br>
+          きれいに仕上げていただいた状態が伝わればじゅうぶんです。枚数を競うものではありません。
+        </div>
         <p>その場で撮っても、すでに撮ってある写真を選んでも大丈夫です。写真は自動で縮小してから送られます。</p>
         <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
           🕒 <b>あとから送っても大丈夫です</b><br>
@@ -287,7 +319,8 @@
         <ul>
           <li><b>⏱ 超過報告</b> … 想定より時間がかかったとき（例: 鍵のトラブルで30分超過）</li>
           <li><b>📦 備品発注</b> … 消耗品が足りないとき（例: トイレットペーパー残り1個）</li>
-          <li><b>📝 引き継ぎ</b> … 次に入る人に伝えたいとき（例: エアコンの効きが悪い）</li>
+          <li><b>📝 引き継ぎ</b> … 次に入る人に伝えたいとき（例: エアコンの効きが悪い）<br>
+            <b>破損・故障・汚損を見つけたときも、ここに書いてください。</b>写真とあわせてお願いします</li>
         </ul>
         <p>送ると管理側にも通知が届きます。返事が必要なものは、担当から改めてご連絡します。</p>
         <div class="warn" style="background:#fff8e1;border-color:#ffe082">
@@ -472,6 +505,27 @@
       <div class="hint">撮影後、自動で縮小して送信します。</div>
     </div>
     <button class="submit" onclick="submitPhoto()">この内容で送信する</button>
+
+    <!-- ★v4.87 破損は写真だけでは伝わらない。
+         写真はフォルダに溜まるだけで、誰かが見に行かないと気づけない。
+         引き継ぎに文章で残して初めて、管理側とオーナー様に届く。
+         見つけたその場で書けるよう、送信ボタンの直下に導線を置く。 -->
+    <div class="note" style="margin-top:18px;background:#fff8e1;border-color:#ffe4a1">
+      <b>🔧 破損・故障・汚損を見つけたとき</b><br>
+      写真を送るだけでは、こちらから気づけないことがあります。
+      お手数ですが <b>📝 引き継ぎ</b> にも一言お願いします。<br>
+      <span style="color:#666">例）洗面台の下から水漏れ／リビングの椅子の脚が1本折れている</span>
+      <button class="btn" style="width:100%;margin-top:10px;padding:12px;font-size:14px;font-weight:700;
+        background:#fff;color:var(--green);border:1px solid var(--green);border-radius:10px"
+        onclick="go('handover')">📝 引き継ぎを書く</button>
+      <div class="hint" style="margin-top:6px">※ 先に写真を送ってから押してください。</div>
+    </div>
+
+    <div class="note" style="margin-top:12px">
+      <b>🔁 あとから追加で送れます</b><br>
+      同じ物件・同じ区分でも<b>何度でも送れます</b>。先に送った写真が消えることはありません。<br>
+      清掃前の写真を送ったあとに破損を見つけたときは、そのぶんだけ追加で送ってください。
+    </div>
 
     <!-- ★v4.53 枚数が多いときは LINE のトークに直接送ってもらう。
          この送信は「縮小してまとめて1回で送る」方式のため、
