@@ -574,11 +574,14 @@
     // ★v5.22 募集人数を必ず出す。
     //   2名・3名で入る現場を1名だと思って行くと、その日の作業が終わらない。
     //   すでに誰かが入っている場合は「あとN名」にして、残りが何人かを一目で分かるようにする。
+    // ★v5.27 文言を「2名で入ります」→「2名募集」に。
+    //   ここは【募集の一覧】なので、状態の説明ではなく募集人数を出すのが正しい。
+    //   「2名で入ります」は、自分を含めて2名なのか、自分のほかに2名なのかが読み取れない。
     if (it.need && it.need > 1){
       var np = document.createElement('span');
       var shortOf = (typeof it.shortOf === 'number') ? it.shortOf : it.need;
       np.className = 'needpill' + ((it.has > 0) ? ' short' : '');
-      np.textContent = (it.has > 0) ? ('あと' + shortOf + '名') : (it.need + '名で入ります');
+      np.textContent = (it.has > 0) ? ('あと' + shortOf + '名募集') : (it.need + '名募集');
       nm.appendChild(np);
     }
     body.appendChild(nm);
