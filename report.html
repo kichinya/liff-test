@@ -152,9 +152,14 @@
     <div class="card">
       <label class="req">清掃日</label><select id="l-date" onchange="fillLateJobs()"></select>
       <div class="note" id="l-range"></div>
-      <label class="req">物件</label><select id="l-job" onchange="lateDoneHint()"></select>
+      <label class="req">物件</label><select id="l-job" onchange="lateDoneHint();fillLateWorkDates()"></select>
       <!-- ★v4.79 記録済みの清掃を選んだときだけ出す -->
       <div class="note" id="l-donenote" style="display:none;background:#e8f5e9;border-color:#a5d6a7"></div>
+      <!-- ★v5.04 1日で終わらない清掃がある。実際に作業した日を選べるようにする。
+           清掃日のままだと、翌日の作業が前日の日時として残り、
+           さらに同じ時間帯だと「時間が重なる」と弾かれてしまう。 -->
+      <label class="req">実際に作業した日</label><select id="l-workdate" onchange="lateWorkDateHint()"></select>
+      <div class="note" id="l-wdnote" style="display:none;background:#e8f5e9;border-color:#a5d6a7"></div>
       <label class="req">開始時刻</label><input id="l-start" type="time" step="300">
       <label class="req">完了時刻</label><input id="l-end" type="time" step="300">
       <label class="req">作業区分</label>
@@ -351,6 +356,7 @@
         <ol>
           <li><b>清掃日</b> を選びます</li>
           <li>入力が必要な物件が出るので、選びます</li>
+          <li><b>実際に作業した日</b> を選びます（清掃日と同じならそのままで大丈夫です）</li>
           <li>実際の <b>開始時刻</b> と <b>完了時刻</b> を入れます</li>
           <li>🧹清掃 か 🔍チェック を選んで記録します</li>
         </ol>
@@ -360,7 +366,9 @@
           「昼に清掃 → ゲスト様のご都合で中断 → 夜に仕上げ」のような場合も、
           <b>2回目の時間をここから出してください。</b>その日のうちなら
           <span class="k">開始</span> を押し直すだけでも記録できます。<br>
-          前回と<b>時間が重なっていると記録できません</b>（同じ作業が二重に入るのを防ぐためです）。
+          前回と<b>時間が重なっていると記録できません</b>（同じ作業が二重に入るのを防ぐためです）。<br>
+          <b>翌日にまたがった場合</b>は「実際に作業した日」で翌日を選んでください。
+          日が違えば、同じ時間帯でも記録できます。
         </div>
         <div class="warn">
           ⚠️ <b>実際に作業した時刻</b>を入れてください。<b>業務委託費のもとになる記録</b>です。入力すると管理側にも通知されます。<br><br>
@@ -864,7 +872,8 @@ async function startPhotoIntake(){
     const res=await jsonp(GAS_URL+'?mode=photo_intake_start'
       +'&userId='+encodeURIComponent(me.userId)
       +'&jobKey='+encodeURIComponent(jk)
-      +'&kind='+encodeURIComponent(kind));
+      +'&kind='+encodeURIComponent(kind)
+      +'&workDate='+encodeURIComponent(wd));   // ★v5.04
     if(!res || !res.ok){
       btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
       return showErr('msg-photo',(res&&res.message)||'受付を始められませんでした。');
@@ -973,11 +982,47 @@ function fillLateJobs(){
     o.dataset.std=j.std||'';
     o.dataset.done=j.done?'1':'';
     o.dataset.doneLabel=j.doneLabel||'';
+    o.dataset.cd=j.cleanDate||d.ymd||'';      // ★v5.04
     sel.appendChild(o); });
   lateDoneHint();
+  fillLateWorkDates();                        // ★v5.04
 }
 
 // 記録済みの清掃を選んだときだけ、追加作業になる旨を出す
+// ★v5.04 実際に作業した日の選択肢（清掃日〜本日・最大8日）
+function fillLateWorkDates(){
+  const sel=$('l-job'); const o=sel.options[sel.selectedIndex];
+  const wsel=$('l-workdate'); wsel.innerHTML='';
+  const cd=(o&&o.dataset&&o.dataset.cd)?o.dataset.cd:'';
+  if(!cd){ const x=document.createElement('option'); x.value=''; x.textContent='先に物件を選んでください'; wsel.appendChild(x); return; }
+  const W=['日','月','火','水','木','金','土'];
+  const p=cd.split('-'); const start=new Date(Number(p[0]),Number(p[1])-1,Number(p[2]));
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(let i=0;i<8;i++){
+    const d=new Date(start.getTime()+i*86400000);
+    if(d>today) break;
+    const y=d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+    const x=document.createElement('option'); x.value=y;
+    x.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+W[d.getDay()]+')'+(i===0?'　清掃日':'')+
+                  (d.getTime()===today.getTime()?'　本日':'');
+    wsel.appendChild(x);
+  }
+  wsel.value=cd;
+  lateWorkDateHint();
+}
+
+function lateWorkDateHint(){
+  const box=$('l-wdnote'); if(!box) return;
+  const sel=$('l-job'); const o=sel.options[sel.selectedIndex];
+  const cd=(o&&o.dataset&&o.dataset.cd)?o.dataset.cd:'';
+  const wd=$('l-workdate').value;
+  if(cd && wd && wd!==cd){
+    box.style.display='block';
+    box.innerHTML='🔁 <b>清掃日とは別の日</b>の作業として記録します。<br>'
+      + '実働時間は合算され、お支払いの対象になります。';
+  }else{ box.style.display='none'; box.innerHTML=''; }
+}
+
 function lateDoneHint(){
   const sel=$('l-job'); const box=$('l-donenote');
   if(!box) return;
@@ -1000,6 +1045,8 @@ async function submitLate(){
   if(!jk) return showErr('msg-late','物件を選んでください。');
   if(!st) return showErr('msg-late','開始時刻を入れてください。');
   if(!en) return showErr('msg-late','完了時刻を入れてください。');
+  const wd=$('l-workdate').value;
+  if(!wd) return showErr('msg-late','実際に作業した日を選んでください。');
   const btn=event.target; btn.disabled=true; btn.textContent='記録しています…';
   try{
     const res=await jsonp(GAS_URL+'?mode=late_submit&userId='+encodeURIComponent(me.userId)
