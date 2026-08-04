@@ -52,6 +52,25 @@
     background:#f5f7f5; border:1px solid var(--line); border-radius:8px;
     padding:9px 11px; margin:8px 0 0; }
   .note:empty{ display:none; }
+
+  /* ★v4.52 使い方 */
+  .faq{ background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
+  .faq>summary{ list-style:none; cursor:pointer; padding:14px 15px; font-size:15px; font-weight:700;
+    display:flex; align-items:center; gap:9px; }
+  .faq>summary::-webkit-details-marker{ display:none; }
+  .faq>summary::after{ content:"＋"; margin-left:auto; color:var(--sub); font-weight:400; font-size:17px; }
+  .faq[open]>summary::after{ content:"−"; }
+  .faq[open]>summary{ border-bottom:1px solid var(--line); }
+  .faq .body{ padding:13px 15px 16px; font-size:14px; line-height:1.85; color:var(--ink); }
+  .faq .body p{ margin:0 0 10px; }
+  .faq .body p:last-child{ margin-bottom:0; }
+  .faq .body ol,.faq .body ul{ margin:0 0 10px; padding-left:1.3em; }
+  .faq .body li{ margin-bottom:5px; }
+  .faq .body .k{ display:inline-block; background:#eef3ee; border:1px solid var(--line);
+    border-radius:6px; padding:1px 7px; font-size:13px; font-weight:700; }
+  .faq .body .warn{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:9px;
+    padding:10px 12px; font-size:13px; line-height:1.8; margin:10px 0 0; }
+  .helpLead{ font-size:13px; color:var(--sub); line-height:1.8; margin:0 0 14px; }
   button.submit{ width:100%; margin-top:20px; padding:15px; font-size:16px; font-weight:700;
     color:#fff; background:var(--green); border:none; border-radius:12px; }
   button.submit:disabled{ background:#a5d6a7; }
@@ -111,7 +130,175 @@
       <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
+      <div class="mbtn" onclick="go('help')"><div class="ico">❓</div>使い方</div>
     </div>
+  </div>
+
+  <!-- ★v4.52 使い方 -->
+  <div id="v-help" class="hidden">
+    <button class="back" onclick="go('menu')">← 戻る</button>
+    <h1>❓ 使い方</h1>
+    <p class="helpLead">
+      知りたいところをタップすると開きます。<br>
+      分からないときは、遠慮なく清掃スタッフグループへお尋ねください🙇
+    </p>
+
+    <details class="faq">
+      <summary>▶ 清掃を始めるとき・終わったとき</summary>
+      <div class="body">
+        <p>いちばん大事な操作です。この2つで実働時間が記録され、業務委託費の元になります。</p>
+        <ol>
+          <li>現場に着いたら、下のメニューの <span class="k">開始</span> を押します</li>
+          <li>その日の物件が出るので、これから入る物件を選びます（1件だけの日は自動で選ばれます）</li>
+          <li>終わったら <span class="k">完了</span> を押します</li>
+        </ol>
+        <div class="warn">
+          ⚠️ <b>開始を押し忘れたまま完了はできません。</b>「完了できる清掃が見つかりませんでした」と出たら、先に開始を押してください。<br>
+          すでに開始した物件でもう一度開始を押すと「すでに開始を報告済みです」と出ます。二重に記録されることはありません。
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>🧹 清掃とチェックの選び分け</summary>
+      <div class="body">
+        <p>同じ物件に「清掃で入る」場合と「チェックだけで入る」場合があります。</p>
+        <p>その日の担当に入っていない物件を選んだときや、すでに完了を出した物件をもう一度選んだときに、<span class="k">🧹 清掃</span> と <span class="k">🔍 チェック</span> のどちらかを聞かれます。実際に行う作業のほうを選んでください。</p>
+        <p>担当に入っている物件をふつうに開始する場合は、聞かれません。そのまま進めて大丈夫です。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>📷 写真報告</summary>
+      <div class="body">
+        <p>清掃の前後の写真を残せます。</p>
+        <ol>
+          <li>メニューの <span class="k">📷 写真報告</span> を選びます</li>
+          <li>物件と、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選びます</li>
+          <li>写真を選んで送信します（<b>最大6枚</b>）</li>
+        </ol>
+        <p>その場で撮っても、すでに撮ってある写真を選んでも大丈夫です。写真は自動で縮小してから送られます。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>💰 立替精算</summary>
+      <div class="body">
+        <p>備品などを立て替えて買ったときに出してください。</p>
+        <ol>
+          <li>メニューの <span class="k">💰 立替精算</span> を選びます</li>
+          <li><b>清掃日</b> を選びます（数日前の分も出せます）</li>
+          <li>その日の物件から、対象の物件を選びます</li>
+          <li>金額と用途を入れます</li>
+          <li>領収書の写真を選びます（<b>最大4枚</b>・任意）</li>
+        </ol>
+        <div class="warn">
+          ⚠️ <b>締切は毎月1日です。</b>前の月の分は1日までに出してください。締切を過ぎた月の清掃日は選べなくなります。<br>
+          間に合わなかった場合は、清掃スタッフグループへご連絡ください。
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>⏱ 超過報告・📦 備品発注・📝 引き継ぎ</summary>
+      <div class="body">
+        <p>清掃中に起きたことを、文章で残せます。物件を選んで内容を書くだけです。</p>
+        <ul>
+          <li><b>⏱ 超過報告</b> … 想定より時間がかかったとき（例: 鍵のトラブルで30分超過）</li>
+          <li><b>📦 備品発注</b> … 消耗品が足りないとき（例: トイレットペーパー残り1個）</li>
+          <li><b>📝 引き継ぎ</b> … 次に入る人に伝えたいとき（例: エアコンの効きが悪い）</li>
+        </ul>
+        <p>送ると管理側にも通知が届きます。返事が必要なものは、担当から改めてご連絡します。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>↩️ 間違えて報告したとき</summary>
+      <div class="body">
+        <p>メニューの <span class="k">↩️ 報告の取消</span> から取り消せます。その日にご自分が出した報告が一覧で出るので、取り消したいものを選んでください。</p>
+        <p>取り消したあと、正しい内容でもう一度報告してください。</p>
+        <div class="warn">
+          ⚠️ 取り消してから開始を押し直すと、<b>開始時刻が押し直した時刻</b>になります。実際に始めた時刻と違う場合は、清掃スタッフグループへお知らせください。
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>📅 自分の予定を見る</summary>
+      <div class="body">
+        <p>見かたは3つあります。</p>
+        <ul>
+          <li><b>毎日18時ごろのLINE</b> … 翌日の予定が届きます。順番どおりに回れる地図のリンク付きです</li>
+          <li><b>📅 マイカレンダー</b> … スマホのカレンダーアプリで見られます</li>
+          <li><b>清掃希望を送信 →【マイ予定】</b> … 先の予定まで一覧で見られます</li>
+        </ul>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>📋 順番や時間を変えたいとき</summary>
+      <div class="body">
+        <p>リッチメニューの <span class="k">清掃希望を送信</span> を押して、上の <span class="k">マイ予定</span> タブを開いてください。</p>
+        <ul>
+          <li><b>▲▼</b> で回る順番を入れ替えられます（時刻は自動で詰め直します）</li>
+          <li>開始時刻もプルダウンで選び直せます</li>
+          <li><b>✨ おすすめの順番</b> を押すと、回れる並びが入ります</li>
+        </ul>
+        <p>最後に <b>この日の予定を保存する</b> を押してください。</p>
+        <div class="warn">
+          ⚠️ 回れない並び（時間が重なる・チェックアウト前に始まる・次のお客様のチェックインに間に合わない）は<b>保存できません</b>。理由が赤い字で出るので、直してから保存してください。安心して触ってみてください。<br><br>
+          🔒 <b>2人で入る予定</b>と、<b>すでに開始を報告した予定</b>は変えられません。清掃スタッフグループへご連絡ください。
+        </div>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>🙋 清掃希望を出す・挙手する</summary>
+      <div class="body">
+        <p>リッチメニューの <span class="k">清掃希望を送信</span> に3つのタブがあります。</p>
+        <ul>
+          <li><b>清掃希望日</b> … 入れる日をカレンダーで選んで送ります</li>
+          <li><b>挙手する</b> … 募集中の案件に手を挙げます。<b>希望の開始時刻</b>も出せます（「おまかせ」でも大丈夫です）</li>
+          <li><b>マイ予定</b> … 担当が決まった予定を見る・直す</li>
+        </ul>
+        <p>希望の開始時刻を出した案件は、こちらの都合で勝手に動かしません。「おまかせ」で出した案件は、回りやすいように時間を調整させていただくことがあります。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>⚙️ 移動手段・出発地の設定</summary>
+      <div class="body">
+        <p>前日にお送りする地図の経路を、より実際に近づけるための設定です。メニューの <span class="k">⚙️ 移動手段・出発地</span> から変えられます。</p>
+        <ul>
+          <li><b>移動手段</b> … 徒歩／自転車／バイク／車／電車・バス（あてはまるものを全部）</li>
+          <li><b>出発地</b> … <b>番地までは不要です。</b>町名まで、または最寄り駅で大丈夫です</li>
+        </ul>
+        <p>経路の計算だけに使います。どちらも空欄のままで問題ありません。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>🏠 対応できる物件を変えたいとき</summary>
+      <div class="body">
+        <p>メニューの <span class="k">🏠 対応できる物件</span> から、ご自分で更新できます。ここで外した物件は、募集のお知らせが届かなくなります。</p>
+        <p>「この物件はもう入れない」「このエリアなら入れる」といった変更は、ご自分で直していただいて構いません。</p>
+      </div>
+    </details>
+
+    <details class="faq">
+      <summary>😥 うまくいかないとき</summary>
+      <div class="body">
+        <p><b>画面が開かない・古いままのとき</b><br>
+        LINEアプリをいったん完全に終了して、開き直してください。それでも直らないときはご連絡ください。</p>
+        <p><b>送信したのに反映されていないとき</b><br>
+        送信できたときは、必ずLINEに確認のメッセージが届きます。届いていなければ受け付けられていません。電波の良い場所でもう一度お試しください。</p>
+        <p><b>物件が出てこないとき</b><br>
+        その日の担当に入っていない可能性があります。清掃スタッフグループへご連絡ください。</p>
+        <div class="warn">
+          困ったときは、無理に操作せず清掃スタッフグループへご連絡ください。あとから管理側で直せます🙇
+        </div>
+      </div>
+    </details>
   </div>
 
   <!-- 立替 -->
@@ -155,6 +342,18 @@
       <div class="hint">撮影後、自動で縮小して送信します。</div>
     </div>
     <button class="submit" onclick="submitPhoto()">この内容で送信する</button>
+
+    <!-- ★v4.53 枚数が多いときは LINE のトークに直接送ってもらう。
+         この画面の送信は「縮小してまとめて1回で送る」方式のため、
+         枚数が増えると通信が重くなり、途中で失敗すると全部やり直しになる。 -->
+    <div class="note" style="margin-top:18px">
+      <b>写真が多いとき（10枚以上）はこちら</b><br>
+      下のボタンを押すと受付が始まります。あとは<b>LINEのトークに直接写真を送るだけ</b>です。
+      アルバムからまとめて選べるので、何十枚でも数タップで送れます📱<br>
+      送り終わったら「終了」と送ってください。
+    </div>
+    <button class="submit" style="background:#455a64;margin-top:10px"
+            onclick="startPhotoIntake()">📱 LINEのトークからまとめて送る</button>
   </div>
 
   <!-- テキスト報告(超過/備品/引き継ぎ) -->
@@ -253,7 +452,7 @@ const TEXT_META = {
 };
 
 function showView(name){
-  ['loading','menu','expense','photo','text','props','settings','cancel','done'].forEach(function(v){
+  ['loading','menu','expense','photo','text','props','settings','cancel','done','help'].forEach(function(v){
     const el = $('v-'+v) || (v==='loading'?$('loading'):null);
     if (el) el.classList.add('hidden');
   });
@@ -378,6 +577,28 @@ async function submitExpense(){
 }
 
 // ---- 写真 ----
+// ★v4.53 受付を開始して画面を閉じる。以降はLINEのトークで写真を受け取る。
+async function startPhotoIntake(){
+  const jk=document.querySelector('#v-photo .jobsel').value;
+  const kind=(document.querySelector('input[name=pk]:checked')||{}).value||'before';
+  if(!jk) return showErr('msg-photo','物件を選んでください。');
+  const btn=event.target; btn.disabled=true; btn.textContent='準備しています…';
+  try{
+    const res=await jsonp(GAS_URL+'?mode=photo_intake_start'
+      +'&userId='+encodeURIComponent(me.userId)
+      +'&jobKey='+encodeURIComponent(jk)
+      +'&kind='+encodeURIComponent(kind));
+    if(!res || !res.ok){
+      btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
+      return showErr('msg-photo',(res&&res.message)||'受付を始められませんでした。');
+    }
+    finishDone();
+  }catch(err){
+    btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
+    showErr('msg-photo','通信に失敗しました。電波の良い場所で再度お試しください。');
+  }
+}
+
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
   l.classList.toggle('on', l.querySelector('input').checked); }); });
 $('p-photo').addEventListener('change', (e)=>{ const p=$('photoPreview'); p.innerHTML='';
@@ -665,7 +886,7 @@ async function submitCancel(){
     dsel.addEventListener('change', fillExpenseJobs);
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
-    if(type && ['expense','photo','overtime','supply','handover','props','settings'].indexOf(type)>=0) go(type);
+    if(type && ['expense','photo','overtime','supply','handover','props','settings','help'].indexOf(type)>=0) go(type);
     else showView('menu');
   }catch(e){ $('loading').innerHTML='<div class="center">LIFFの初期化に失敗しました。時間をおいて再度お試しください。</div>'; }
 })();
