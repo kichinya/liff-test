@@ -227,10 +227,16 @@
         <p>清掃の前後の写真を残せます。</p>
         <ol>
           <li><span class="k">報告</span> を開いて <span class="k">📷 写真報告</span> を選びます</li>
-          <li>物件と、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選びます</li>
+          <li><b>清掃日</b>と物件、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選びます</li>
           <li>写真を選んで送信します（<b>1回に6枚まで</b>）</li>
         </ol>
         <p>その場で撮っても、すでに撮ってある写真を選んでも大丈夫です。写真は自動で縮小してから送られます。</p>
+        <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
+          🕒 <b>あとから送っても大丈夫です</b><br>
+          清掃日を選べるので、<b>直近7日ぶん</b>はいつでも送れます。
+          その場で送れなかったときは、落ち着いてからで構いません。<br>
+          ただし<b>撮影はその場でお願いします</b>。あとから撮り直すことはできません。
+        </div>
         <div class="warn">
           📱 <b>7枚以上あるとき</b><br>
           <span class="k">📷 写真報告</span> からの送信は<b>1回6枚まで</b>です。
@@ -449,6 +455,10 @@
     <h1>📷 写真報告</h1>
     <div id="msg-photo" class="msg"></div>
     <div class="card">
+      <!-- ★v4.85 清掃日を先に選ぶ。当日の物件しか出さないと、
+           翌日になった瞬間に完了写真を送る手段が無くなる。 -->
+      <label class="req">清掃日</label><select id="p-date" onchange="fillPhotoJobs()"></select>
+      <div class="note" id="p-range"></div>
       <label class="req">物件</label><select class="jobsel"></select>
       <label class="req">区分</label>
       <div class="seg" id="p-seg">
@@ -772,6 +782,24 @@ async function submitExpense(){
 }
 
 // ---- 写真 ----
+// ★v4.85 清掃日 → 物件 の2段。立替と同じ形にそろえた。
+//   完了写真をその場で送れない人は必ずいる（電波・時間・枚数）。
+//   翌日以降に送れないと、撮ってあっても記録に残らない。
+let PHOTO_DATES=[];
+function fillPhotoJobs(){
+  const sel=document.querySelector('#v-photo .jobsel');
+  const i=parseInt($('p-date').value,10);
+  const d=(i>=0 && PHOTO_DATES[i])?PHOTO_DATES[i]:null;
+  sel.innerHTML='';
+  if(!d || !d.jobs.length){
+    const o=document.createElement('option'); o.value=''; o.textContent='この日の清掃物件がありません';
+    sel.appendChild(o); return;
+  }
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+  d.jobs.forEach(function(j){ const o=document.createElement('option');
+    o.value=j.jobKey; o.textContent=j.name; sel.appendChild(o); });
+}
+
 // ★v4.53 受付を開始して画面を閉じる。以降はLINEのトークで写真を受け取る。
 async function startPhotoIntake(){
   const jk=document.querySelector('#v-photo .jobsel').value;
@@ -804,6 +832,7 @@ async function submitPhoto(){
   const jk=document.querySelector('#v-photo .jobsel').value;
   const kind=(document.querySelector('input[name=pk]:checked')||{}).value||'before';
   const files=Array.prototype.slice.call($('p-photo').files,0,6);
+  if(!$('p-date').value) return showErr('msg-photo','清掃日を選んでください。');
   if(!jk) return showErr('msg-photo','物件を選んでください。');
   if(!files.length) return showErr('msg-photo','写真を選んでください。');
   const btn=event.target; btn.disabled=true; btn.textContent='送信中…';
@@ -1160,10 +1189,27 @@ async function submitCancel(){
 
     const todayJobs=jobs.filter(function(j){ return !j.cleanDate || j.cleanDate===todayY; });
     const expSel=document.querySelector('#v-expense .jobsel');
+    const phSel=document.querySelector('#v-photo .jobsel');   // ★v4.85 写真も日付で埋める
     document.querySelectorAll('.jobsel').forEach(function(sel){
-      if(sel===expSel) return;
+      if(sel===expSel || sel===phSel) return;
       fillSel(sel, todayJobs, false, '本日の清掃物件がありません');
     });
+
+    // ★v4.85 写真報告も 清掃日 → 物件 の2段（直近7日）。
+    PHOTO_DATES = res.photoDates || [];
+    if(res.photoRange) $('p-range').textContent = res.photoRange;
+    const psel=$('p-date'); psel.innerHTML='';
+    if(!PHOTO_DATES.length){
+      const o=document.createElement('option'); o.value=''; o.textContent='選べる清掃日がありません';
+      psel.appendChild(o);
+    } else {
+      PHOTO_DATES.forEach(function(d,i){ d.jobs.forEach(function(j){
+          if(!jobsMap[j.jobKey]) jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:d.ymd}; });
+        const o=document.createElement('option'); o.value=String(i);
+        o.textContent=d.label+'（'+d.jobs.length+'件）'; psel.appendChild(o); });
+      psel.value='0';
+      fillPhotoJobs();
+    }
 
     // ★v4.51 立替は 清掃日 → 物件 の2段。締切を過ぎた月は選択肢に出ない。
     EXP_DATES = res.dates || [];
