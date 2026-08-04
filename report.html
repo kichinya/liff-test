@@ -130,8 +130,35 @@
       <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
+      <div class="mbtn" onclick="go('late')"><div class="ico">⏰</div>打刻の後入れ</div>
       <div class="mbtn" onclick="go('help')"><div class="ico">❓</div>使い方</div>
     </div>
+  </div>
+
+  <!-- ★v4.55 打刻の後入れ -->
+  <div id="v-late" class="hidden">
+    <button class="back" onclick="go('menu')">← 戻る</button>
+    <h1>⏰ 打刻の後入れ</h1>
+    <div id="msg-late" class="msg"></div>
+    <p class="lead">開始や完了を押し忘れた清掃を、あとから入力できます。</p>
+    <div class="card">
+      <label class="req">清掃日</label><select id="l-date" onchange="fillLateJobs()"></select>
+      <div class="note" id="l-range"></div>
+      <label class="req">物件</label><select id="l-job"></select>
+      <label class="req">開始時刻</label><input id="l-start" type="time" step="300">
+      <label class="req">完了時刻</label><input id="l-end" type="time" step="300">
+      <label class="req">作業区分</label>
+      <div class="seg" id="l-seg">
+        <label class="on"><input type="radio" name="lk" value="清掃" checked><span>🧹 清掃</span></label>
+        <label><input type="radio" name="lk" value="チェック"><span>🔍 チェック</span></label>
+      </div>
+      <div class="note" style="background:#fff8e1;border-color:#ffe4a1">
+        実際に作業した時刻を入れてください。<br>
+        入力すると<b>管理側にも通知されます</b>。業務委託費のもとになる記録です。<br>
+        日をまたいだ場合は、清掃スタッフグループへご連絡ください。
+      </div>
+    </div>
+    <button class="submit" onclick="submitLate()">この内容で記録する</button>
   </div>
 
   <!-- ★v4.52 使い方 -->
@@ -452,7 +479,7 @@ const TEXT_META = {
 };
 
 function showView(name){
-  ['loading','menu','expense','photo','text','props','settings','cancel','done','help'].forEach(function(v){
+  ['loading','menu','expense','photo','text','props','settings','cancel','done','help','late'].forEach(function(v){
     const el = $('v-'+v) || (v==='loading'?$('loading'):null);
     if (el) el.classList.add('hidden');
   });
@@ -472,6 +499,7 @@ function go(name){
   if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
   if (name==='props')  loadProps();        // ★対応できる物件: 開くたびに最新を取り直す
   if (name==='settings') loadSettings();   // ★v4.41 移動手段・出発地
+  if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
 }
 
 // JSONP GET
@@ -636,6 +664,69 @@ async function submitText(){
     finishDone();
   }catch(err){ btn.disabled=false; btn.textContent='この内容で送信する'; showErr('msg-text','送信に失敗しました。再度お試しください。'); }
 }
+
+// ---- ★v4.55 打刻の後入れ ----
+let LATE_DAYS=[];
+document.getElementById('l-seg').addEventListener('click', ()=>{
+  document.querySelectorAll('#l-seg label').forEach(function(l){
+    l.classList.toggle('on', l.querySelector('input').checked); }); });
+
+async function loadLate(){
+  setMsg2('msg-late','読み込み中…','');
+  $('l-date').innerHTML=''; $('l-job').innerHTML='';
+  try{
+    const res=await jsonp(GAS_URL+'?mode=late_jobs&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok) return showErr('msg-late',(res&&res.message)||'読み込みに失敗しました。');
+    LATE_DAYS=res.days||[];
+    if(res.range && res.range.note) $('l-range').textContent=res.range.note;
+    setMsg2('msg-late','','');
+    if(!LATE_DAYS.length){
+      const o=document.createElement('option'); o.value=''; o.textContent='入力が必要な清掃はありません';
+      $('l-date').appendChild(o);
+      const o2=document.createElement('option'); o2.value=''; o2.textContent='—'; $('l-job').appendChild(o2);
+      return;
+    }
+    LATE_DAYS.forEach(function(d,i){ const o=document.createElement('option');
+      o.value=String(i); o.textContent=d.label+'（'+d.jobs.length+'件）'; $('l-date').appendChild(o); });
+    $('l-date').value='0'; fillLateJobs();
+  }catch(e){ showErr('msg-late','通信に失敗しました。電波の良い場所で再度お試しください。'); }
+}
+
+function fillLateJobs(){
+  const i=parseInt($('l-date').value,10);
+  const d=(i>=0 && LATE_DAYS[i])?LATE_DAYS[i]:null;
+  const sel=$('l-job'); sel.innerHTML='';
+  if(!d || !d.jobs.length){ const o=document.createElement('option'); o.value='';
+    o.textContent='この日は入力が必要な清掃がありません'; sel.appendChild(o); return; }
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+  d.jobs.forEach(function(j){ const o=document.createElement('option');
+    o.value=j.jobKey; o.textContent=j.name; o.dataset.std=j.std||''; sel.appendChild(o); });
+}
+
+async function submitLate(){
+  const jk=$('l-job').value, st=$('l-start').value, en=$('l-end').value;
+  const kind=(document.querySelector('input[name=lk]:checked')||{}).value||'清掃';
+  if(!$('l-date').value) return showErr('msg-late','清掃日を選んでください。');
+  if(!jk) return showErr('msg-late','物件を選んでください。');
+  if(!st) return showErr('msg-late','開始時刻を入れてください。');
+  if(!en) return showErr('msg-late','完了時刻を入れてください。');
+  const btn=event.target; btn.disabled=true; btn.textContent='記録しています…';
+  try{
+    const res=await jsonp(GAS_URL+'?mode=late_submit&userId='+encodeURIComponent(me.userId)
+      +'&jobKey='+encodeURIComponent(jk)
+      +'&start='+encodeURIComponent(st.replace(':',''))
+      +'&end='+encodeURIComponent(en.replace(':',''))
+      +'&kind='+encodeURIComponent(kind));
+    btn.disabled=false; btn.textContent='この内容で記録する';
+    if(!res || !res.ok) return showErr('msg-late',(res&&res.message)||'記録できませんでした。');
+    finishDone();
+  }catch(e){
+    btn.disabled=false; btn.textContent='この内容で記録する';
+    showErr('msg-late','通信に失敗しました。記録できたかどうかは、画面を開き直してご確認ください。');
+  }
+}
+
+function setMsg2(id,text,cls){ const m=$(id); if(!m) return; m.textContent=text||''; m.className='msg'+(cls?' '+cls:''); }
 
 // ---- 報告の取消(★v3.39 LIFFで完結) ----
 // ★jobsMap は流用しない。母集合が違う。
@@ -886,7 +977,7 @@ async function submitCancel(){
     dsel.addEventListener('change', fillExpenseJobs);
     // ?type= があれば直接そのフォーム、無ければメニュー
     const type=new URLSearchParams(location.search).get('type');
-    if(type && ['expense','photo','overtime','supply','handover','props','settings','help'].indexOf(type)>=0) go(type);
+    if(type && ['expense','photo','overtime','supply','handover','props','settings','help','late'].indexOf(type)>=0) go(type);
     else showView('menu');
   }catch(e){ $('loading').innerHTML='<div class="center">LIFFの初期化に失敗しました。時間をおいて再度お試しください。</div>'; }
 })();
