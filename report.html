@@ -57,6 +57,16 @@
     padding:9px 11px; margin:8px 0 0; }
   .note:empty{ display:none; }
 
+  /* ★v5.22【文字サイズが画面ごとに違っていた原因】
+     .warn の定義が「.faq .body .warn」（使い方ページの中）しか無く、
+     超過報告・備品発注・引き継ぎ の画面にある warn 枠だけが
+     font-size 未指定 → ブラウザ既定の 16px で描かれていた。
+     他の画面の説明枠は .note(12px) / .pnote(13px) なので、
+     この3画面だけ一回り大きく見えていた。iOSの自動拡大ではない。
+     ここで素の .warn を定義して、他の説明枠と同じ大きさに揃える。 */
+  .warn{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:10px;
+    padding:11px 12px; font-size:13px; line-height:1.75; margin:0 0 12px; color:var(--ink); }
+
   /* ★v4.52 使い方 */
   .faq{ background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
   .faq>summary{ list-style:none; cursor:pointer; padding:14px 15px; font-size:15px; font-weight:700;
@@ -536,6 +546,8 @@
         <label class="on"><input type="radio" name="pk" value="before" checked><span>清掃前</span></label>
         <label><input type="radio" name="pk" value="after"><span>清掃後</span></label>
       </div>
+      <!-- ★v5.22 開始/完了の報告から自動で選ぶ。理由をここに出す（勝手に変わったと思わせない） -->
+      <div class="hint" id="p-segwhy" style="display:none"></div>
       <label class="req">写真（複数可・最大6枚）</label>
       <!-- ★v4.50 capture を外した。撮り直しや、あとから出す場合にライブラリを使えるようにする -->
       <label class="photo-btn">📷 写真を撮影 / 選択<input id="p-photo" type="file" accept="image/*" multiple></label>
@@ -897,6 +909,33 @@ function fillPhotoJobs(){
   //   値として送るのは jobKey なので、飾りがログや請求に混ざることはない。
   d.jobs.forEach(function(j){ const o=document.createElement('option');
     o.value=j.jobKey; o.textContent=(j.label||j.name); sel.appendChild(o); });
+  autoPickPhotoKind();
+}
+
+// ★v5.22【区分を自動で選ぶ】
+//   清掃前/清掃後の押し間違いは、写真が別のフォルダに入り、
+//   写真の未提出チェック（PhotoAudit）も「まだ出ていない」と鳴り続ける。
+//   開始・完了の報告はすでに清掃ジョブに入っているので、それを使う。
+//     完了を報告済み → 清掃後
+//     それ以外       → 清掃前
+//   ※あとから手で変えられる。勝手に変わったと思われないよう理由を必ず出す。
+function autoPickPhotoKind(){
+  const why=$('p-segwhy');
+  const sel=document.querySelector('#v-photo .jobsel');
+  const i=parseInt($('p-date').value,10);
+  const d=(i>=0 && PHOTO_DATES[i])?PHOTO_DATES[i]:null;
+  const j=(d&&d.jobs)?d.jobs.filter(function(x){ return x.jobKey===sel.value; })[0]:null;
+  if(!j){ if(why){ why.style.display='none'; why.textContent=''; } return; }
+  const want = j.done ? 'after' : 'before';
+  const el=document.querySelector('#p-seg input[value="'+want+'"]');
+  if(el){ el.checked=true;
+    document.querySelectorAll('#p-seg label').forEach(function(l){ l.classList.toggle('on', l.querySelector('input').checked); }); }
+  if(why){
+    why.style.display='block';
+    why.textContent = j.done ? '完了を報告済みのため「清掃後」を選びました。違う場合は押し直してください。'
+              : (j.started ? '開始を報告済みのため「清掃前」を選びました。違う場合は押し直してください。'
+                           : 'まだ開始の報告がないため「清掃前」を選びました。違う場合は押し直してください。');
+  }
 }
 
 // ★v4.53 受付を開始して画面を閉じる。以降はLINEのトークで写真を受け取る。
@@ -929,7 +968,11 @@ async function startPhotoIntake(){
 }
 
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
-  l.classList.toggle('on', l.querySelector('input').checked); }); });
+  l.classList.toggle('on', l.querySelector('input').checked); });
+  // 手で選び直したら、自動選択の理由は引っ込める（それ以上説明する必要がない）
+  const _w=$('p-segwhy'); if(_w) _w.style.display='none'; });
+// ★v5.22 物件を選び直したら区分も選び直す
+document.querySelector('#v-photo .jobsel').addEventListener('change', autoPickPhotoKind);
 $('p-photo').addEventListener('change', (e)=>{ const p=$('photoPreview'); p.innerHTML='';
   Array.prototype.slice.call(e.target.files,0,6).forEach(function(f){ const im=new Image(); im.src=URL.createObjectURL(f);
     im.onload=()=>URL.revokeObjectURL(im.src); p.appendChild(im); }); });

@@ -121,6 +121,10 @@
   .job.oos{ border-color:#ffd8a8; background:#fffdf7; }
   .oospill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
             background:#fff1d6; color:#a06a00; margin-left:6px; vertical-align:middle; font-weight:700; }
+  /* ★v5.22 募集人数。2名で入る現場だと知らずに1人で行くのを防ぐ。 */
+  .needpill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+            background:var(--green-l); color:var(--green); margin-left:6px; vertical-align:middle; font-weight:700; }
+  .needpill.short{ background:#ffe9e9; color:#c62828; }
   .oosbtn{ display:block; width:100%; margin:14px 0 4px; padding:12px; font-size:14px; font-weight:700;
            background:#fff; color:#2e7d32; border:1px dashed #2e7d32; border-radius:10px; cursor:pointer; }
   .oosnote{ font-size:12px; color:var(--sub); line-height:1.6; margin:6px 2px 0; }
@@ -567,6 +571,16 @@
       pill.textContent = '対応外';
       nm.appendChild(pill);
     }
+    // ★v5.22 募集人数を必ず出す。
+    //   2名・3名で入る現場を1名だと思って行くと、その日の作業が終わらない。
+    //   すでに誰かが入っている場合は「あとN名」にして、残りが何人かを一目で分かるようにする。
+    if (it.need && it.need > 1){
+      var np = document.createElement('span');
+      var shortOf = (typeof it.shortOf === 'number') ? it.shortOf : it.need;
+      np.className = 'needpill' + ((it.has > 0) ? ' short' : '');
+      np.textContent = (it.has > 0) ? ('あと' + shortOf + '名') : (it.need + '名で入ります');
+      nm.appendChild(np);
+    }
     body.appendChild(nm);
 
     var sub = document.createElement('div');
@@ -579,6 +593,8 @@
     var memo = [];
     if (it.stayLabel) memo.push('滞在 ' + it.stayLabel);
     if (it.guests !== '' && it.guests != null) memo.push('宿泊 ' + it.guests + '名');
+    // ★v5.22 すでに決まっている方がいれば名前も出す（誰と組むかで判断が変わる）
+    if (it.mates) memo.push('すでに ' + it.mates + ' さん');
     if (memo.length){
       var mm = document.createElement('div');
       mm.className = 'sub';
@@ -942,14 +958,28 @@
       if (by[it.key]) { it.start = by[it.key]; it.end = (it.dur>0) ? m2hm(hm2m(by[it.key]) + it.dur) : ''; }
     });
     d.items.sort(function(a,b){ return hm2m(a.start) - hm2m(b.start); });
+    planDirty(di);
     renderPlan(di);
     setPlanMsg(di, 'おすすめの順番を入れました。内容を確認して保存してください。', 'ok');
+  }
+
+  // ★v5.22【保存ボタンは、変えたときだけ出す】
+  //   担当が決まった予定は自動で入るので、見るだけの人には保存する理由がない。
+  //   常に出ていると「押さないと確定しないのでは」と迷わせる。
+  //   順番か時刻を変えたときだけ出す（変えたら保存は必要）。
+  function planDirty(di){
+    var d = PLAN_DAYS[di];
+    if (!d) return;
+    d._dirty = true;
+    var b = $('p-save-' + di);
+    if (b) b.style.display = 'block';
   }
 
   function planMove(di, i, dir){
     var d = PLAN_DAYS[di], j = i + dir;
     if (j < 0 || j >= d.items.length) return;
     var tmp = d.items[i]; d.items[i] = d.items[j]; d.items[j] = tmp;
+    planDirty(di);
     planReflow(di);
   }
 
@@ -957,6 +987,7 @@
     var it = PLAN_DAYS[di].items[i];
     it.start = val || '';
     it.end = (val && it.dur > 0) ? m2hm(hm2m(val) + it.dur) : '';
+    planDirty(di);
     renderPlan(di);
   }
 
@@ -1085,7 +1116,10 @@
           '</div>';
       }
       html +=
-        '<button class="btn pSave" id="p-save-' + di + '" onclick="planSave(' + di + ')">この日の予定を保存する</button>' +
+        // ★v5.22 変更があったときだけ出す（既定は非表示）
+        '<button class="btn pSave" id="p-save-' + di + '" onclick="planSave(' + di + ')"' +
+          (d._dirty ? '' : ' style="display:none"') +
+          '>変更した予定を保存する</button>' +
         '<div class="pMsg" id="p-msg-' + di + '"></div>';
 
       var box = (only != null) ? $('p-day-' + di) : document.createElement('div');
@@ -1123,16 +1157,18 @@
         + '&plan=' + encodeURIComponent(plan))
       .then(function(res){
         planBusy = false;
-        if (btn){ btn.disabled = false; btn.textContent = 'この日の予定を保存する'; }
+        if (btn){ btn.disabled = false; btn.textContent = '変更した予定を保存する'; }
         if (!res || !res.ok){
           setPlanMsg(di, (res && res.message) || '保存に失敗しました。', 'err');
           return;
         }
+        d._dirty = false;                         // ★v5.22 保存し終えたらボタンを引っ込める
+        if (btn) btn.style.display = 'none';
         setPlanMsg(di, res.message || '保存しました。', 'ok');
       })
       .catch(function(){
         planBusy = false;
-        if (btn){ btn.disabled = false; btn.textContent = 'この日の予定を保存する'; }
+        if (btn){ btn.disabled = false; btn.textContent = '変更した予定を保存する'; }
         setPlanMsg(di, '通信に失敗しました。保存できたかどうかは、画面を開き直してご確認ください。', 'err');
       });
   }
