@@ -66,8 +66,11 @@
   .faq .body p:last-child{ margin-bottom:0; }
   .faq .body ol,.faq .body ul{ margin:0 0 10px; padding-left:1.3em; }
   .faq .body li{ margin-bottom:5px; }
-  .faq .body .k{ display:inline-block; background:#eef3ee; border:1px solid var(--line);
-    border-radius:6px; padding:1px 7px; font-size:13px; font-weight:700; }
+  /* ★v4.83 使い方に出てくる「押すボタン」の名前。実際の画面のボタンと同じ緑にする。
+     灰色だと本文に埋もれ、どれがボタン名なのか読み取れなかった。 */
+  .faq .body .k{ display:inline-block; background:var(--green); color:#fff;
+    border:1px solid var(--green-d); border-radius:6px; padding:2px 8px;
+    font-size:13px; font-weight:700; white-space:nowrap; }
   .faq .body .warn{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:9px;
     padding:10px 12px; font-size:13px; line-height:1.8; margin:10px 0 0; }
   .helpLead{ font-size:13px; color:var(--sub); line-height:1.8; margin:0 0 14px; }
@@ -174,11 +177,14 @@
     <h1>❓ 使い方</h1>
     <div class="note" style="margin-bottom:14px">
       <b>どこに何があるか</b><br>
-      📋 <b>報告</b>（このメニュー）… 立替精算／写真報告／超過報告／備品発注／引き継ぎ／
+      LINEのトークの下にメニューがあります。<br><br>
+      📋 <b>報告</b>（いま開いているところ）… 立替精算／写真報告／超過報告／備品発注／引き継ぎ／
       対応できる物件／移動手段・出発地／報告の取消／打刻の後入れ<br>
       🙋 <b>清掃希望を送信</b> … 清掃希望日／挙手する／<b>マイ予定</b>（予定の確認・順番の変更・カレンダー追加）
     </div>
     <p class="helpLead">
+      ここに出てくる <span class="k" style="font-size:12px">緑色の名前</span> は、
+      LINEの画面にある<b>ボタンの名前</b>です。<br>
       知りたいところをタップすると開きます。<br>
       分からないときは、遠慮なく<b>このトークにそのままご返信ください</b>🙇<br>担当が確認してお返事します。
     </p>
@@ -188,7 +194,7 @@
       <div class="body">
         <p>いちばん大事な操作です。この2つで実働時間が記録され、業務委託費の元になります。</p>
         <ol>
-          <li>現場に着いたら、下のメニューの <span class="k">開始</span> を押します</li>
+          <li>現場に着いたら、LINEの下のメニューにある <span class="k">開始</span> を押します</li>
           <li>その日の物件が出るので、これから入る物件を選びます（1件だけの日は自動で選ばれます）</li>
           <li>終わったら <span class="k">完了</span> を押します</li>
         </ol>
@@ -220,19 +226,20 @@
       <div class="body">
         <p>清掃の前後の写真を残せます。</p>
         <ol>
-          <li>メニューの <span class="k">📷 写真報告</span> を選びます</li>
+          <li><span class="k">報告</span> を開いて <span class="k">📷 写真報告</span> を選びます</li>
           <li>物件と、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選びます</li>
-          <li>写真を選んで送信します（<b>この画面からは6枚まで</b>）</li>
+          <li>写真を選んで送信します（<b>1回に6枚まで</b>）</li>
         </ol>
         <p>その場で撮っても、すでに撮ってある写真を選んでも大丈夫です。写真は自動で縮小してから送られます。</p>
         <div class="warn">
           📱 <b>7枚以上あるとき</b><br>
-          この画面の送信は<b>6枚まで</b>です。7枚以上のときは、同じ画面の下にある
+          <span class="k">📷 写真報告</span> からの送信は<b>1回6枚まで</b>です。
+          7枚以上あるときは、その画面の下にある
           <span class="k">📱 LINEのトークからまとめて送る</span> を押してください。<br>
           受付が始まったら、<b>このトークに写真を送るだけ</b>です。アルバムからまとめて選べるので、何十枚でも数タップで送れます。<br><br>
           <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、枚数をお知らせします。
           すぐ確認したいときは <span class="k">✅ 送信おわり</span> を押してください。<br>
-          ※別の物件の写真を送るときは、もう一度この画面から選び直してください。
+          ※別の物件の写真を送るときは、もう一度 <span class="k">📷 写真報告</span> から選び直してください。
         </div>
         <div class="warn">
           📷 <b>「写真を読み込めませんでした」と出たとき</b><br>
@@ -248,7 +255,7 @@
       <div class="body">
         <p>備品などを立て替えて買ったときに出してください。</p>
         <ol>
-          <li>メニューの <span class="k">💰 立替精算</span> を選びます</li>
+          <li><span class="k">報告</span> を開いて <span class="k">💰 立替精算</span> を選びます</li>
           <li><b>清掃日</b> を選びます（数日前の分も出せます）</li>
           <li>その日の物件から、対象の物件を選びます</li>
           <li>金額と用途を入れます</li>
@@ -290,7 +297,7 @@
     <details class="faq">
       <summary>↩️ 間違えて報告したとき</summary>
       <div class="body">
-        <p>メニューの <span class="k">↩️ 報告の取消</span> から取り消せます。その日にご自分が出した報告が一覧で出るので、取り消したいものを選んでください。</p>
+        <p><span class="k">報告</span> の中の <span class="k">↩️ 報告の取消</span> から取り消せます。その日にご自分が出した報告が一覧で出るので、取り消したいものを選んでください。</p>
         <p>取り消したあと、正しい内容でもう一度報告してください。</p>
         <div class="warn">
           ⚠️ 取り消してから開始を押し直すと、<b>開始時刻が押し直した時刻</b>になります。実際に始めた時刻と違う場合は、下の「⏰ 打刻の後入れ」で直せます。
@@ -301,7 +308,7 @@
     <details class="faq">
       <summary>⏰ 開始や完了を押し忘れたとき</summary>
       <div class="body">
-        <p>あとから入力できます。メニューの <span class="k">⏰ 打刻の後入れ</span> を選んでください。</p>
+        <p>あとから入力できます。<span class="k">報告</span> の中の <span class="k">⏰ 打刻の後入れ</span> を選んでください。</p>
         <ol>
           <li><b>清掃日</b> を選びます</li>
           <li>入力が必要な物件が出るので、選びます</li>
@@ -346,7 +353,7 @@
     <details class="faq">
       <summary>📋 順番や時間を変えたいとき</summary>
       <div class="body">
-        <p>リッチメニューの <span class="k">清掃希望を送信</span> を押して、上の <span class="k">マイ予定</span> タブを開いてください。</p>
+        <p>LINEの下のメニューにある <span class="k">清掃希望を送信</span> を押して、画面の上にある <span class="k">マイ予定</span> タブを開いてください。</p>
         <ul>
           <li><b>▲▼</b> で回る順番を入れ替えられます（時刻は自動で詰め直します）</li>
           <li>開始時刻もプルダウンで選び直せます</li>
@@ -363,7 +370,7 @@
     <details class="faq">
       <summary>🙋 清掃希望を出す・挙手する</summary>
       <div class="body">
-        <p>リッチメニューの <span class="k">清掃希望を送信</span> に3つのタブがあります。</p>
+        <p>LINEの下のメニューにある <span class="k">清掃希望を送信</span> を押すと、画面の上に3つのタブがあります。</p>
         <ul>
           <li><b>清掃希望日</b> … 入れる日をカレンダーで選んで送ります</li>
           <li><b>挙手する</b> … 募集中の案件に手を挙げます。<b>希望の開始時刻</b>も出せます（「おまかせ」でも大丈夫です）</li>
@@ -376,7 +383,7 @@
     <details class="faq">
       <summary>⚙️ 移動手段・出発地の設定</summary>
       <div class="body">
-        <p>前日にお送りする地図の経路を、より実際に近づけるための設定です。メニューの <span class="k">⚙️ 移動手段・出発地</span> から変えられます。</p>
+        <p>前日にお送りする地図の経路を、より実際に近づけるための設定です。<span class="k">報告</span> の中の <span class="k">⚙️ 移動手段・出発地</span> から変えられます。</p>
         <ul>
           <li><b>移動手段</b> … 徒歩／自転車／バイク／車／電車・バス（あてはまるものを全部）</li>
           <li><b>出発地</b> … <b>番地までは不要です。</b>町名まで、または最寄り駅で大丈夫です</li>
@@ -388,7 +395,7 @@
     <details class="faq">
       <summary>🏠 対応できる物件を変えたいとき</summary>
       <div class="body">
-        <p>メニューの <span class="k">🏠 対応できる物件</span> から、ご自分で更新できます。ここで外した物件は、募集のお知らせが届かなくなります。</p>
+        <p><span class="k">報告</span> の中の <span class="k">🏠 対応できる物件</span> から、ご自分で更新できます。ここで外した物件は、募集のお知らせが届かなくなります。</p>
         <p>「この物件はもう入れない」「このエリアなら入れる」といった変更は、ご自分で直していただいて構いません。</p>
       </div>
     </details>
@@ -457,7 +464,7 @@
     <button class="submit" onclick="submitPhoto()">この内容で送信する</button>
 
     <!-- ★v4.53 枚数が多いときは LINE のトークに直接送ってもらう。
-         この画面の送信は「縮小してまとめて1回で送る」方式のため、
+         この送信は「縮小してまとめて1回で送る」方式のため、
          枚数が増えると通信が重くなり、途中で失敗すると全部やり直しになる。 -->
     <div class="note" style="margin-top:18px">
       <b>7枚以上あるときはこちら</b><br>
