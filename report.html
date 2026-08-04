@@ -274,6 +274,13 @@
           <li><b>📝 引き継ぎ</b> … 次に入る人に伝えたいとき（例: エアコンの効きが悪い）</li>
         </ul>
         <p>送ると管理側にも通知が届きます。返事が必要なものは、担当から改めてご連絡します。</p>
+        <div class="warn" style="background:#fff8e1;border-color:#ffe082">
+          📨 <b>この3つは、物件のオーナー様にも共有されます。</b><br>
+          書いた内容がそのまま届きます（<b>お名前は出ません</b>）。
+          物件と作業について、<b>見たままの事実</b>を書いてください。<br>
+          金額のご相談や社内のことは、ここではなく<b>このトークにご返信ください</b>。<br>
+          ※ <b>💰 立替精算はオーナー様には共有されません。</b>安心してお出しください。
+        </div>
       </div>
     </details>
 
@@ -458,6 +465,14 @@
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1 id="t-title">報告</h1>
     <div id="msg-text" class="msg"></div>
+    <!-- ★v4.71 オーナー様へ転送される報告は、書く前に必ず知らせる。
+         送ったあとに知るのでは遅い。表示の出し分けは TEXT_META.owner で行う。 -->
+    <div class="warn" id="t-owner" style="display:none;background:#fff8e1;border-color:#ffe082">
+      📨 <b>この報告は、物件のオーナー様にも共有されます。</b><br>
+      書いた内容がそのまま届きます（<b>お名前は出ません</b>）。<br>
+      物件と作業について、<b>見たままの事実</b>を書いてください。<br>
+      金額のご相談や社内のことは、ここではなく<b>このトークにご返信ください</b>。
+    </div>
     <div class="card">
       <label class="req">物件</label><select class="jobsel"></select>
       <label class="req" id="t-label">内容</label>
@@ -542,10 +557,14 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE
 const $ = (id) => document.getElementById(id);
 let me = null;                 // {userId, name}
 let jobsMap = {};              // jobKey -> {pid,name,cleanDate}
+// ★v4.71 owner:true = オーナーグループへ転送される種別。
+//   ⚠️ サーバ側 Attendancereport.gs の ATT_OWNER_FWD と対になっている。
+//      片方だけ変えると「知らされずに転送される」「出ない告知が出る」のどちらかになる。
+//      転送の可否を変えるときは、必ず両方を直すこと。
 const TEXT_META = {
-  overtime: { title:'⏱ 超過報告', kind:'超過',   ph:'例）鍵のトラブルで30分超過しました' },
-  supply:   { title:'📦 備品発注', kind:'備品',   ph:'例）トイレットペーパー 残り1個、補充希望' },
-  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', ph:'例）エアコンの効きが悪い。次回確認願います' },
+  overtime: { title:'⏱ 超過報告', kind:'超過',   owner:true, ph:'例）鍵のトラブルで30分超過しました' },
+  supply:   { title:'📦 備品発注', kind:'備品',   owner:true, ph:'例）トイレットペーパー 残り1個、補充希望' },
+  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, ph:'例）エアコンの効きが悪い。次回確認願います' },
 };
 
 function showView(name){
@@ -564,6 +583,9 @@ function go(name){
     $('t-title').textContent = m.title;
     $('t-content').placeholder = m.ph;
     $('v-text').dataset.type = name;
+    $('t-owner').style.display = m.owner ? 'block' : 'none';   // ★v4.71
+    $('t-content').value = '';                                  // 前回の入力を持ち越さない
+    $('msg-text').className = 'msg'; $('msg-text').textContent = '';
   }
   showView(name);
   if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
