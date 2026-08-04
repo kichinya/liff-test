@@ -144,11 +144,14 @@
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>⏰ 打刻の後入れ</h1>
     <div id="msg-late" class="msg"></div>
-    <p class="lead">開始や完了を押し忘れた清掃を、あとから入力できます。</p>
+    <p class="lead">開始や完了を押し忘れた清掃を、あとから入力できます。<br>
+      <b>一度終えた清掃に、あとから入り直した分</b>もここから出せます。</p>
     <div class="card">
       <label class="req">清掃日</label><select id="l-date" onchange="fillLateJobs()"></select>
       <div class="note" id="l-range"></div>
-      <label class="req">物件</label><select id="l-job"></select>
+      <label class="req">物件</label><select id="l-job" onchange="lateDoneHint()"></select>
+      <!-- ★v4.79 記録済みの清掃を選んだときだけ出す -->
+      <div class="note" id="l-donenote" style="display:none;background:#e8f5e9;border-color:#a5d6a7"></div>
       <label class="req">開始時刻</label><input id="l-start" type="time" step="300">
       <label class="req">完了時刻</label><input id="l-end" type="time" step="300">
       <label class="req">作業区分</label>
@@ -159,7 +162,7 @@
       <div class="note" style="background:#fff8e1;border-color:#ffe4a1">
         実際に作業した時刻を入れてください。<br>
         入力すると<b>管理側にも通知されます</b>。業務委託費のもとになる記録です。<br>
-        日をまたいだ場合は、このトークにそのままご返信ください。
+        1回の入力が日をまたぐ場合は、このトークにそのままご返信ください。
       </div>
     </div>
     <button class="submit" onclick="submitLate()">この内容で記録する</button>
@@ -305,7 +308,14 @@
           <li>実際の <b>開始時刻</b> と <b>完了時刻</b> を入れます</li>
           <li>🧹清掃 か 🔍チェック を選んで記録します</li>
         </ol>
-        <p>すでに記録済みの清掃は出てきません（同じものが二重に入らないようにしています）。</p>
+        <p>すでに記録済みの清掃も選べます。物件名の横に <b>✔ 10:03〜13:02 記録済み</b> のように出ます。</p>
+        <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
+          🔁 <b>一度終えた清掃に、あとから入り直したとき</b><br>
+          「昼に清掃 → ゲスト様のご都合で中断 → 夜に仕上げ」のような場合も、
+          <b>2回目の時間をここから出してください。</b>その日のうちなら
+          <span class="k">開始</span> を押し直すだけでも記録できます。<br>
+          前回と<b>時間が重なっていると記録できません</b>（同じ作業が二重に入るのを防ぐためです）。
+        </div>
         <div class="warn">
           ⚠️ <b>実際に作業した時刻</b>を入れてください。<b>業務委託費のもとになる記録</b>です。入力すると管理側にも通知されます。<br><br>
           日をまたいだ場合と、締切を過ぎた月の分は入力できません。その場合はこのトークにそのままご返信ください。
@@ -865,9 +875,33 @@ function fillLateJobs(){
   if(!d || !d.jobs.length){ const o=document.createElement('option'); o.value='';
     o.textContent='この日は入力が必要な清掃がありません'; sel.appendChild(o); return; }
   const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+  // ★v4.79 すでに記録がある清掃も出す（2回目以降の追加作業を入力できるように）。
+  //   何時から何時が記録済みかを選択肢に出さないと、同じ時刻をもう一度入れてしまう。
   d.jobs.forEach(function(j){ const o=document.createElement('option');
-    o.value=j.jobKey; o.textContent=j.name; o.dataset.std=j.std||''; sel.appendChild(o); });
+    o.value=j.jobKey;
+    o.textContent = j.name + (j.done ? '　✔ ' + (j.doneLabel||'記録済み') : '');
+    o.dataset.std=j.std||'';
+    o.dataset.done=j.done?'1':'';
+    o.dataset.doneLabel=j.doneLabel||'';
+    sel.appendChild(o); });
+  lateDoneHint();
 }
+
+// 記録済みの清掃を選んだときだけ、追加作業になる旨を出す
+function lateDoneHint(){
+  const sel=$('l-job'); const box=$('l-donenote');
+  if(!box) return;
+  const o=sel.options[sel.selectedIndex];
+  if(o && o.dataset && o.dataset.done){
+    box.style.display='block';
+    box.innerHTML='✔ この清掃は <b>'+esc2(o.dataset.doneLabel||'記録済み')+'</b> です。<br>'
+      + 'いま入れる時刻は <b>2回目以降の作業</b>として追加されます。'
+      + '前回と時間が重なっていると記録できません。';
+  }else{
+    box.style.display='none'; box.innerHTML='';
+  }
+}
+function esc2(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 async function submitLate(){
   const jk=$('l-job').value, st=$('l-start').value, en=$('l-end').value;
