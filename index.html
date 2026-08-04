@@ -9,7 +9,10 @@
   :root{ --green:#2e7d32; --green-l:#e8f5e9; --ink:#222; --sub:#666; --bg:#f7f8f7; --line:#e0e0e0; --off:#fff; }
   *{ box-sizing:border-box; }
   html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; }
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    /* ★v5.16 iOSの自動文字拡大(Text Autosizing)を止める。
+       中身の少ない画面だけ勝手に文字が大きくなり、画面ごとに見た目が変わる。 */
+    -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .wrap{ max-width:480px; margin:0 auto; padding:12px 14px 120px; }
   .hello{ font-size:16px; font-weight:700; margin:6px 2px 2px; }
   .lead{ font-size:13px; color:var(--sub); margin:0 2px 14px; line-height:1.6; }
@@ -88,6 +91,16 @@
   .pItem select{ margin-top:6px; width:100%; padding:9px; font-size:15px;
     border:1px solid var(--line); border-radius:8px; background:#fff; }
   .pItem select:disabled{ background:#f2f2f2; color:#999; }
+  /* ★v5.15 辞退（マイ予定から）。押し間違えが痛いので、控えめな見た目＋確認を1枚はさむ。 */
+  .pDec{ margin-top:7px; }
+  .pDec button{ padding:7px 12px; font-size:12px; font-weight:700; cursor:pointer;
+    border:1px solid #e0c3c3; background:#fff; color:#b3554f; border-radius:8px; }
+  .pDec button:disabled{ opacity:.4; }
+  .pDecAsk{ margin-top:7px; font-size:12px; color:#c62828; line-height:1.7; }
+  .pDecAsk .row{ display:flex; gap:7px; margin-top:6px; }
+  .pDecAsk .row button{ flex:1; padding:9px 4px; font-size:12px; font-weight:700; border-radius:8px; cursor:pointer; }
+  .pDecAsk .yes{ border:1px solid #c62828; background:#c62828; color:#fff; }
+  .pDecAsk .no{ border:1px solid var(--line); background:#fff; color:var(--sub); }
   .pActs{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px; }
   .pActs button{ padding:11px 4px; border-radius:10px; font-size:13px; font-weight:700;
     cursor:pointer; border:1px solid var(--green); background:#fff; color:var(--green); }
@@ -153,7 +166,9 @@
   <div id="view-plan" class="hidden">
     <div class="pLead">
       担当が決まっている予定です。<b>順番と開始時刻をご自分で変えられます。</b><br>
-      回れない並び（重なる／チェックアウト前／同日INに間に合わない）は保存できません。
+      回れない並び（重なる／チェックアウト前／同日INに間に合わない）は保存できません。<br>
+      <!-- ★v5.15 辞退の導線をここに一本化した -->
+      ご都合が悪くなった予定は、その予定の<b>「この予定を辞退する」</b>から取り下げてください。
     </div>
     <!-- ★v4.58 マイカレンダーをここへ移した。
          「報告」メニューにあったが、これは予定を見るためのもの。
@@ -729,6 +744,7 @@
   var PLAN_TRAVEL = 30;     // 現場間の移動時間(分)
   var PLAN_STEP = 15;       // 時刻の刻み(分)
   var planBusy = false;
+  var PLAN_FLASH = '';      // ★v5.15 読み直しをまたいで出したいメッセージ（辞退の結果など）
 
   function hm2m(v){
     var m = String(v||'').match(/^(\d{1,2}):(\d{2})$/);
@@ -808,6 +824,7 @@
 
   function loadMyPlan(){
     $('p-note').classList.remove('hidden');
+    $('p-note').style.color = '';
     $('p-note').textContent = '読み込み中…';
     $('p-list').innerHTML = '';
     jsonp(GAS_URL + '?mode=myplan_get&userId=' + encodeURIComponent(ME.userId))
@@ -820,10 +837,23 @@
         if (res.travel) PLAN_TRAVEL = res.travel;
         if (res.step) PLAN_STEP = res.step;
         if (!PLAN_DAYS.length){
-          $('p-note').innerHTML = 'いまのところ、担当が決まっている予定はありません。<br>「挙手する」から希望を出せます。';
+          if (PLAN_FLASH) $('p-note').style.color = '#2e7d32';
+          $('p-note').innerHTML =
+            (PLAN_FLASH ? (esc(PLAN_FLASH).replace(/\n/g,'<br>') + '<br><br>') : '') +
+            'いまのところ、担当が決まっている予定はありません。<br>「挙手する」から希望を出せます。';
+          PLAN_FLASH = '';
           return;
         }
-        $('p-note').classList.add('hidden');
+        // ★v5.15 辞退の結果は、どの日が消えても必ず見えるよう一覧の上に出す
+        if (PLAN_FLASH){
+          $('p-note').classList.remove('hidden');
+          $('p-note').style.color = '#2e7d32';
+          $('p-note').innerHTML = esc(PLAN_FLASH).replace(/\n/g, '<br>');
+          PLAN_FLASH = '';
+        } else {
+          $('p-note').classList.add('hidden');
+          $('p-note').style.color = '';
+        }
         renderPlan();
       })
       .catch(function(){
@@ -954,6 +984,61 @@
     }).join('');
   }
 
+  // ============================================================
+  //  ★v5.15 辞退（マイ予定から）
+  //    ・通知のボタンだと「先の予約なのに辞退が出た」「どの案件か分かりにくい」が起きた。
+  //      マイ予定は全件を並べて見られるので、辞退の導線はここに置く。
+  //    ・押し間違えは取り返しがつかない（担当が外れ、募集に戻る）ので確認を1枚はさむ。
+  //    ・開始を報告済みの案件にはボタンを出さない（サーバ側でも同じ検査をする）。
+  // ============================================================
+  function planDeclineAsk(di, i){
+    var d = PLAN_DAYS[di], it = d.items[i];
+    var box = $('p-dec-' + di + '-' + i);
+    if (!box) return;
+    box.innerHTML =
+      '<div class="pDecAsk">' +
+        esc(d.label) + '　' + esc(it.prop) + ' を辞退します。<br>' +
+        '担当から外れ、他の方の募集に戻ります。よろしいですか？' +
+        '<div class="row">' +
+          '<button class="yes" onclick="planDeclineGo(' + di + ',' + i + ',this)">はい、辞退します</button>' +
+          '<button class="no" onclick="planDeclineCancel(' + di + ',' + i + ')">やめる</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function planDeclineCancel(di, i){
+    var box = $('p-dec-' + di + '-' + i);
+    if (box) box.innerHTML = '<button onclick="planDeclineAsk(' + di + ',' + i + ')">この予定を辞退する</button>';
+  }
+
+  function planDeclineGo(di, i, btn){
+    if (planBusy) return;
+    var it = PLAN_DAYS[di].items[i];
+    if (!it || !it.key){ setPlanMsg(di, 'この案件はシステム上の不備があるため、画面から辞退できません。\nこのトークにそのままご返信ください。', 'err'); return; }
+    planBusy = true;
+    btn.disabled = true; btn.textContent = '送信しています…';
+    setPlanMsg(di, '', '');
+    jsonp(GAS_URL + '?mode=myplan_decline&userId=' + encodeURIComponent(ME.userId)
+        + '&key=' + encodeURIComponent(it.key))
+      .then(function(res){
+        planBusy = false;
+        if (!res || !res.ok){
+          btn.disabled = false; btn.textContent = 'はい、辞退します';
+          setPlanMsg(di, (res && res.message) || '辞退を受け付けられませんでした。', 'err');
+          return;
+        }
+        // 反映後の状態を必ず取り直す（画面と実際がずれるのがいちばん困る）。
+        // 読み直すと画面が作り直されてメッセージが消えるので、預けておいて再表示する。
+        PLAN_FLASH = res.message || '辞退を承りました。';
+        loadMyPlan();
+      })
+      .catch(function(){
+        planBusy = false;
+        btn.disabled = false; btn.textContent = 'はい、辞退します';
+        setPlanMsg(di, '通信に失敗しました。辞退できたかどうかは、画面を開き直してご確認ください。', 'err');
+      });
+  }
+
   function renderPlan(only){
     var host = $('p-list');
     if (only == null) host.innerHTML = '';
@@ -983,13 +1068,23 @@
             '<select ' + (it.locked?'disabled':'') +
               ' onchange="planTime(' + di + ',' + i + ',this.value)">' + planOptions(it) + '</select>' +
             (it.locked ? '<div class="pLock">🔒 ' + esc(it.lockReason) + '</div>' : '') +
+            // ★v5.15 辞退はここから。2名で入る予定でも押せる（自分だけ抜ける）。
+            (it.canDecline
+              ? ('<div class="pDec" id="p-dec-' + di + '-' + i + '">' +
+                   '<button onclick="planDeclineAsk(' + di + ',' + i + ')">この予定を辞退する</button>' +
+                 '</div>')
+              : '') +
           '</div></div>';
       });
 
-      html += '<div class="pActs">' +
-        '<button onclick="planSuggest(' + di + ')">✨ おすすめの順番</button>' +
-        '<button onclick="planReflow(' + di + ')">⏱ 時間を詰め直す</button>' +
-        '</div>' +
+      // ★v5.15 1件しかない日は「順番」も「詰め直し」も意味がないので出さない。
+      if (d.items.length >= 2){
+        html += '<div class="pActs">' +
+          '<button onclick="planSuggest(' + di + ')">✨ おすすめの順番</button>' +
+          '<button onclick="planReflow(' + di + ')">⏱ 時間を詰め直す</button>' +
+          '</div>';
+      }
+      html +=
         '<button class="btn pSave" id="p-save-' + di + '" onclick="planSave(' + di + ')">この日の予定を保存する</button>' +
         '<div class="pMsg" id="p-msg-' + di + '"></div>';
 

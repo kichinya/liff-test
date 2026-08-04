@@ -9,11 +9,7 @@
   :root{ --green:#2e7d32; --green-d:#1b5e20; --line:#e0e0e0; --bg:#f7f8f7; --ink:#222; --sub:#666; }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink);
-    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
-    /* ★v5.16 iOSの自動文字拡大(Text Autosizing)を止める。
-       これが無いと、中身の少ない画面（引き継ぎ・超過・備品）だけ
-       勝手に文字が大きくなり、同じアプリなのに画面ごとに見た目が変わる。 */
-    -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; }
   .wrap{ max-width:560px; margin:0 auto; padding:16px 16px 40px; }
   h1{ font-size:18px; margin:6px 0 4px; display:flex; align-items:center; gap:8px; }
   .lead{ color:var(--sub); font-size:13px; margin:0 0 14px; }
@@ -189,7 +185,7 @@
       LINEのトークの下にメニューがあります。<br><br>
       📋 <b>報告</b>（いま開いているところ）… 立替精算／写真報告／超過報告／備品発注／引き継ぎ／
       対応できる物件／移動手段・出発地／報告の取消／打刻の後入れ<br>
-      🙋 <b>清掃希望を送信</b> … 清掃希望日／挙手する／<b>マイ予定</b>（予定の確認・順番の変更・辞退・カレンダー追加）
+      🙋 <b>清掃希望を送信</b> … 清掃希望日／挙手する／<b>マイ予定</b>（予定の確認・順番の変更・カレンダー追加）
     </div>
     <p class="helpLead">
       ここに出てくる <span class="k" style="font-size:12px">囲んだ名前</span> は、
@@ -416,30 +412,12 @@
         <ul>
           <li><b>▲▼</b> で回る順番を入れ替えられます（時刻は自動で詰め直します）</li>
           <li>開始時刻もプルダウンで選び直せます</li>
-          <li><b>✨ おすすめの順番</b> を押すと、回れる並びが入ります（予定が2件以上ある日に出ます）</li>
+          <li><b>✨ おすすめの順番</b> を押すと、回れる並びが入ります</li>
         </ul>
         <p>最後に <b>この日の予定を保存する</b> を押してください。</p>
         <div class="warn">
           ⚠️ 回れない並び（時間が重なる・チェックアウト前に始まる・次のお客様のチェックインに間に合わない）は<b>保存できません</b>。理由が赤い字で出るので、直してから保存してください。安心して触ってみてください。<br><br>
           🔒 <b>2人で入る予定</b>と、<b>すでに開始を報告した予定</b>は変えられません。このトークにそのままご返信ください。
-        </div>
-      </div>
-    </details>
-
-    <!-- ★v5.15 辞退の導線をマイ予定に一本化した。通知のボタンは廃止。 -->
-    <details class="faq">
-      <summary>↩️ 決まった予定を辞退したいとき</summary>
-      <div class="body">
-        <p>LINEの下のメニューにある <span class="k">清掃希望を送信</span> を押して、画面の上にある <span class="k">マイ予定</span> タブを開いてください。</p>
-        <ul>
-          <li>取り下げたい予定の <b>この予定を辞退する</b> を押します</li>
-          <li>確認が出るので <b>はい、辞退します</b> を押すと完了です</li>
-          <li>2人で入る予定は、<b>ご自分の分だけ</b>取り下がります（もう一方の方はそのままです）</li>
-        </ul>
-        <div class="warn">
-          ⚠️ <b>すでに開始を報告した予定は辞退できません。</b>このトークにそのままご返信ください。<br><br>
-          ⚠️ <b>当日・翌日</b>の分を辞退するときは、あわせて<b>このトークにもひとことご返信ください</b>。すぐに代わりの方を手配します。<br><br>
-          ⚠️ 以前の「担当が決まりました」のお知らせに付いていた<b>辞退ボタンは使わなくなりました</b>。押し間違いが起きたためです。辞退は <span class="k">マイ予定</span> からお願いします。
         </div>
       </div>
     </details>
@@ -451,7 +429,7 @@
         <ul>
           <li><b>清掃希望日</b> … 入れる日をカレンダーで選んで送ります</li>
           <li><b>挙手する</b> … 募集中の案件に手を挙げます。<b>希望の開始時刻</b>も出せます（「おまかせ」でも大丈夫です）</li>
-          <li><b>マイ予定</b> … 担当が決まった予定を見る・直す・<b>辞退する</b></li>
+          <li><b>マイ予定</b> … 担当が決まった予定を見る・直す</li>
         </ul>
         <p>希望の開始時刻を出した案件は、こちらの都合で勝手に動かしません。「おまかせ」で出した案件は、回りやすいように時間を調整させていただくことがあります。</p>
       </div>
@@ -544,7 +522,22 @@
     </div>
     <button class="submit" onclick="submitPhoto()">この内容で送信する</button>
 
-    <div class="note" style="margin-top:18px">
+    <!-- ★v4.87 破損は写真だけでは伝わらない。
+         写真はフォルダに溜まるだけで、誰かが見に行かないと気づけない。
+         引き継ぎに文章で残して初めて、管理側とオーナー様に届く。
+         見つけたその場で書けるよう、送信ボタンの直下に導線を置く。 -->
+    <div class="note" style="margin-top:18px;background:#fff8e1;border-color:#ffe4a1">
+      <b>🔧 破損・故障・汚損を見つけたとき</b><br>
+      写真を送るだけでは、こちらから気づけないことがあります。
+      お手数ですが <b>📝 引き継ぎ</b> にも一言お願いします。<br>
+      <span style="color:#666">例）洗面台の下から水漏れ／リビングの椅子の脚が1本折れている</span>
+      <button class="btn" style="width:100%;margin-top:10px;padding:12px;font-size:14px;font-weight:700;
+        background:#fff;color:var(--green);border:1px solid var(--green);border-radius:10px"
+        onclick="go('handover')">📝 引き継ぎを書く</button>
+      <div class="hint" style="margin-top:6px">※ 先に写真を送ってから押してください。</div>
+    </div>
+
+    <div class="note" style="margin-top:12px">
       <b>🔁 あとから追加で送れます</b><br>
       同じ物件・同じ区分でも<b>何度でも送れます</b>。先に送った写真が消えることはありません。<br>
       清掃前の写真を送ったあとに破損を見つけたときは、そのぶんだけ追加で送ってください。
@@ -553,7 +546,7 @@
     <!-- ★v4.53 枚数が多いときは LINE のトークに直接送ってもらう。
          この送信は「縮小してまとめて1回で送る」方式のため、
          枚数が増えると通信が重くなり、途中で失敗すると全部やり直しになる。 -->
-    <div class="note" style="margin-top:12px">
+    <div class="note" style="margin-top:18px">
       <b>7枚以上あるときはこちら</b><br>
       上の送信は<b>6枚まで</b>です。7枚以上は下のボタンを押してください。
       受付が始まったら、あとは<b>LINEのトークに直接写真を送るだけ</b>です。
@@ -562,24 +555,6 @@
     </div>
     <button class="submit" style="background:#455a64;margin-top:10px"
             onclick="startPhotoIntake()">📱 LINEのトークからまとめて送る</button>
-
-    <!-- ★v4.87 破損は写真だけでは伝わらない。
-         写真はフォルダに溜まるだけで、誰かが見に行かないと気づけない。
-         引き継ぎに文章で残して初めて、管理側とオーナー様に届く。
-         ★v5.16 送信ボタンの直下から【いちばん下】へ移した。
-           写真を送る手段が2つ（この画面／LINEのトーク）あるのに、
-           その途中に引き継ぎが挟まっていて、下のボタンに気づきにくかった。
-           「写真を送り終えたら引き継ぎ」の順に並べる。 -->
-    <div class="note" style="margin-top:22px;background:#fff8e1;border-color:#ffe4a1">
-      <b>🔧 破損・故障・汚損を見つけたとき</b><br>
-      写真を送るだけでは、こちらから気づけないことがあります。
-      <b>写真を送り終えたあと</b>、お手数ですが <b>📝 引き継ぎ</b> にも一言お願いします。<br>
-      <span style="color:#666">例）洗面台の下から水漏れ／リビングの椅子の脚が1本折れている</span>
-      <button class="btn" style="width:100%;margin-top:10px;padding:12px;font-size:14px;font-weight:700;
-        background:#fff;color:var(--green);border:1px solid var(--green);border-radius:10px"
-        onclick="go('handover')">📝 引き継ぎを書く</button>
-      <div class="hint" style="margin-top:6px">※ 先に写真を送ってから押してください。</div>
-    </div>
   </div>
 
   <!-- テキスト報告(超過/備品/引き継ぎ) -->
@@ -902,17 +877,11 @@ async function startPhotoIntake(){
   if(!jk) return showErr('msg-photo','物件を選んでください。');
   const btn=event.target; btn.disabled=true; btn.textContent='準備しています…';
   try{
-    // ★v5.16【致命バグ修正】ここに &workDate=…+encodeURIComponent(wd) が入っていた。
-    //   wd はこの関数のどこにも無い（v5.04 で打刻の後入れから誤って持ち込んだ）。
-    //   ReferenceError が try に入るため、画面には
-    //   「通信に失敗しました。電波の良い場所で再度お試しください。」としか出ず、
-    //   ずっと通信の問題に見えていた。受付が始まらないので
-    //   トークに写真を送っても何も起きない＝「画像がLINEトークから送れない」。
-    //   サーバ側 photoIntakeStartJsonp_ は workDate を読んでいないので、送る必要もない。
     const res=await jsonp(GAS_URL+'?mode=photo_intake_start'
       +'&userId='+encodeURIComponent(me.userId)
       +'&jobKey='+encodeURIComponent(jk)
-      +'&kind='+encodeURIComponent(kind));
+      +'&kind='+encodeURIComponent(kind)
+      +'&workDate='+encodeURIComponent(wd));   // ★v5.04
     if(!res || !res.ok){
       btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
       return showErr('msg-photo',(res&&res.message)||'受付を始められませんでした。');
