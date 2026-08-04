@@ -939,7 +939,7 @@
     // システム上のキーが無い案件があると、どの行を直せばよいか特定できない
     var noKey = d.items.filter(function(it){ return !it.key; });
     if (noKey.length){
-      setPlanMsg(di, 'この日の案件にシステム上の不備があるため保存できません。\n清掃スタッフグループへご連絡ください。', 'err');
+      setPlanMsg(di, 'この日の案件にシステム上の不備があるため保存できません。\nこのトークにそのままご返信ください。', 'err');
       return;
     }
     var why = planCheck(d);
