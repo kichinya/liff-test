@@ -249,6 +249,11 @@
           ⚠️ <b>締切は毎月1日です。</b>前の月の分は1日までに出してください。締切を過ぎた月の清掃日は選べなくなります。<br>
           間に合わなかった場合は、このトークにそのままご返信ください。
         </div>
+        <div class="warn">
+          📷 <b>「写真を読み込めませんでした」と出たとき</b><br>
+          iPhoneの写真は、そのままでは読み込めないことがあります。
+          その写真を写真アプリで開いて<b>スクリーンショットを撮り、そのスクショを選んで</b>ください。それなら確実に送れます。
+        </div>
       </div>
     </details>
 
@@ -587,6 +592,45 @@ function resizeImage(file, maxDim=1600, quality=0.72){
   });
 }
 
+// ★v4.67 1枚ずつ「読めたか」を持って返す。1枚の失敗で全体を落とさないため。
+//
+//   【何が起きていたか 2026-08-04】
+//     藤元さんが立替を送ろうとして「送信に失敗しました」。
+//     resizeImage は img.onerror で即 reject する。iPhoneのライブラリから選んだ
+//     HEIC写真・iCloudで最適化された写真は読み込めず、ここで落ちる。
+//     for ループの中なので【1枚目が失敗した時点で以降は処理されず】、
+//     金額も用途も含めて送信そのものが消える。原因も画面に出ない。
+//
+//   【方針】
+//     ・読めた写真だけで送る（証跡が1枚でも残るほうが、全部消えるよりよい）
+//     ・読めなかった枚数と、その場でできる回避策を必ず画面に出す
+//     ・全部読めなかったときは送らずに理由を出す（黙って空で送らない）
+async function toJpegB64(file){
+  try{
+    const d = await resizeImage(file);
+    const b = (d.split(',')[1] || '');
+    if (!b) throw new Error('空データ');
+    return { ok:true, b64:b };
+  }catch(e){
+    return { ok:false, name:(file && file.name) || '写真', why:(e && e.message) || '不明' };
+  }
+}
+
+// 選ばれたファイルをまとめて変換し、{list, bad} を返す
+async function toJpegB64All(files){
+  const list = [], bad = [];
+  for (const f of files){
+    const r = await toJpegB64(f);
+    if (r.ok) list.push(r.b64); else bad.push(r);
+  }
+  return { list: list, bad: bad };
+}
+
+// 読めなかったときの案内。回避策まで書かないと、その場で詰まる。
+const IMG_FAIL_HINT =
+  '写真アプリでその写真を開き、スクリーンショットを撮って、'
+  + 'そのスクショを選んでお送りください。それなら確実に送れます。';
+
 function showErr(id, text){ const m=$(id); m.className='msg err'; m.textContent=text; }
 function finishDone(){ showView('done'); setTimeout(()=>{ if(window.liff && liff.isInClient()) liff.closeWindow(); }, 1800); }
 
@@ -642,15 +686,33 @@ async function submitExpense(){
   if(!(amount>0)) return showErr('msg-expense','金額を正しく入力してください。');
   if(!purpose) return showErr('msg-expense','用途を入力してください。');
   const btn=event.target; btn.disabled=true; btn.textContent='送信中…';
+  const reset=()=>{ btn.disabled=false; btn.textContent='この内容で送信する'; };
   try{
+    // ★v4.67 読めた写真だけで送る。全部読めないときだけ中止。
     const files=Array.prototype.slice.call($('e-photo').files,0,4);
-    const receipts=[]; for(const f of files){ receipts.push((await resizeImage(f)).split(',')[1]||''); }
+    const conv=await toJpegB64All(files);
+    if(files.length && !conv.list.length){
+      reset();
+      return showErr('msg-expense',
+        '領収書の写真を読み込めませんでした（'+files.length+'枚）。'+IMG_FAIL_HINT);
+    }
+    const receipts=conv.list;
     const job=jobsMap[jk]||{};
     await postGas({ mode:'exp_submit', userId:me.userId, jobKey:jk, pid:job.pid||'', propName:job.name||'',
       cleanDate:job.cleanDate||'', amount:amount, purpose:purpose,
       receipts:receipts, receiptMime: receipts.length?'image/jpeg':'' });
+    if(conv.bad.length){
+      // 送信は成立している。落ちた枚数を隠さない。
+      reset();
+      return showErr('msg-expense',
+        '送信しました。ただし '+conv.bad.length+'枚は読み込めず、'+conv.list.length+'枚だけ添付されています。'
+        + '足りない領収書は、'+IMG_FAIL_HINT);
+    }
     finishDone();
-  }catch(err){ btn.disabled=false; btn.textContent='この内容で送信する'; showErr('msg-expense','送信に失敗しました。電波の良い場所で再度お試しください。'); }
+  }catch(err){
+    reset();
+    showErr('msg-expense','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+  }
 }
 
 // ---- 写真 ----
@@ -689,13 +751,29 @@ async function submitPhoto(){
   if(!jk) return showErr('msg-photo','物件を選んでください。');
   if(!files.length) return showErr('msg-photo','写真を選んでください。');
   const btn=event.target; btn.disabled=true; btn.textContent='送信中…';
+  const reset=()=>{ btn.disabled=false; btn.textContent='この内容で送信する'; };
   try{
-    const photos=[]; for(const f of files){ photos.push((await resizeImage(f)).split(',')[1]||''); }
+    // ★v4.67 立替と同じ穴。1枚読めないだけで全部消えるのを止める。
+    const conv=await toJpegB64All(files);
+    if(!conv.list.length){
+      reset();
+      return showErr('msg-photo','写真を読み込めませんでした（'+files.length+'枚）。'+IMG_FAIL_HINT);
+    }
+    const photos=conv.list;
     const job=jobsMap[jk]||{};
     await postGas({ mode:'photo_submit', userId:me.userId, jobKey:jk, pid:job.pid||'', propName:job.name||'',
       cleanDate:job.cleanDate||'', kind:kind, photos:photos, mime:'image/jpeg' });
+    if(conv.bad.length){
+      reset();
+      return showErr('msg-photo',
+        '送信しました。ただし '+conv.bad.length+'枚は読み込めず、'+conv.list.length+'枚だけ送られています。'
+        + '足りない写真は、'+IMG_FAIL_HINT);
+    }
     finishDone();
-  }catch(err){ btn.disabled=false; btn.textContent='この内容で送信する'; showErr('msg-photo','送信に失敗しました。枚数を減らすか電波の良い場所でお試しください。'); }
+  }catch(err){
+    reset();
+    showErr('msg-photo','送信に失敗しました（'+((err&&err.message)||'不明')+'）。枚数を減らすか電波の良い場所でお試しください。');
+  }
 }
 
 // ---- テキスト(超過/備品/引き継ぎ) ----
