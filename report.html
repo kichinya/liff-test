@@ -264,9 +264,9 @@
         <ol>
           <li>現場に着いて <span class="k">開始</span> を押す</li>
           <li>「清掃前の写真をお願いします」と出るので、<b>そのリンクをタップ</b></li>
-          <li>写真を選んで送信（<b>1回に6枚まで</b>）</li>
-          <li>終わって <span class="k">完了</span> を押す</li>
-          <li>同じように<b>清掃後</b>の写真を送る</li>
+          <li>物件と区分を確かめて <span class="k">📷 写真を送る</span> を押す</li>
+          <li><b>このトークに写真を送る</b>（アルバムからまとめて選べます・<b>枚数の制限はありません</b>）</li>
+          <li>終わって <span class="k">完了</span> を押し、同じように<b>清掃後</b>の写真を送る</li>
         </ol>
         <p><b>あとから送るとき</b>は、<span class="k">報告</span> を開いて <span class="k">📷 写真報告</span> を選び、
         <b>清掃日</b>と物件、<span class="k">清掃前</span> か <span class="k">清掃後</span> を選んでください。</p>
@@ -296,14 +296,15 @@
           その場で送れなかったときは、落ち着いてからで構いません。<br>
           ただし<b>撮影はその場でお願いします</b>。あとから撮り直すことはできません。
         </div>
-        <div class="warn">
-          📱 <b>7枚以上あるとき</b><br>
-          <span class="k">📷 写真報告</span> からの送信は<b>1回6枚まで</b>です。
-          7枚以上あるときは、その画面の下にある
-          <span class="k">📱 LINEのトークからまとめて送る</span> を押してください。<br>
-          受付が始まったら、<b>このトークに写真を送るだけ</b>です。アルバムからまとめて選べるので、何十枚でも数タップで送れます。<br><br>
-          <!-- ★v5.21 「✅ 送信おわり」は廃止（クイックリプライのため、写真を送った時点で消えて押せなかった） -->
-          <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、枚数をお知らせします。<br>
+        <!-- ★v5.30 送りかたを1本にしたので、枚数による使い分けの説明を廃止 -->
+        <div class="warn" style="background:#e8f5e9;border-color:#a5d6a7">
+          📱 <b>写真は「このトークに送る」だけです</b><br>
+          <span class="k">📷 写真を送る</span> を押すと受付が始まり、画面が閉じます。
+          あとは<b>このトークに写真を送るだけ</b>です。
+          アルバムからまとめて選べるので、何枚でも数タップで送れます。<br>
+          <b>枚数の制限はありません。</b>1枚でも何十枚でも同じ送りかたです。<br><br>
+          <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、
+          清掃前・清掃後それぞれの枚数をお知らせします。<br>
           ※別の物件の写真を送るときは、もう一度 <span class="k">📷 写真報告</span> から選び直してください。
         </div>
         <div class="warn">
@@ -565,32 +566,32 @@
       </div>
       <!-- ★v5.22 開始/完了の報告から自動で選ぶ。理由をここに出す（勝手に変わったと思わせない） -->
       <div class="hint" id="p-segwhy" style="display:none"></div>
-      <label class="req">写真（複数可・最大6枚）</label>
-      <!-- ★v4.50 capture を外した。撮り直しや、あとから出す場合にライブラリを使えるようにする -->
-      <label class="photo-btn">📷 写真を撮影 / 選択<input id="p-photo" type="file" accept="image/*" multiple></label>
-      <div id="photoPreview"></div>
-      <div class="hint">撮影後、自動で縮小して送信します。</div>
     </div>
-    <button class="submit" onclick="submitPhoto()">この内容で送信する</button>
+
+    <!-- ★v5.30【この画面から直接送る方式（6枚まで）を廃止】
+         送りかたが2つ並んでいたため、
+         「6枚まで」の枠が目に入った時点でそこで完結したつもりになり、
+         下の「まとめて送る」に気づかない人が多かった。
+         枚数で使い分けさせるのは、現場では覚えられない。
+         送りかたを【トークに送る】1本にする。
+         ・枚数の上限が無くなる（何十枚でも）
+         ・途中で失敗しても、送れた分は残る（1枚ずつ受け取るため）
+         ・縮小処理をしないので、電波が弱くても落ちにくい
+         ⚠️ サーバ側の photo_submit は残す。古い画面がキャッシュに残っている人の分。 -->
+    <div class="note" style="margin-top:16px;background:#e8f5e9;border-color:#a5d6a7">
+      <b>📱 このボタンを押すと、受付が始まります</b><br>
+      あとは<b>このトークに写真を送るだけ</b>です。
+      アルバムからまとめて選べるので、何枚でも数タップで送れます。<br>
+      <b>送り終わったら、そのままで大丈夫です。</b>最後の写真から10分ほどで自動的に締めて、枚数をお知らせします。
+    </div>
+    <button class="submit" onclick="startPhotoIntake()">📷 写真を送る</button>
 
     <div class="note" style="margin-top:18px">
       <b>🔁 あとから追加で送れます</b><br>
       同じ物件・同じ区分でも<b>何度でも送れます</b>。先に送った写真が消えることはありません。<br>
-      清掃前の写真を送ったあとに破損を見つけたときは、そのぶんだけ追加で送ってください。
+      清掃前の写真を送ったあとに破損を見つけたときは、そのぶんだけ追加で送ってください。<br>
+      ※別の物件の写真を送るときは、もう一度この画面から選び直してください。
     </div>
-
-    <!-- ★v4.53 枚数が多いときは LINE のトークに直接送ってもらう。
-         この送信は「縮小してまとめて1回で送る」方式のため、
-         枚数が増えると通信が重くなり、途中で失敗すると全部やり直しになる。 -->
-    <div class="note" style="margin-top:12px">
-      <b>7枚以上あるときはこちら</b><br>
-      上の送信は<b>6枚まで</b>です。7枚以上は下のボタンを押してください。
-      受付が始まったら、あとは<b>LINEのトークに直接写真を送るだけ</b>です。
-      アルバムからまとめて選べるので、何十枚でも数タップで送れます📱<br>
-      <b>送り終わったら、そのままで大丈夫です。</b>自動的に締めて枚数をお知らせします。
-    </div>
-    <button class="submit" style="background:#455a64;margin-top:10px"
-            onclick="startPhotoIntake()">📱 LINEのトークからまとめて送る</button>
 
     <!-- ★v4.87 破損は写真だけでは伝わらない。
          写真はフォルダに溜まるだけで、誰かが見に行かないと気づけない。
@@ -974,12 +975,12 @@ async function startPhotoIntake(){
       +'&jobKey='+encodeURIComponent(jk)
       +'&kind='+encodeURIComponent(kind));
     if(!res || !res.ok){
-      btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
+      btn.disabled=false; btn.textContent='📷 写真を送る';
       return showErr('msg-photo',(res&&res.message)||'受付を始められませんでした。');
     }
     finishDone();
   }catch(err){
-    btn.disabled=false; btn.textContent='📱 LINEのトークからまとめて送る';
+    btn.disabled=false; btn.textContent='📷 写真を送る';
     showErr('msg-photo','通信に失敗しました。電波の良い場所で再度お試しください。');
   }
 }
@@ -990,10 +991,14 @@ $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg lab
   const _w=$('p-segwhy'); if(_w) _w.style.display='none'; });
 // ★v5.22 物件を選び直したら区分も選び直す
 document.querySelector('#v-photo .jobsel').addEventListener('change', autoPickPhotoKind);
-$('p-photo').addEventListener('change', (e)=>{ const p=$('photoPreview'); p.innerHTML='';
-  Array.prototype.slice.call(e.target.files,0,6).forEach(function(f){ const im=new Image(); im.src=URL.createObjectURL(f);
-    im.onload=()=>URL.revokeObjectURL(im.src); p.appendChild(im); }); });
+// ★v5.30 写真プレビューは廃止（この画面から直接送る方式をやめたため）。
+//   要素が無いので addEventListener を残すと、ここで例外→以降のJSが全部止まる。
 
+// ★v5.30【画面からは呼ばれません】
+//   写真の送りかたを「LINEのトークに送る」1本にしたため、この関数への導線は無い。
+//   サーバ側の photo_submit は残してあるので、
+//   古い画面がキャッシュに残っている人が押しても、これまでどおり保存される。
+//   ⚠️ 消さないこと。消すと、キャッシュが残っている人の送信だけが静かに失敗する。
 async function submitPhoto(){
   const jk=document.querySelector('#v-photo .jobsel').value;
   const kind=(document.querySelector('input[name=pk]:checked')||{}).value||'before';
