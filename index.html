@@ -1225,14 +1225,26 @@
       //   新: 同時に投げて両方を待つ。遅いほう1本ぶんの時間で済む。
       //   ⚠️ どちらが失敗しても画面は出す（従来どおり）。
       //      ただし shift_get が「スタッフ未登録」を返したときだけは止める。
+      // ★v5.41【1本にまとめる】
+      //   v5.40 で Promise.all にしたが、実測では直列のままだった
+      //   （0:57:05 → 3.6秒 → 0:57:10 に2本目が開始）。
+      //   Apps Script のウェブアプリは同じ利用者の実行を順番待ちにするため、
+      //   画面側で並べても速くならない。往復そのものを1回にする。
+      //   ⚠️ GAS側が古いと ?mode=boot が無いので、そのときは従来の2本に戻す。
       var res = null, ra = null;
-      var pair = await Promise.all([
-        jsonp(GAS_URL + '?mode=shift_get&userId=' + encodeURIComponent(ME.userId))
-          .catch(function(){ return null; }),
-        jsonp(GAS_URL + '?mode=assign_get&userId=' + encodeURIComponent(ME.userId))
-          .catch(function(){ return null; }),
-      ]);
-      res = pair[0]; ra = pair[1];
+      var boot = await jsonp(GAS_URL + '?mode=boot&userId=' + encodeURIComponent(ME.userId))
+        .catch(function(){ return null; });
+      if (boot && boot.ok && (boot.shift || boot.assign)){
+        res = boot.shift; ra = boot.assign;
+      } else {
+        var pair = await Promise.all([
+          jsonp(GAS_URL + '?mode=shift_get&userId=' + encodeURIComponent(ME.userId))
+            .catch(function(){ return null; }),
+          jsonp(GAS_URL + '?mode=assign_get&userId=' + encodeURIComponent(ME.userId))
+            .catch(function(){ return null; }),
+        ]);
+        res = pair[0]; ra = pair[1];
+      }
 
       if (res && res.ok && Array.isArray(res.days)){
         res.days.forEach(function(d){ selected[d] = true; });
