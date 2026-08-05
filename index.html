@@ -238,7 +238,9 @@
     return new Promise(function(resolve, reject){
       var cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*100000);
       var s = document.createElement('script');
-      var timer = setTimeout(function(){ cleanup(); reject(new Error('timeout')); }, 15000);
+      // ★v5.40 15秒 → 25秒（report.html と揃える）。
+      //   GAS側が数秒かかるうえ、現場は電波が弱い。ここで切れると「開けない」に見える。
+      var timer = setTimeout(function(){ cleanup(); reject(new Error('timeout')); }, 25000);
       function cleanup(){ clearTimeout(timer); try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
         if (s.parentNode) s.parentNode.removeChild(s); }
       window[cb] = function(data){ cleanup(); resolve(data); };
@@ -1216,24 +1218,31 @@
       var prof = await liff.getProfile();
       ME = { userId: prof.userId, name: prof.displayName };
 
-      // 前回提出を取得してONを復元
-      try{
-        var res = await jsonp(GAS_URL + '?mode=shift_get&userId=' + encodeURIComponent(ME.userId));
-        if (res && res.ok && Array.isArray(res.days)){
-          res.days.forEach(function(d){ selected[d] = true; });
-        } else if (res && res.ok === false){
-          // スタッフ未登録など。カレンダーは出すが注意表示。
-          $('loading').innerHTML =
-            (res.message || 'スタッフ情報が確認できませんでした。マネージャーへご連絡ください。');
-          return;
-        }
-      }catch(e){ /* 取得失敗でも空で続行 */ }
+      // ★v5.40【2本を並列で取る】
+      //   旧: shift_get を await → 終わってから assign_get を await、の直列。
+      //       1本4秒なら8秒待つ。実測でGAS側が数秒かかっており、
+      //       そのぶんがそのまま「画面が出ない時間」になっていた。
+      //   新: 同時に投げて両方を待つ。遅いほう1本ぶんの時間で済む。
+      //   ⚠️ どちらが失敗しても画面は出す（従来どおり）。
+      //      ただし shift_get が「スタッフ未登録」を返したときだけは止める。
+      var res = null, ra = null;
+      var pair = await Promise.all([
+        jsonp(GAS_URL + '?mode=shift_get&userId=' + encodeURIComponent(ME.userId))
+          .catch(function(){ return null; }),
+        jsonp(GAS_URL + '?mode=assign_get&userId=' + encodeURIComponent(ME.userId))
+          .catch(function(){ return null; }),
+      ]);
+      res = pair[0]; ra = pair[1];
 
-      // ★v3.58 担当が決まっている予定を取得（失敗しても画面は出す）
-      try{
-        var ra = await jsonp(GAS_URL + '?mode=assign_get&userId=' + encodeURIComponent(ME.userId));
-        if (ra && ra.ok && ra.days) ASSIGNED = ra.days;
-      }catch(e2){ /* 取得失敗でも空で続行 */ }
+      if (res && res.ok && Array.isArray(res.days)){
+        res.days.forEach(function(d){ selected[d] = true; });
+      } else if (res && res.ok === false){
+        // スタッフ未登録など。カレンダーは出すが注意表示。
+        $('loading').innerHTML =
+          (res.message || 'スタッフ情報が確認できませんでした。マネージャーへご連絡ください。');
+        return;
+      }
+      if (ra && ra.ok && ra.days) ASSIGNED = ra.days;
 
       renderCalendar();
 
