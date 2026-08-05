@@ -125,6 +125,7 @@
   .needpill{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
             background:var(--green-l); color:var(--green); margin-left:6px; vertical-align:middle; font-weight:700; }
   .needpill.short{ background:#ffe9e9; color:#c62828; }
+  /* ★v5.35 対応人数のプルダウンは、希望開始時刻の select と同じ見た目にする（.job select を流用） */
   .oosbtn{ display:block; width:100%; margin:14px 0 4px; padding:12px; font-size:14px; font-weight:700;
            background:#fff; color:#2e7d32; border:1px dashed #2e7d32; border-radius:10px; cursor:pointer; }
   .oosnote{ font-size:12px; color:var(--sub); line-height:1.6; margin:6px 2px 0; }
@@ -223,6 +224,7 @@
   var ASSIGNED = {};                      // ★v3.58 { 'YYYY-MM-DD': [{prop,time,state,sameDay}] }
   var HAND_ITEMS = [];                    // ★v3.46 hand_list の結果
   var handDate = {};                      // ★v4.18 ジョブキー -> 希望清掃日(yyyy-MM-dd)
+  var handSolo = {};                      // ★v5.34 ジョブキー -> true(1名で対応する申告)
   var HAND_SHOW_ALL = false;              // ★v4.17 対応可物件の対象外も表示するか
   var HAND_OUT_COUNT = 0;                 // ★v4.17 対象外の件数（切替ボタンに出す）
   var handSel = {};                       // ★v3.46 { jobKey: 'HHMM' or '' }
@@ -466,7 +468,7 @@
 
   function loadHandList(){
     if (!ME || !ME.userId){ $('h-note').textContent = 'ユーザー情報が取得できていません。'; return; }
-    handSel = {};
+    handSel = {}; handSolo = {};
     handLoaded = false;
     $('h-list').innerHTML = '';
     $('h-noteWrap').classList.add('hidden');
@@ -692,6 +694,30 @@
       body.appendChild(ng);
     }
 
+    // ★v5.34【対応人数】※v5.35 チェックボックスからプルダウンへ
+    //   人数の目安は暫定。正しいかどうかは現場にしか分からない。
+    //   管理側が物件ごとに決め打ちする前に、まず現場の判断を集める。
+    //   ⚠️ 出すのは「2名以上の募集で、まだ誰も入っていない」ときだけ。
+    //      すでに1人いる案件で通すと、その人の予定が黙って消える。
+    //   ⚠️ 見た目は【希望開始時刻と同じプルダウン】に揃える。
+    //      チェックボックスと長い注意書きは、行の中で浮いて読まれなかった。
+    var solo = null;
+    if (!it.raised && it.need > 1 && !it.has){
+      solo = document.createElement('select');
+      solo.className = 'hidden';
+      solo.appendChild(new Option('対応人数：' + it.need + '名（募集を続ける）', ''));
+      solo.appendChild(new Option('対応人数：1名（1人で終わります）', '1'));
+      body.appendChild(solo);
+      var shint = document.createElement('div');
+      shint.className = 'sub hidden';
+      shint.textContent = '1名を選ぶと募集は止まり、あなただけの担当になります。';
+      body.appendChild(shint);
+      solo._hint = shint;
+      solo.addEventListener('change', function(){
+        if (solo.value === '1') handSolo[it.key] = true; else delete handSolo[it.key];
+      });
+    }
+
     cbx.addEventListener('change', function(){
       if (cbx.checked){
         handSel[it.key] = sel ? sel.value : '';
@@ -699,12 +725,15 @@
         row.classList.add('on');
         if (sel){ sel.classList.remove('hidden'); if (sel._hint) sel._hint.classList.remove('hidden'); }
         if (dsel){ dsel.classList.remove('hidden'); if (dsel._hint) dsel._hint.classList.remove('hidden'); }
+        if (solo){ solo.classList.remove('hidden'); solo._hint.classList.remove('hidden'); }   // ★v5.35
       } else {
         delete handSel[it.key];
         delete handDate[it.key];                                                     // ★v4.18
+        delete handSolo[it.key];                                                     // ★v5.34
         row.classList.remove('on');
         if (sel){ sel.classList.add('hidden'); if (sel._hint) sel._hint.classList.add('hidden'); }
         if (dsel){ dsel.classList.add('hidden'); if (dsel._hint) dsel._hint.classList.add('hidden'); }
+        if (solo){ solo.value = ''; solo.classList.add('hidden'); solo._hint.classList.add('hidden'); }   // ★v5.35
       }
       updateHandCount();
     });
@@ -727,7 +756,10 @@
     btn.disabled = true; setHandMsg('送信中…','');
 
     // ★v4.18 ジョブキー|希望開始時刻|希望清掃日
-    var items = keys.map(function(k){ return k + '|' + (handSel[k] || '') + '|' + (handDate[k] || ''); }).join(',');
+    // ★v5.34 4つ目に「1名で対応する申告」を足す（KEY|HHMM|YMD|1）
+    var items = keys.map(function(k){
+      return k + '|' + (handSel[k] || '') + '|' + (handDate[k] || '') + '|' + (handSolo[k] ? '1' : '');
+    }).join(',');
     var note = ($('h-memo').value || '').trim().slice(0, 200);
 
     var url = GAS_URL + '?mode=hand_submit&userId=' + encodeURIComponent(ME.userId)
