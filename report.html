@@ -755,7 +755,10 @@ function jsonp(url){
   return new Promise((resolve,reject)=>{
     const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*100000);
     const s=document.createElement('script');
-    const timer=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 15000);
+    // ★v5.37 15秒 → 25秒。GAS側は速くしたが、
+    //   電波の弱い現場では往復だけで15秒に届くことがある。
+    //   ここで切れると「報告が開けない」に見える。
+    const timer=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 25000);
     function cleanup(){ clearTimeout(timer); delete window[cb]; if(s.parentNode) s.parentNode.removeChild(s); }
     window[cb]=(data)=>{ cleanup(); resolve(data); };
     s.onerror=()=>{ cleanup(); reject(new Error('network')); };
@@ -1381,8 +1384,32 @@ async function submitCancel(){
     if(!liff.isLoggedIn()){ liff.login(); return; }
     const prof=await liff.getProfile(); me={ userId:prof.userId, name:prof.displayName };
     // ★v4.51 1回で「今日の物件（写真・超過報告用）」と「立替で選べる清掃日＋その日の物件」を受ける
-    const res=await jsonp(GAS_URL+'?mode=exp_jobs&userId='+encodeURIComponent(me.userId));
-    if(!res || !res.ok){ $('loading').innerHTML='<div class="center">'+((res&&res.message)||'情報の取得に失敗しました。')+'</div>'; return; }
+    // ★v5.37 起動時のこの1本が失敗すると、画面は「読み込み中…」のまま何も出ない。
+    //   落ちた理由と、その場で押せる【もう一度読み込む】を必ず出す。
+    let res=null;
+    try{
+      res = await jsonp(GAS_URL+'?mode=exp_jobs&userId='+encodeURIComponent(me.userId));
+    }catch(eJ){
+      const why = (eJ && eJ.message === 'timeout')
+        ? '時間内に応答がありませんでした。電波の弱い場所だと起きやすいです。'
+        : '通信に失敗しました。';
+      $('loading').innerHTML =
+        '<div class="center" style="padding:24px 12px;line-height:1.9">'
+        + '<div style="font-size:34px">📶</div>'
+        + '<div style="font-weight:700;margin:8px 0">開けませんでした</div>'
+        + '<div style="font-size:13px;color:#666">'+why+'</div>'
+        + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button>'
+        + '<div style="font-size:12px;color:#999;margin-top:14px">'
+        + '何度やっても開かないときは、このトークにそのままご返信ください。</div></div>';
+      return;
+    }
+    if(!res || !res.ok){
+      $('loading').innerHTML =
+        '<div class="center" style="padding:24px 12px;line-height:1.9">'
+        + '<div>'+((res&&res.message)||'情報の取得に失敗しました。')+'</div>'
+        + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button></div>';
+      return;
+    }
     if(res.staff && res.staff.name){ $('who').textContent=res.staff.name+' さん'; }
     const jobs=res.jobs||[];
     // ★v4.50 立替だけ過去31日ぶんを出す。
