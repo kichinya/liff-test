@@ -158,7 +158,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.46</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.47</div></div>
     </div>
   </div>
 
@@ -291,9 +291,30 @@
     $('tab-plan').classList.toggle('on', t.plan);
     $('bar').style.display = t.shift ? 'block' : 'none';
     $('h-bar').classList.toggle('hidden', !t.hand);
-    // 挙手・マイ予定は開くたびに取り直す（他の人に決まった案件・変わった予定を出さないため）
-    if (t.hand) loadHandList();
-    if (t.plan) loadMyPlan();
+    // ★v5.47 タブを押すたびに毎回GASへ取りにいっていたため、
+    //   切り替えのたびに「読み込み中…」で数秒待たされていた。
+    //   ・取得済みで新しい（FRESH_MS 以内）なら、その場で描画して待たせない
+    //   ・古ければ、いまある内容を出したまま裏で取り直す（画面は空にしない）
+    //   ・一度も取れていないときだけ、従来どおり「読み込み中…」を出す
+    //   起動直後に裏で先読みしているので、実際にはほぼ待ちません。
+    if (t.hand) {
+      if (handLoaded && (Date.now() - HAND_AT) < FRESH_MS) { renderHandList(); }
+      else if (handLoaded) { renderHandList(); loadHandList(true); }
+      else { loadHandList(); }
+    }
+    if (t.plan) {
+      if (PLAN_LOADED && (Date.now() - PLAN_AT) < FRESH_MS) { renderPlan(); }
+      else if (PLAN_LOADED) { renderPlan(); loadMyPlan(true); }
+      else { loadMyPlan(); }
+    }
+  }
+
+  // ★v5.47 先読み・鮮度の管理
+  var HAND_AT = 0, PLAN_AT = 0, PLAN_LOADED = false;
+  var FRESH_MS = 60000;   // 60秒以内に取ったものは取り直さない
+  function prefetchTabs_(){
+    try { if (!handLoaded) loadHandList(true); } catch (e) {}
+    try { if (!PLAN_LOADED) loadMyPlan(true); } catch (e) {}
   }
 
   // ============================================================
@@ -475,15 +496,18 @@
 
   function loadHandList(){
     if (!ME || !ME.userId){ $('h-note').textContent = 'ユーザー情報が取得できていません。'; return; }
-    handSel = {}; handSolo = {};
-    handLoaded = false;
-    $('h-list').innerHTML = '';
-    $('h-noteWrap').classList.add('hidden');
-    $('h-note').classList.remove('hidden');
-    $('h-note').textContent = '読み込み中…';
-    $('h-send').classList.add('hidden');
-    setHandMsg('');
-    updateHandCount();
+    // ★v5.47 silent=true のときは画面を空にしない（先読み・裏での取り直し用）
+    if (!silent) {
+      handSel = {}; handSolo = {};
+      handLoaded = false;
+      $('h-list').innerHTML = '';
+      $('h-noteWrap').classList.add('hidden');
+      $('h-note').classList.remove('hidden');
+      $('h-note').textContent = '読み込み中…';
+      $('h-send').classList.add('hidden');
+      setHandMsg('');
+      updateHandCount();
+    }
 
     jsonp(GAS_URL + '?mode=hand_list&userId=' + encodeURIComponent(ME.userId)
       + (HAND_SHOW_ALL ? '&all=1' : ''))
@@ -495,6 +519,9 @@
         HAND_ITEMS = res.items || [];
         HAND_OUT_COUNT = res.outCount || 0;   // ★v4.17
         handLoaded = true;
+        HAND_AT = Date.now();                 // ★v5.47
+        // ★v5.47 裏での取り直し中に選択済みがあれば、描き直して消さないよう
+        //   選択状態は handSel に残っている（silent では初期化していない）。
         renderHandList();
       })
       .catch(function(){
@@ -880,11 +907,14 @@
     }
   }
 
-  function loadMyPlan(){
-    $('p-note').classList.remove('hidden');
-    $('p-note').style.color = '';
-    $('p-note').textContent = '読み込み中…';
-    $('p-list').innerHTML = '';
+  function loadMyPlan(silent){
+    // ★v5.47 silent=true のときは画面を空にしない（先読み・裏での取り直し用）
+    if (!silent) {
+      $('p-note').classList.remove('hidden');
+      $('p-note').style.color = '';
+      $('p-note').textContent = '読み込み中…';
+      $('p-list').innerHTML = '';
+    }
     jsonp(GAS_URL + '?mode=myplan_get&userId=' + encodeURIComponent(ME.userId))
       .then(function(res){
         if (!res || !res.ok){
@@ -892,6 +922,7 @@
           return;
         }
         PLAN_DAYS = res.days || [];
+        PLAN_LOADED = true; PLAN_AT = Date.now();   // ★v5.47
         if (res.travel) PLAN_TRAVEL = res.travel;
         if (res.step) PLAN_STEP = res.step;
         if (!PLAN_DAYS.length){
@@ -1268,6 +1299,12 @@
         var t0 = initialTab();
         if (t0 === 'plan' || t0 === 'hand') showTab(t0);
       }catch(eT){ /* 失敗しても既定タブのまま */ }
+
+      // ★v5.47 起動が終わったら、裏で「挙手」「マイ予定」を先読みしておく。
+      //   スタッフが清掃希望日を見ている数秒のあいだに取り終わるので、
+      //   タブを押したときに待たされない。
+      //   ⚠️ 先に showTab で開いた側は既に読み込み済みなので、prefetch は重複しない。
+      setTimeout(prefetchTabs_, 400);
     }catch(e){
       $('loading').innerHTML =
         'LINEアプリ内で開いてください。<br>（このページはLINEのリッチメニューから開きます）';
