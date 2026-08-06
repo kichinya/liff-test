@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- ★v5.45 LINE内ブラウザが古い版を掴んだまま「直っていない」ように見える事故が繰り返されていたため、
+     HTML自体はキャッシュさせない。中身はGitHub Pagesの1ファイルなので転送量の影響はほぼ無い。 -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>報告</title>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <style>
@@ -130,7 +135,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div>読み込み中…</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">読み込み中…</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -1406,10 +1411,29 @@ function jobsFailed(why){
 // ---- 起動 ----
 (async function init(){
   let uiShown = false;   // ★v5.44 画面をもう出したか（出した後は全面エラーにしない）
+  // ★v5.45 liff.init / getProfile が遅いと（Android の LINE内ブラウザで起きやすい）
+  //   「読み込み中…」のまま何も起きないように見え、「報告が開かない」と受け取られる。
+  //   いま何を待っているかを出し、12秒たっても進まなければ その場で押せる案内を出す。
+  let slowTimer = null;
   try{
+    { const lt=$('loadtext'); if(lt) lt.textContent='LINEと接続しています…'; }
+    slowTimer = setTimeout(function(){
+      const el=$('loading');
+      if(!el || el.classList.contains('hidden')) return;
+      el.innerHTML =
+        '<div class="center" style="padding:24px 12px;line-height:1.9">'
+        + '<div style="font-size:34px">📶</div>'
+        + '<div style="font-weight:700;margin:8px 0">接続に時間がかかっています</div>'
+        + '<div style="font-size:13px;color:#666">電波の良い場所で、もう一度お試しください。</div>'
+        + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button>'
+        + '<div style="font-size:12px;color:#999;margin-top:14px">'
+        + '何度やっても開かないときは、このトークにそのままご返信ください。</div></div>';
+    }, 12000);
     await liff.init({ liffId: LIFF_ID });
     if(!liff.isLoggedIn()){ liff.login(); return; }
+    { const lt=$('loadtext'); if(lt) lt.textContent='ご本人を確認しています…'; }
     const prof=await liff.getProfile(); me={ userId:prof.userId, name:prof.displayName };
+    if(slowTimer){ clearTimeout(slowTimer); slowTimer=null; }
     // ★v4.51 1回で「今日の物件（写真・超過報告用）」と「立替で選べる清掃日＋その日の物件」を受ける
     // ★v5.37 起動時のこの1本が失敗すると、画面は「読み込み中…」のまま何も出ない。
     //   落ちた理由と、その場で押せる【もう一度読み込む】を必ず出す。
@@ -1504,6 +1528,7 @@ function jobsFailed(why){
     dsel.addEventListener('change', fillExpenseJobs);
     // ★v5.44 画面の表示は上（起動直後）で済ませているので、ここでは何もしない。
   }catch(e){
+    if (slowTimer) { try { clearTimeout(slowTimer); } catch(e3){} }
     // ★v5.44 画面が出た後の失敗で全面エラーにすると、使えていた機能まで閉ざしてしまう。
     if (uiShown) { try { jobsFailed('画面の準備に失敗しました'); } catch(e2){} return; }
     $('loading').classList.remove('hidden');
