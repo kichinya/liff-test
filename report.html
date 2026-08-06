@@ -131,6 +131,9 @@
 <body>
 <div class="wrap">
   <div id="loading" class="center"><div class="spinner"></div><div>読み込み中…</div></div>
+  <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
+  <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
+    border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
 
   <!-- メニュー -->
   <div id="v-menu" class="hidden">
@@ -1377,8 +1380,32 @@ async function submitCancel(){
   }
 }
 
+// ★v5.44 物件リストの読み込み状態を、画面をふさがずに伝えるヘルパ
+function jobsLoading(){
+  document.querySelectorAll('.jobsel').forEach(function(sel){
+    sel.innerHTML='<option value="">物件を読み込んでいます…</option>'; });
+  ['e-date','p-date'].forEach(function(id){ const s=$(id);
+    if(s) s.innerHTML='<option value="">読み込んでいます…</option>'; });
+}
+function jobsFailed(why){
+  document.querySelectorAll('.jobsel').forEach(function(sel){
+    sel.innerHTML='<option value="">読み込めませんでした</option>'; });
+  ['e-date','p-date'].forEach(function(id){ const s=$(id);
+    if(s) s.innerHTML='<option value="">読み込めませんでした</option>'; });
+  const bar=$('jobsbar');
+  if(bar){
+    bar.innerHTML='📶 物件の一覧を読み込めませんでした（'+why+'）　'
+      + '<button onclick="location.reload()" style="border:0;background:#c62828;color:#fff;'
+      + 'border-radius:6px;padding:4px 10px;font-size:12px">もう一度</button>'
+      + '<div style="font-size:11px;margin-top:6px;color:#7a4a4a">'
+      + '「使い方」「対応できる物件」「移動手段」「打刻の後入れ」はこのままお使いいただけます。</div>';
+    bar.classList.remove('hidden');
+  }
+}
+
 // ---- 起動 ----
 (async function init(){
+  let uiShown = false;   // ★v5.44 画面をもう出したか（出した後は全面エラーにしない）
   try{
     await liff.init({ liffId: LIFF_ID });
     if(!liff.isLoggedIn()){ liff.login(); return; }
@@ -1386,30 +1413,32 @@ async function submitCancel(){
     // ★v4.51 1回で「今日の物件（写真・超過報告用）」と「立替で選べる清掃日＋その日の物件」を受ける
     // ★v5.37 起動時のこの1本が失敗すると、画面は「読み込み中…」のまま何も出ない。
     //   落ちた理由と、その場で押せる【もう一度読み込む】を必ず出す。
+    // ★v5.44 画面を先に出す。物件リストの取得を待たない。
+    //   従来は exp_jobs（清掃ジョブ＋アーカイブの走査）が返るまで「読み込み中…」のままで、
+    //   電波の弱い場所や Android の LINE内ブラウザでは「報告が開かない」と受け取られていた。
+    //   使い方・対応できる物件・移動手段・打刻の後入れ・報告の取消は
+    //   物件リストを使わないので、この時点で完全に操作できる。
+    jobsLoading();
+    {
+      const t0=new URLSearchParams(location.search).get('type');
+      if(t0 && ['expense','photo','overtime','supply','handover','props','settings','help','late'].indexOf(t0)>=0) go(t0);
+      else showView('menu');
+      uiShown = true;
+    }
+
     let res=null;
     try{
       res = await jsonp(GAS_URL+'?mode=exp_jobs&userId='+encodeURIComponent(me.userId));
     }catch(eJ){
-      const why = (eJ && eJ.message === 'timeout')
-        ? '時間内に応答がありませんでした。電波の弱い場所だと起きやすいです。'
-        : '通信に失敗しました。';
-      $('loading').innerHTML =
-        '<div class="center" style="padding:24px 12px;line-height:1.9">'
-        + '<div style="font-size:34px">📶</div>'
-        + '<div style="font-weight:700;margin:8px 0">開けませんでした</div>'
-        + '<div style="font-size:13px;color:#666">'+why+'</div>'
-        + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button>'
-        + '<div style="font-size:12px;color:#999;margin-top:14px">'
-        + '何度やっても開かないときは、このトークにそのままご返信ください。</div></div>';
+      jobsFailed((eJ && eJ.message === 'timeout')
+        ? '時間内に応答がありませんでした' : '通信に失敗しました');
       return;
     }
     if(!res || !res.ok){
-      $('loading').innerHTML =
-        '<div class="center" style="padding:24px 12px;line-height:1.9">'
-        + '<div>'+((res&&res.message)||'情報の取得に失敗しました。')+'</div>'
-        + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button></div>';
+      jobsFailed((res&&res.message)||'情報を取得できませんでした');
       return;
     }
+    $('jobsbar').classList.add('hidden');
     if(res.staff && res.staff.name){ $('who').textContent=res.staff.name+' さん'; }
     const jobs=res.jobs||[];
     // ★v4.50 立替だけ過去31日ぶんを出す。
@@ -1473,11 +1502,20 @@ async function submitCancel(){
       fillExpenseJobs();
     }
     dsel.addEventListener('change', fillExpenseJobs);
-    // ?type= があれば直接そのフォーム、無ければメニュー
-    const type=new URLSearchParams(location.search).get('type');
-    if(type && ['expense','photo','overtime','supply','handover','props','settings','help','late'].indexOf(type)>=0) go(type);
-    else showView('menu');
-  }catch(e){ $('loading').innerHTML='<div class="center">LIFFの初期化に失敗しました。時間をおいて再度お試しください。</div>'; }
+    // ★v5.44 画面の表示は上（起動直後）で済ませているので、ここでは何もしない。
+  }catch(e){
+    // ★v5.44 画面が出た後の失敗で全面エラーにすると、使えていた機能まで閉ざしてしまう。
+    if (uiShown) { try { jobsFailed('画面の準備に失敗しました'); } catch(e2){} return; }
+    $('loading').classList.remove('hidden');
+    $('loading').innerHTML =
+      '<div class="center" style="padding:24px 12px;line-height:1.9">'
+      + '<div style="font-size:34px">📶</div>'
+      + '<div style="font-weight:700;margin:8px 0">開けませんでした</div>'
+      + '<div style="font-size:13px;color:#666">LINEとの接続に失敗しました。</div>'
+      + '<button class="submit" style="margin-top:18px" onclick="location.reload()">もう一度読み込む</button>'
+      + '<div style="font-size:12px;color:#999;margin-top:14px">'
+      + '何度やっても開かないときは、このトークにそのままご返信ください。</div></div>';
+  }
 })();
 </script>
 </body>
