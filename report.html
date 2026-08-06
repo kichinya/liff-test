@@ -135,7 +135,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v5.46</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v5.70</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -1069,24 +1069,48 @@ document.getElementById('l-seg').addEventListener('click', ()=>{
     l.classList.toggle('on', l.querySelector('input').checked); }); });
 
 async function loadLate(){
-  setMsg2('msg-late','読み込み中…','');
-  $('l-date').innerHTML=''; $('l-job').innerHTML='';
+  // ★v5.69 「読み込み中…」は className='msg'（修飾なし）で、CSS上 display:none。
+  //   つまり【画面には一度も出ていなかった】。
+  //   そのうえプルダウンを空にするので、開いた直後にタップすると
+  //   iOS は「オプションなし」と表示する。スタッフには「選択できない」としか見えない。
+  //   ・見えるクラス（ok）で出す
+  //   ・プルダウン自体にも「読み込んでいます…」を入れて、空の状態を作らない
+  setMsg2('msg-late','読み込んでいます…','ok');
+  $('l-date').innerHTML='<option value="">読み込んでいます…</option>';
+  $('l-job').innerHTML='<option value="">読み込んでいます…</option>';
   try{
     const res=await jsonp(GAS_URL+'?mode=late_jobs&userId='+encodeURIComponent(me.userId));
-    if(!res || !res.ok) return showErr('msg-late',(res&&res.message)||'読み込みに失敗しました。');
+    if(!res || !res.ok){
+      // ★v5.69 空のままにすると「オプションなし」になり、理由が伝わらない
+      $('l-date').innerHTML='<option value="">読み込めませんでした</option>';
+      $('l-job').innerHTML='<option value="">読み込めませんでした</option>';
+      return showErr('msg-late',(res&&res.message)||'読み込みに失敗しました。もう一度開き直してください。');
+    }
     LATE_DAYS=res.days||[];
     if(res.range && res.range.note) $('l-range').textContent=res.range.note;
     setMsg2('msg-late','','');
     if(!LATE_DAYS.length){
-      const o=document.createElement('option'); o.value=''; o.textContent='入力が必要な清掃はありません';
-      $('l-date').appendChild(o);
-      const o2=document.createElement('option'); o2.value=''; o2.textContent='—'; $('l-job').appendChild(o2);
+      // ★v5.70 0件のとき、清掃日にだけ案内を入れて、物件のプルダウンを空のままにしていた。
+      //   端末は空の select を「オプションなし」と表示するので、
+      //   通信に失敗したときと見分けがつかない。両方に同じ理由を出す。
+      $('l-date').innerHTML='<option value="">入力が必要な清掃はありません</option>';
+      $('l-job').innerHTML='<option value="">入力が必要な清掃はありません</option>';
+      setMsg2('msg-late',
+        'この期間（'+((res.range&&res.range.note)||'')+'）\n'
+        +'あなたの担当として登録されている清掃と、\n'
+        +'あなたが開始・完了を報告した清掃はありませんでした。\n\n'
+        +'実際に作業された場合は、このトークにそのままご返信ください。','ok');
       return;
     }
     LATE_DAYS.forEach(function(d,i){ const o=document.createElement('option');
       o.value=String(i); o.textContent=d.label+'（'+d.jobs.length+'件）'; $('l-date').appendChild(o); });
     $('l-date').value='0'; fillLateJobs();
-  }catch(e){ showErr('msg-late','通信に失敗しました。電波の良い場所で再度お試しください。'); }
+  }catch(e){
+    // ★v5.69 同上
+    $('l-date').innerHTML='<option value="">読み込めませんでした</option>';
+    $('l-job').innerHTML='<option value="">読み込めませんでした</option>';
+    showErr('msg-late','時間内に読み込めませんでした。\n電波の良い場所で、この画面を開き直してください。');
+  }
 }
 
 function fillLateJobs(){

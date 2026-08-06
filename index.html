@@ -158,7 +158,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.49</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.62</div></div>
     </div>
   </div>
 
@@ -302,6 +302,9 @@
       try {
         if (handLoaded && (Date.now() - HAND_AT) < FRESH_MS) { renderHandList(); }
         else if (handLoaded) { renderHandList(); loadHandList(true); }
+        // ★v5.62 先読みが走っている最中に押されたら、同じ要求を2本飛ばさない。
+        //   v5.49 で BUSY を作ったのに、参照していたのは prefetchTabs_ だけだった。
+        else if (HAND_BUSY) { $('h-note').classList.remove('hidden'); $('h-note').textContent = '読み込み中…'; }
         else { loadHandList(); }
       } catch (eH) {
         try { $('h-note').classList.remove('hidden');
@@ -312,6 +315,7 @@
       try {
         if (PLAN_LOADED && (Date.now() - PLAN_AT) < FRESH_MS) { renderPlan(); }
         else if (PLAN_LOADED) { renderPlan(); loadMyPlan(true); }
+        else if (PLAN_BUSY) { $('p-note').classList.remove('hidden'); $('p-note').textContent = '読み込み中…'; }   // ★v5.62
         else { loadMyPlan(); }
       } catch (eP) {
         try { $('p-note').classList.remove('hidden');
@@ -933,6 +937,15 @@
       $('p-note').style.color = '';
       $('p-note').textContent = '読み込み中…';
       $('p-list').innerHTML = '';
+    }
+    // ★v5.62 ME のガードを BUSY を立てる前に置く。
+    //   loadHandList には最初からあるのに、こちらだけ無かった。
+    //   ME が無い状態で呼ばれると BUSY を立てた直後に例外になり、
+    //   フラグが戻らず以後の先読みが永久にスキップされる形だった。
+    if (!ME || !ME.userId) {
+      $('p-note').classList.remove('hidden');
+      $('p-note').textContent = 'ユーザー情報を取得できていません。開き直してください。';
+      return;
     }
     PLAN_BUSY = true;   // ★v5.49
     jsonp(GAS_URL + '?mode=myplan_get&userId=' + encodeURIComponent(ME.userId))
