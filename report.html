@@ -135,7 +135,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v5.70</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v5.72</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -172,6 +172,13 @@
     <p class="lead">開始や完了を押し忘れた清掃を、あとから入力できます。<br>
       <b>一度終えた清掃に、あとから入り直した分</b>もここから出せます。</p>
     <div class="card">
+      <!-- ★v5.72 チェックだけで入った／代打／押し忘れ の人は、担当者名に入っていない。
+           担当に入れると必要人数が埋まって募集が止まるため、入れないのが正しい状態。
+           そのままだと候補に出ず、記録できない＝業務委託費が欠ける。ここで出せるようにする。 -->
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0 0 10px">
+        <input type="checkbox" id="l-all" onchange="loadLate()" style="width:20px;height:20px">
+        <span>担当外の清掃も出す（チェック・代打・押し忘れ）</span>
+      </label>
       <label class="req">清掃日</label><select id="l-date" onchange="fillLateJobs()"></select>
       <div class="note" id="l-range"></div>
       <label class="req">物件</label><select id="l-job" onchange="lateDoneHint();fillLateWorkDates()"></select>
@@ -1079,7 +1086,9 @@ async function loadLate(){
   $('l-date').innerHTML='<option value="">読み込んでいます…</option>';
   $('l-job').innerHTML='<option value="">読み込んでいます…</option>';
   try{
-    const res=await jsonp(GAS_URL+'?mode=late_jobs&userId='+encodeURIComponent(me.userId));
+    // ★v5.72 担当外も出すときは all=1
+    const _all = ($('l-all') && $('l-all').checked) ? '&all=1' : '';
+    const res=await jsonp(GAS_URL+'?mode=late_jobs&userId='+encodeURIComponent(me.userId)+_all);
     if(!res || !res.ok){
       // ★v5.69 空のままにすると「オプションなし」になり、理由が伝わらない
       $('l-date').innerHTML='<option value="">読み込めませんでした</option>';
@@ -1099,7 +1108,8 @@ async function loadLate(){
         'この期間（'+((res.range&&res.range.note)||'')+'）\n'
         +'あなたの担当として登録されている清掃と、\n'
         +'あなたが開始・完了を報告した清掃はありませんでした。\n\n'
-        +'実際に作業された場合は、このトークにそのままご返信ください。','ok');
+        +'チェックや代打で入られた場合は、上の\n'
+        +'「担当外の清掃も出す」にチェックを入れてください。','ok');
       return;
     }
     LATE_DAYS.forEach(function(d,i){ const o=document.createElement('option');
@@ -1124,7 +1134,9 @@ function fillLateJobs(){
   //   何時から何時が記録済みかを選択肢に出さないと、同じ時刻をもう一度入れてしまう。
   d.jobs.forEach(function(j){ const o=document.createElement('option');
     o.value=j.jobKey;
-    o.textContent = j.name + (j.done ? '　✔ ' + (j.doneLabel||'記録済み') : '');
+    // ★v5.72 担当外はひと目で分かるようにする（誤って他人の清掃を入れないため）
+    o.textContent = (j.mine === false ? '［担当外］' : '') + j.name
+                  + (j.done ? '　✔ ' + (j.doneLabel||'記録済み') : '');
     o.dataset.std=j.std||'';
     o.dataset.done=j.done?'1':'';
     o.dataset.doneLabel=j.doneLabel||'';
