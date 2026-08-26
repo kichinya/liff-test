@@ -638,15 +638,15 @@
     <!-- ★v4.71 オーナー様へ転送される報告は、書く前に必ず知らせる。
          送ったあとに知るのでは遅い。表示の出し分けは TEXT_META.owner で行う。 -->
     <div class="warn" id="t-owner" style="display:none;background:#fff8e1;border-color:#ffe082">
-      📨 <b>内容によっては、物件のオーナー様にも共有します。</b><br>
-      共有するかどうかは<b>こちらで確認してから</b>決めますので、
-      まずは<b>見たままの事実</b>をそのまま書いてください（<b>お名前は出ません</b>）。<br>
-      金額のご相談や社内のことは、ここではなく<b>このトークにご返信ください</b>。
+      <span id="t-owner-text"></span>
     </div>
     <div class="card">
       <label class="req">物件</label><select class="jobsel"></select>
       <label class="req" id="t-label">内容</label>
       <textarea id="t-content" placeholder=""></textarea>
+    </div>
+    <div id="t-owner-foot" class="warn" style="display:none;background:#ffebee;border-color:#ef9a9a">
+      ⚠️ この内容は<b>そのままオーナー様へ届きます</b>。取り消しはできません。
     </div>
     <button class="submit" onclick="submitText()">この内容で送信する</button>
   </div>
@@ -731,11 +731,34 @@ let jobsMap = {};              // jobKey -> {pid,name,cleanDate}
 //   ⚠️ サーバ側 Attendancereport.gs の ATT_OWNER_FWD と対になっている。
 //      片方だけ変えると「知らされずに転送される」「出ない告知が出る」のどちらかになる。
 //      転送の可否を変えるときは、必ず両方を直すこと。
+// ★v7.10 2026-08-26 備品・引き継ぎは【そのままオーナー様へ自動送信】になった。
+//   auto:true の種別は「こちらで確認してから決めます」と書いてはいけない。
+//   誰も読まずに届くのに、読んでから決めると伝えるのは嘘になる。
+//   ⚠️ GAS 側 Photoreportreceive.gs の PR_OWNER_AUTO と必ず揃えること。
 const TEXT_META = {
-  overtime: { title:'⏱ 超過報告', kind:'超過',   owner:true, ph:'例）鍵のトラブルで30分超過しました' },
-  supply:   { title:'📦 備品発注', kind:'備品',   owner:true, ph:'例）トイレットペーパー 残り1個、補充希望' },
-  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, ph:'例）エアコンの効きが悪い。次回確認願います' },
+  overtime: { title:'⏱ 超過報告', kind:'超過',   owner:true, auto:false, ph:'例）鍵のトラブルで30分超過しました' },
+  supply:   { title:'📦 備品発注', kind:'備品',   owner:true, auto:true,  ph:'例）トイレットペーパー 残り1個、補充希望' },
+  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, auto:true,  ph:'例）エアコンの効きが悪い。次回確認願います' },
 };
+
+const OWNER_NOTE_AUTO =
+  '📨 <b>書いた内容は、そのまま物件のオーナー様へ届きます。</b><br>' +
+  '木賃屋では確認しませんので、<b>送る前にもう一度お読みください</b>。<br>' +
+  'LINEは<b>送信の取り消しができません</b>。<br><br>' +
+  '✅ <b>書いてよいこと</b><br>' +
+  '　・見たままの事実（どこが・どうなっている）<br>' +
+  '　・いつ気づいたか<br><br>' +
+  '🚫 <b>書かないでください</b><br>' +
+  '　・金額、立替、報酬のこと<br>' +
+  '　・他のスタッフや社内のこと<br>' +
+  '　・推測での原因や、前の利用者への評価<br><br>' +
+  'これらは<b>このトークにご返信ください</b>（<b>お名前は出ません</b>）。';
+
+const OWNER_NOTE_CHECK =
+  '📨 <b>内容によっては、物件のオーナー様にも共有します。</b><br>' +
+  '共有するかどうかは<b>こちらで確認してから</b>決めますので、' +
+  'まずは<b>見たままの事実</b>をそのまま書いてください（<b>お名前は出ません</b>）。<br>' +
+  '金額のご相談や社内のことは、ここではなく<b>このトークにご返信ください</b>。';
 
 function showView(name){
   ['loading','menu','expense','photo','text','props','settings','cancel','done','help','late'].forEach(function(v){
@@ -754,6 +777,11 @@ function go(name){
     $('t-content').placeholder = m.ph;
     $('v-text').dataset.type = name;
     $('t-owner').style.display = m.owner ? 'block' : 'none';   // ★v4.71
+    // ★v7.10 自動送信の種別かどうかで文言を変える
+    $('t-owner-text').innerHTML = m.auto ? OWNER_NOTE_AUTO : OWNER_NOTE_CHECK;
+    $('t-owner').style.background = m.auto ? '#ffebee' : '#fff8e1';
+    $('t-owner').style.borderColor = m.auto ? '#ef9a9a' : '#ffe082';
+    $('t-owner-foot').style.display = m.auto ? 'block' : 'none';   // ★v7.11 送信ボタン直前にも再掲
     $('t-content').value = '';                                  // 前回の入力を持ち越さない
     $('msg-text').className = 'msg'; $('msg-text').textContent = '';
   }
