@@ -645,9 +645,11 @@
       <label class="req" id="t-label">内容</label>
       <textarea id="t-content" placeholder=""></textarea>
     </div>
-    <div id="t-owner-foot" class="warn" style="display:none;background:#ffebee;border-color:#ef9a9a">
-      ⚠️ この内容は<b>そのままオーナー様へ届きます</b>。取り消しはできません。<br>
-      📷 写真は<b>物件のグループLINE</b>へ直接お送りください（この画面からは送れません）。
+    <!-- ★v7.12 上のカードと同じ文言を繰り返さない。ここは【送信直前の見直し】に役割を分ける。
+         同じ内容を2回出すと、2回とも読み飛ばされる。 -->
+    <div id="t-owner-foot" class="warn" style="display:none;background:#fff8e1;border-color:#ffe082">
+      送信前にもう一度だけ確認してください。<br>
+      金額・他のスタッフ・社内のことが入っていませんか？
     </div>
     <button class="submit" onclick="submitText()">この内容で送信する</button>
   </div>
