@@ -734,9 +734,14 @@ let jobsMap = {};              // jobKey -> {pid,name,cleanDate}
 //   ⚠️ サーバ側 Attendancereport.gs の ATT_OWNER_FWD と対になっている。
 //      片方だけ変えると「知らされずに転送される」「出ない告知が出る」のどちらかになる。
 //      転送の可否を変えるときは、必ず両方を直すこと。
+// ★v7.14 禁止（金額を書くな）ではなく、この画面の役割を先に伝える形にする。
+//   「発注が必要なもの」と「自分で買って立て替えたもの」は別の手続き。
+//   そこを分けて書けば、金額が混ざる余地がなくなる。
 const OWNER_NOTE_SUPPLY =
-  '📨 <b>この内容は、そのまま物件のオーナー様へ届きます</b>（<b>お名前は出ません</b>）。<br>' +
-  '<b>金額は書かないでください。</b>買って立て替えた分は「💰 立替精算」から。<br>' +
+  '📦 <b>この画面は「発注が必要な備品」のご連絡です。</b><br>' +
+  '内容は<b>そのまま物件のオーナー様へ届きます</b>（<b>お名前は出ません</b>）。<br><br>' +
+  '💰 <b>ご自身で購入して立て替えた分は、こちらではなく<br>' +
+  '　　「💰 立替精算」からお願いします。</b><br><br>' +
   '📷 写真は<b>物件のグループLINE</b>へ直接お送りください。';
 
 const OWNER_NOTE_AUTO =
@@ -767,13 +772,13 @@ const OWNER_NOTE_CHECK =
 //   誰も読まずに届くのに、読んでから決めると伝えるのは嘘になる。
 //   ⚠️ GAS 側 Photoreportreceive.gs の PR_OWNER_AUTO と必ず揃えること。
 const TEXT_META = {
-  overtime: { title:'⏱ 超過報告', kind:'超過',   owner:true, auto:false, ph:'例）鍵のトラブルで30分超過しました' },
+  overtime: { title:'⏱ 超過報告', kind:'超過',   owner:true, auto:false, label:'超過した理由', ph:'例）鍵のトラブルで30分超過しました' },
   // ★v7.13 備品は書く内容が短く決まっている（何が足りないか）。
   //   引き継ぎ用の長い注意書きは読み飛ばされるだけなので、必要な2点だけに絞る。
   //   ・オーナー様へ直接届くこと（「備品発注」という名前からは想像できない）
   //   ・金額を書かないこと（立替と混同して「〇〇円で買いました」と書く人が出る）
-  supply:   { title:'📦 備品発注', kind:'備品',   owner:true, auto:true,  note:OWNER_NOTE_SUPPLY, ph:'例）トイレットペーパー 残り1個、補充希望' },
-  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, auto:true,  ph:'例）エアコンの効きが悪い。次回確認願います' },
+  supply:   { title:'📦 備品発注', kind:'備品',   owner:true, auto:true,  note:OWNER_NOTE_SUPPLY, label:'発注が必要な備品', ph:'例）トイレットペーパー 残り1個、補充希望' },
+  handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, auto:true,  label:'引き継ぎの内容', ph:'例）エアコンの効きが悪い。次回確認願います' },
 };
 
 
@@ -792,6 +797,7 @@ function go(name){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
     $('t-content').placeholder = m.ph;
+    $('t-label').textContent = m.label || '内容';   // ★v7.14 入力欄の見出しも種別ごとに
     $('v-text').dataset.type = name;
     $('t-owner').style.display = m.owner ? 'block' : 'none';   // ★v4.71
     // ★v7.10 自動送信の種別かどうかで文言を変える
