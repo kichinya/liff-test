@@ -69,8 +69,11 @@
      他の画面の説明枠は .note(12px) / .pnote(13px) なので、
      この3画面だけ一回り大きく見えていた。iOSの自動拡大ではない。
      ここで素の .warn を定義して、他の説明枠と同じ大きさに揃える。 */
+  /* ★v7.16 上マージンが 0 だったため、.card（下マージン無し）の直下に置くと
+     フォームにぴったりくっついていた。上下 12px にそろえる。
+     隣接する要素どうしのマージンは相殺されるので、カードが続いても 12px のまま。 */
   .warn{ background:#fff8e1; border:1px solid #ffe4a1; border-radius:10px;
-    padding:11px 12px; font-size:13px; line-height:1.75; margin:0 0 12px; color:var(--ink); }
+    padding:11px 12px; font-size:13px; line-height:1.75; margin:12px 0; color:var(--ink); }
 
   /* ★v4.52 使い方 */
   .faq{ background:#fff; border:1px solid var(--line); border-radius:12px; margin-bottom:10px; overflow:hidden; }
