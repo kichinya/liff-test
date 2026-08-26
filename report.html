@@ -737,6 +737,9 @@ let jobsMap = {};              // jobKey -> {pid,name,cleanDate}
 // ★v7.14 禁止（金額を書くな）ではなく、この画面の役割を先に伝える形にする。
 //   「発注が必要なもの」と「自分で買って立て替えたもの」は別の手続き。
 //   そこを分けて書けば、金額が混ざる余地がなくなる。
+// ★v7.15 送信ボタン直前の注意カードを出すか。既定 false（出さない）
+const SHOW_FOOT_NOTE = false;
+
 const OWNER_NOTE_SUPPLY =
   '📦 <b>この画面は「発注が必要な備品」のご連絡です。</b><br>' +
   '内容は<b>そのまま物件のオーナー様へ届きます</b>（<b>お名前は出ません</b>）。<br><br>' +
@@ -804,7 +807,12 @@ function go(name){
     $('t-owner-text').innerHTML = m.note || (m.auto ? OWNER_NOTE_AUTO : OWNER_NOTE_CHECK);
     $('t-owner').style.background = m.auto ? '#ffebee' : '#fff8e1';
     $('t-owner').style.borderColor = m.auto ? '#ef9a9a' : '#ffe082';
-    $('t-owner-foot').style.display = m.auto ? 'block' : 'none';   // ★v7.11 送信ボタン直前にも再掲
+    // ★v7.15 送信ボタン直前の再掲カードは外した。
+    //   ・入力が1〜2行なので上のカードが画面から消えない（再掲の前提が成り立たない）
+    //   ・内容が上の言い換えで、同じことを2回読ませていた
+    //   ・カードが増えるほど、赤いカードの存在感が下がる
+    //   戻すときは SHOW_FOOT_NOTE を true にするだけ。
+    $('t-owner-foot').style.display = (SHOW_FOOT_NOTE && m.auto) ? 'block' : 'none';
     $('t-content').value = '';                                  // 前回の入力を持ち越さない
     $('msg-text').className = 'msg'; $('msg-text').textContent = '';
   }
