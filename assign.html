@@ -196,6 +196,8 @@
          border:1px solid var(--line); border-radius:11px; padding:9px 12px; background:#fff; }
   .srow.on{ background:#f1f8f2; border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green); }
   .srow.ng{ border-color:#ef9a9a; background:#fffafa; }
+  .srow.ask{ background:#fbfbfb; }
+  .srow.ask .s{ color:#a06a00; }
   .srow.on.ng{ background:#fff3f3; }
   .srow .n{ display:block; font-size:14px; font-weight:800; color:#222; }
   .srow.on .n{ color:var(--green); }
@@ -295,7 +297,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.64';
+const APP_VER = 'v7.71';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -353,7 +355,9 @@ function candHtml(j){
     const tr = (x.kind==='研修') ? '<i>研修</i>' : '';
     return '<span class="chip">'+esc(x.disp)+tr+'</span>';
   }).join('');
-  return '<div class="cand">📣 この日シフト提出 '+c.length+'名<div class="chips">'+chips+'</div></div>';
+  return '<div class="cand">📣 この日シフト提出 '+c.length+'名'
+       + '<span style="font-weight:400;color:#33691e">（未提出の方はタップして選べます）</span>'
+       + '<div class="chips">'+chips+'</div></div>';
 }
 
 // ★v7.42 チェック対応日が清掃日と別の日のとき、その日の側に出す専用カード。
@@ -821,17 +825,42 @@ function findJob(jobKey){
   return hit;
 }
 
-// その日その物件に出せる人（シフト提出者を先に、未提出も選べる）
+// ★v7.71【4つに分ける】社長指摘 2026-08-27
+//   「シフトを提出していない人にも“この日は空いています”と出ると勘違いしやすい」
+//   空いている＝頼める、ではない。シフトが出ていない人は
+//   【その日入れるかどうかが分からない】だけで、空いているわけではない。
+//
+//     ① シフトあり × 予定なし … いちばん頼みやすい
+//     ② シフトあり × 予定あり … 移動が間に合えば追加で頼める
+//     ③ シフトなし × 予定あり … すでに出勤している日。頼める可能性が高い
+//     ④ シフトなし × 予定なし … 入れるか分からない。声かけが要る
 function pickable(j){
   const okProp = function(s){ return s.propsAll || (s.props||[]).indexOf(j.pid) >= 0; };
-  const shifted = [], others = [];
+  const day = ED ? ED.date : j.ymd;
+  const g = { shiftFree: [], shiftBusy: [], noShiftBusy: [], noShiftFree: [] };
   (DATA.staff||[]).forEach(function(s){
     if(!okProp(s)) return;
-    const mk = (s.shift||{})[j.ymd];
-    (mk && mk !== '×' ? shifted : others).push(s);
+    const mk = (s.shift||{})[day];
+    const hasShift = !!(mk && mk !== '×');
+    const busy = hasJobsOn(s, day, j.jobKey);
+    if(hasShift) (busy ? g.shiftBusy : g.shiftFree).push(s);
+    else         (busy ? g.noShiftBusy : g.noShiftFree).push(s);
   });
   const by = function(a,b){ return a.disp < b.disp ? -1 : 1; };
-  return { shifted: shifted.sort(by), others: others.sort(by) };
+  Object.keys(g).forEach(function(k){ g[k].sort(by); });
+  return g;
+}
+
+// その日、他に予定を持っているか
+function hasJobsOn(s, day, exceptKey){
+  let hit = false;
+  (DATA.areas||[]).forEach(function(a){
+    a.jobs.forEach(function(x){
+      if(hit || x.kind==='check' || x.ymd!==day || x.jobKey===exceptKey) return;
+      if((x.staff||[]).indexOf(s.disp)>=0 || (x.staff||[]).indexOf(s.name)>=0) hit = true;
+    });
+  });
+  return hit;
 }
 
 function kindAt(s, ymd){
@@ -951,7 +980,13 @@ function candStatus(s, j){
       mine.push(x);
     });
   });
-  if(!mine.length) return { txt: 'この日は空いています', ng: false };
+  if(!mine.length){
+    const mk = (s.shift||{})[day];
+    // ★v7.71 シフトが出ていない人を「空いています」と言わない
+    return (mk && mk !== '×')
+      ? { txt: '✅ シフト提出あり・他の予定なし', ng: false }
+      : { txt: 'シフト未提出。この日入れるかは分かりません', ng: false, ask: true };
+  }
 
   mine.sort(function(a,b){ return (a.start||'99:99') < (b.start||'99:99') ? -1 : 1; });
   const list = mine.map(function(x){
@@ -1011,7 +1046,8 @@ function drawEdit(){
       const s = w.s, st = w.st;
       const k = kindAt(s, j.ymd);
       const on = ED.staff.indexOf(s.disp) >= 0;
-      return '<button class="srow'+(on?' on':'')+(st.ng?' ng':'')+'" onclick="togStaff('+q(s.disp)+')">'
+      return '<button class="srow'+(on?' on':'')+(st.ng?' ng':'')+(st.ask?' ask':'')
+           + '" onclick="togStaff('+q(s.disp)+')">'
            + '<span class="n">'+esc(s.disp)
            + (k==='研修'?'<i>研修</i>':(k==='稼働前'?'<i>稼働前</i>':''))
            + (s.move?'<u>'+esc(s.move)+'</u>':'')+'</span>'
@@ -1019,7 +1055,9 @@ function drawEdit(){
     }).join('');
   };
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
-  const chkList = P.shifted.concat(P.others).filter(function(s){ return !isTrainee(s); });
+  // ★v7.71 チェック担当は4分類をまとめて（シフト提出者を先に）
+  const chkList = P.shiftFree.concat(P.shiftBusy, P.noShiftBusy, P.noShiftFree)
+                    .filter(function(s){ return !isTrainee(s); });
 
   // ★v7.56 今回あらたに依頼することになる人（外注・オーナーは除く）
   const was = {}; (j.staff||[]).forEach(function(x){ was[x]=1; });
@@ -1093,12 +1131,17 @@ function drawEdit(){
 
     + '<div class="sec"><div class="lb">清掃担当　'
     +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
-    +   (P.shifted.length
-        ? '<div style="font-size:11px;color:#666;margin-bottom:6px">この日シフト提出</div>'
-          +'<div class="srows">'+staffRows(P.shifted)+'</div>' : '')
-    +   (P.others.length
-        ? '<div style="font-size:11px;color:#666;margin:11px 0 6px">シフト未提出（それでも選べます）</div>'
-          +'<div class="srows">'+staffRows(P.others)+'</div>' : '')
+    +   [['📅 シフト提出あり・空いています', P.shiftFree, ''],
+         ['📅 シフト提出あり・別の予定あり', P.shiftBusy, ''],
+         ['🔸 シフト未提出だが、この日は出勤しています', P.noShiftBusy, ''],
+         ['⚪ シフト未提出・予定なし', P.noShiftFree, 'この日入れるかは分かりません。声をかけてから決めてください']]
+        .map(function(g){
+          if(!g[1].length) return '';
+          return '<div style="font-size:11px;color:#666;margin:11px 0 6px">'+g[0]
+               + '　<span style="color:#999">'+g[1].length+'名</span>'
+               + (g[2] ? '<br><span style="color:#a06a00">'+g[2]+'</span>' : '')+'</div>'
+               + '<div class="srows">'+staffRows(g[1])+'</div>';
+        }).join('')
     +   '<div style="font-size:11px;color:#666;margin:9px 0 5px">人以外の枠</div>'
     +   '<div class="pills">'+OUTSIDE.map(function(n){
           return pillHtml(n, ED.staff.indexOf(n)>=0, 'togStaff('+q(n)+')'); }).join('')+'</div>'
