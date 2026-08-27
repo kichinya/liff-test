@@ -190,6 +190,21 @@
   .pill i{ font-style:normal; margin-left:5px; font-size:10.5px; color:var(--amber);
            background:var(--amberbg); border-radius:5px; padding:0 5px; }
   .pill.off{ opacity:.45; }
+  /* ★v7.64 候補の行（その日の予定と移動時間つき） */
+  .srows{ display:flex; flex-direction:column; gap:7px; }
+  .srow{ display:block; width:100%; text-align:left; font-family:inherit; cursor:pointer;
+         border:1px solid var(--line); border-radius:11px; padding:9px 12px; background:#fff; }
+  .srow.on{ background:#f1f8f2; border-color:var(--green); box-shadow:inset 0 0 0 1px var(--green); }
+  .srow.ng{ border-color:#ef9a9a; background:#fffafa; }
+  .srow.on.ng{ background:#fff3f3; }
+  .srow .n{ display:block; font-size:14px; font-weight:800; color:#222; }
+  .srow.on .n{ color:var(--green); }
+  .srow .n i{ font-style:normal; margin-left:6px; font-size:10.5px; font-weight:700;
+              color:var(--amber); background:var(--amberbg); border-radius:5px; padding:0 5px; }
+  .srow .n u{ text-decoration:none; margin-left:6px; font-size:11px; font-weight:400; color:var(--sub); }
+  .srow .s{ display:block; margin-top:3px; font-size:11.5px; color:var(--sub);
+            white-space:pre-wrap; line-height:1.5; }
+  .srow.ng .s{ color:#b71c1c; font-weight:700; }
   .stp{ display:flex; align-items:center; gap:10px; }
   .stp button{ width:44px; height:40px; border:1px solid var(--line); border-radius:10px;
                background:#fff; font-size:19px; font-weight:800; color:#333; font-family:inherit; }
@@ -280,7 +295,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.63';
+const APP_VER = 'v7.64';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -921,6 +936,52 @@ function pillHtml(label, on, fn, sub){
        + (sub ? '<i>'+esc(sub)+'</i>' : '')+'</button>';
 }
 
+// ★v7.64 その人がその日すでに持っている予定と、この現場へ間に合うかを返す。
+//   { txt, ng }  ng=true なら赤く出す（間に合わない・重なっている）
+function candStatus(s, j){
+  const day = ED.date;
+  // その人のその日の予定（この案件は除く）
+  const mine = [];
+  (DATA.areas||[]).forEach(function(a){
+    a.jobs.forEach(function(x){
+      if(x.kind==='check') return;
+      if(x.ymd !== day) return;
+      if(x.jobKey === j.jobKey) return;
+      if((x.staff||[]).indexOf(s.disp) < 0 && (x.staff||[]).indexOf(s.name) < 0) return;
+      mine.push(x);
+    });
+  });
+  if(!mine.length) return { txt: 'この日は空いています', ng: false };
+
+  mine.sort(function(a,b){ return (a.start||'99:99') < (b.start||'99:99') ? -1 : 1; });
+  const list = mine.map(function(x){
+    return (x.start||'--:--')+'〜'+(x.end||'')+' '+x.prop;
+  }).join('　/　');
+
+  // この案件を挟んだ前後との移動が足りるか
+  const s0 = hm2min(ED.start), e0 = hm2min(ED.end);
+  let ng = false, why = [];
+  mine.forEach(function(x){
+    const xs = hm2min(x.start), xe = hm2min(x.end);
+    if(s0==null || xs==null) return;
+    if(xe!=null && e0!=null && xs < e0 && s0 < xe){ ng = true; why.push('時間が重なります'); return; }
+    if(xe!=null && xe <= s0){                       // 相手が先 → こちらへ移動
+      const mn = travelMin(x.pid, j.pid, s.move);
+      const gap = s0 - xe;
+      if(mn==null){ why.push(x.prop+' のあと '+gap+'分（移動時間 不明）'); }
+      else if(gap < mn){ ng = true; why.push(x.prop+' から '+mn+'分かかります（空き'+gap+'分）'); }
+      else { why.push(x.prop+' のあと 移動'+mn+'分 → 空き'+gap+'分 ✅'); }
+    }else if(e0!=null && e0 <= xs){                 // こちらが先 → 相手へ移動
+      const mn = travelMin(j.pid, x.pid, s.move);
+      const gap = xs - e0;
+      if(mn==null){ why.push('このあと '+x.prop+' まで '+gap+'分（移動時間 不明）'); }
+      else if(gap < mn){ ng = true; why.push('このあと '+x.prop+' まで '+mn+'分かかります（空き'+gap+'分）'); }
+      else { why.push('このあと '+x.prop+' へ 移動'+mn+'分 → 空き'+gap+'分 ✅'); }
+    }
+  });
+  return { txt: list + (why.length ? '\n' + why.join('\n') : ''), ng: ng };
+}
+
 function drawEdit(){
   // ★v7.56 描き直す前に、入力中の特記事項を拾っておく
   try { const t = document.getElementById('ed-note'); if(t) ED.note = t.value; } catch(e){}
@@ -933,6 +994,28 @@ function drawEdit(){
       const k = kindAt(s, j.ymd);
       return pillHtml(s.disp, ED.staff.indexOf(s.disp)>=0, 'togStaff('+q(s.disp)+')',
                       k==='研修' ? '研修' : (k==='稼働前' ? '稼働前' : ''));
+    }).join('');
+  };
+  // ★v7.64 その日すでに予定がある人は、行で出して中身を見せる
+  const staffRows = function(list){
+    // ★v7.64 頼める人を上に。間に合わない人は下へ回す
+    const withSt = list.map(function(s){ return { s: s, st: candStatus(s, j) }; });
+    withSt.sort(function(a,b){
+      if(a.st.ng !== b.st.ng) return a.st.ng ? 1 : -1;
+      const af = a.st.txt.indexOf('空いています')===0 ? 0 : 1;
+      const bf = b.st.txt.indexOf('空いています')===0 ? 0 : 1;
+      if(af !== bf) return af - bf;
+      return a.s.disp < b.s.disp ? -1 : 1;
+    });
+    return withSt.map(function(w){
+      const s = w.s, st = w.st;
+      const k = kindAt(s, j.ymd);
+      const on = ED.staff.indexOf(s.disp) >= 0;
+      return '<button class="srow'+(on?' on':'')+(st.ng?' ng':'')+'" onclick="togStaff('+q(s.disp)+')">'
+           + '<span class="n">'+esc(s.disp)
+           + (k==='研修'?'<i>研修</i>':(k==='稼働前'?'<i>稼働前</i>':''))
+           + (s.move?'<u>'+esc(s.move)+'</u>':'')+'</span>'
+           + '<span class="s">'+esc(st.txt)+'</span></button>';
     }).join('');
   };
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
@@ -1011,11 +1094,11 @@ function drawEdit(){
     + '<div class="sec"><div class="lb">清掃担当　'
     +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
     +   (P.shifted.length
-        ? '<div style="font-size:11px;color:#666;margin-bottom:5px">この日シフト提出</div>'
-          +'<div class="pills">'+staffPills(P.shifted)+'</div>' : '')
+        ? '<div style="font-size:11px;color:#666;margin-bottom:6px">この日シフト提出</div>'
+          +'<div class="srows">'+staffRows(P.shifted)+'</div>' : '')
     +   (P.others.length
-        ? '<div style="font-size:11px;color:#666;margin:9px 0 5px">シフト未提出（それでも選べます）</div>'
-          +'<div class="pills">'+staffPills(P.others)+'</div>' : '')
+        ? '<div style="font-size:11px;color:#666;margin:11px 0 6px">シフト未提出（それでも選べます）</div>'
+          +'<div class="srows">'+staffRows(P.others)+'</div>' : '')
     +   '<div style="font-size:11px;color:#666;margin:9px 0 5px">人以外の枠</div>'
     +   '<div class="pills">'+OUTSIDE.map(function(n){
           return pillHtml(n, ED.staff.indexOf(n)>=0, 'togStaff('+q(n)+')'); }).join('')+'</div>'
