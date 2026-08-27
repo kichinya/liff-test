@@ -85,6 +85,8 @@
   .days span{ font-size:11px; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#333; }
   .days span.sat{ color:#1565c0; border-color:#90caf9; background:#e3f2fd; }
   .days span.sun{ color:#c62828; border-color:#ef9a9a; background:var(--redbg); }
+  /* ★v7.42 別日のチェック専用カード */
+  .job.chk{ background:#f8fbff; border-color:#bbdefb; }
   .tag{ display:inline-block; font-size:11px; border-radius:6px; padding:1px 6px;
         margin-left:6px; border:1px solid var(--line); color:var(--sub); }
   .tag.sd{ color:#b71c1c; border-color:#ef9a9a; background:var(--redbg); }
@@ -101,6 +103,7 @@
   .badge.tr{ background:var(--amberbg); color:var(--amber); border:1px solid #ffe082; }
   .badge.so{ background:#e8f5e9; color:var(--green); border:1px solid #a5d6a7; }
   .badge.ng{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; }
+  .badge.ck{ background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }  /* ★v7.42 別日のチェック */
 
   .foot{ margin-top:22px; font-size:11.5px; color:var(--sub); line-height:1.8; }
   .rel{ display:block; width:100%; margin-top:16px; padding:13px; font-family:inherit;
@@ -154,10 +157,12 @@
 //     assign.html?debug=<管理者のLINE userId>
 //   と開けば、LIFF なしで中身を確認できます。
 // ============================================================
-const LIFF_ID = '';   // ★ここに 2010751229-xxxxxxxx を入れる
+const LIFF_ID = '2010751229-89yq6FEa';   // ★v7.42 アサイン管理（管理者のみ）
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
 
 const $ = function(id){ return document.getElementById(id); };
+// ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
+const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 
@@ -214,7 +219,29 @@ function candHtml(j){
   return '<div class="cand">📣 この日シフト提出 '+c.length+'名<div class="chips">'+chips+'</div></div>';
 }
 
+// ★v7.42 チェック対応日が清掃日と別の日のとき、その日の側に出す専用カード。
+//   集計（未アサイン・人数不足）には入れない。親の清掃の行で数えているため。
+function checkHtml(j){
+  const md = fmtMD;
+  const none = !j.staff || !j.staff.length;
+  return '<div class="job chk'+(j.isPast?' past':'')+'">'
+    +   '<div class="top">'
+    +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
+    +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
+    +     '<span class="p">'+esc(j.prop)+' <span class="badge ck">チェック</span></span>'
+    +   '</div>'
+    +   '<div class="rows">'
+    +     '<span class="k">時間</span><span class="v">'+esc(j.chkTime||'--:--')+'</span>'
+    +     '<span class="k">担当</span><span class="v'+(none?' none':'')+'">'
+    +        (none ? '未定' : esc(j.staff.join('・')))+'</span>'
+    +     '<span class="k">清掃</span><span class="v"><span class="t">'
+    +        esc(md(j.cleanDate))+'　'+esc((j.cleanStaff||[]).join('・')||'未アサイン')+'</span></span>'
+    +   '</div>'
+    + '</div>';
+}
+
 function jobHtml(j){
+  if(j.kind === 'check') return checkHtml(j);
   const noStaff = !j.staff || !j.staff.length;
   const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
   const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
@@ -223,7 +250,7 @@ function jobHtml(j){
   const sd = isSameDay ? '<span class="tag sd">⚠️ 同日IN '+esc(j.inT||'')+'</span>' : '';
 
   // ★v7.37 滞在期間 / 宿泊人数 / 次回IN / 次回人数 / 募集人数
-  const md = function(d){ return d ? d.slice(5).replace('-','/') : ''; };
+  const md = fmtMD;
   const stayTxt = (j.inD && j.outD)
     ? md(j.inD)+'〜'+md(j.outD)+(j.nights ? ' <b>'+j.nights+'泊</b>' : '')
     : '<span class="t">—</span>';
@@ -247,7 +274,7 @@ function jobHtml(j){
     needTxt = '<b'+(short?' style="color:#c62828"':'')+'>'+nowN+' / '+needN+'名</b>'
             + (short ? ' <span style="color:#c62828;font-weight:700">あと'+(needN-nowN)+'名</span>' : '');
   }
-  const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(j.chkDate.slice(5))+'）' : '';
+  const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(fmtMD(j.chkDate))+'）' : '';
   // ★v7.35 チェックが要るのは【外注】と【研修中】が入っているジョブだけ。
   //   それ以外は空欄でも「—」と出す（全部に「未定」と出ると本当に見るべき所が埋もれる）
   const hasChk = !!(j.chk && j.chk.length);
@@ -262,7 +289,7 @@ function jobHtml(j){
   }
   return '<div class="'+cls+'">'
     +   '<div class="top">'
-    +     '<span class="d">'+esc(j.ymd.slice(5))+'('+esc(j.wd)+')'
+    +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
     +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
     +     '<span class="p">'+esc(j.prop)+'</span>'
     +   '</div>'
@@ -298,6 +325,7 @@ function drawJobs(){
   const pass = function(j){
     if(fp && j.pid !== fp) return false;
     if(onlyBad){
+      if(j.kind==='check'){ return !j.staff || !j.staff.length; }   // ★v7.42 担当未定のチェックだけ残す
       const ns = !j.staff || !j.staff.length;
       if(!ns && !isShort(j) && !j.needChk) return false;   // ★v7.37 人数不足も「決まっていない」に含める
     }
@@ -307,6 +335,7 @@ function drawJobs(){
   let all=[], noStaff=[], shortJ=[], noChk=[];
   DATA.areas.forEach(function(a){
     a.jobs.filter(pass).forEach(function(j){
+      if(j.kind==='check') return;                 // ★v7.42 別日チェックは集計に入れない（親で数えている）
       all.push(j);
       if(!j.staff || !j.staff.length) noStaff.push(j);
       else if(isShort(j)) shortJ.push(j);          // ★v7.37 1/2名など
@@ -330,15 +359,19 @@ function drawJobs(){
   DATA.areas.forEach(function(a){
     const js = a.jobs.filter(pass);
     if(!js.length) return;
+    const cl  = function(j){ return j.kind !== 'check'; };
     const has = function(j){ return j.staff && j.staff.length; };
-    const bad = js.filter(function(j){ return !has(j); });
-    const shr = js.filter(function(j){ return has(j) && isShort(j); });
-    const wrn = js.filter(function(j){ return has(j) && !isShort(j) && j.needChk; });
-    const ok  = js.filter(function(j){ return has(j) && !isShort(j) && !j.needChk; });
-    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.length+'件</span></div>';
+    const bad = js.filter(function(j){ return cl(j) && !has(j); });
+    const shr = js.filter(function(j){ return cl(j) && has(j) && isShort(j); });
+    const wrn = js.filter(function(j){ return cl(j) && has(j) && !isShort(j) && j.needChk; });
+    const ok  = js.filter(function(j){ return cl(j) && has(j) && !isShort(j) && !j.needChk; });
+    // ★v7.42 チェック対応日が清掃日と別の日のもの。その日の側にも出す
+    const chk = js.filter(function(j){ return j.kind === 'check'; });
+    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.filter(cl).length+'件</span></div>';
     h += groupHtml('🔴 清掃が決まっていない','bad',bad);
     h += groupHtml('🟠 人数が足りない','bad',shr);
     h += groupHtml('🟡 チェックが決まっていない（外注・研修中）','warn',wrn);
+    h += groupHtml('🔵 この日のチェック（清掃は別の日）','ok',chk);
     h += groupHtml('✅ 決まっている','ok',ok);
   });
   $('body').innerHTML = h;
@@ -356,7 +389,7 @@ function shiftHtml(shift, nDays){
     const w   = new Date(d+'T00:00:00').getDay();
     const cls = (w===0) ? ' class="sun"' : (w===6 ? ' class="sat"' : '');
     const bad = (shift[d] === '×');
-    const lbl = d.slice(5).replace('-','/')+'('+WD[w]+')';
+    const lbl = fmtMD(d);          // ★v7.42 曜日なし・0詰めなし
     return '<span'+(bad?' style="color:#aaa;text-decoration:line-through"':cls)+'>'+esc(lbl)+'</span>';
   }).join('');
   return '<span style="color:#666;font-size:12px">'+ok.length+'日 / '+nDays+'日</span>'
@@ -410,7 +443,7 @@ function drawStaff(){
       trainRow = '<span class="k">実績</span><span>'
         + '<b style="font-size:15px;'+col+'">'+doneN+'回</b>'
         + (s.doneCheck ? ' <span style="color:#666;font-size:12px">＋チェック'+s.doneCheck+'回</span>' : '')
-        + (s.lastDone  ? ' <span style="color:#666;font-size:12px">最終 '+esc(s.lastDone.slice(5))+'</span>' : '')
+        + (s.lastDone  ? ' <span style="color:#666;font-size:12px">最終 '+esc(fmtMD(s.lastDone))+'</span>' : '')
         + (doneN >= 3  ? ' <span class="badge so">独り立ち判断</span>' : '')
         + '</span>';
     }
