@@ -105,6 +105,46 @@
   .badge.ng{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; }
   .badge.ck{ background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }  /* ★v7.42 別日のチェック */
 
+  /* ★v7.45 担当を決めるシート（段2） */
+  .ovl{ position:fixed; inset:0; background:rgba(0,0,0,.42); z-index:50;
+        display:none; align-items:flex-end; }
+  .ovl.on{ display:flex; }
+  .sheet{ background:#fff; width:100%; max-height:92vh; overflow-y:auto;
+          border-radius:16px 16px 0 0; }
+  .sheet .hd{ position:sticky; top:0; background:#fff; padding:14px 16px 10px;
+              border-bottom:1px solid var(--line); }
+  .sheet .hd b{ font-size:16px; }
+  .sheet .hd small{ display:block; color:var(--sub); font-size:12px; font-weight:400; margin-top:2px; }
+  .sheet .sec{ padding:12px 16px; border-bottom:1px solid #f0f1f3; }
+  .sheet .lb{ font-size:11.5px; color:var(--sub); font-weight:700; margin-bottom:7px; }
+  .pills{ display:flex; flex-wrap:wrap; gap:7px; }
+  .pill{ border:1px solid var(--line); border-radius:999px; padding:7px 14px; font-size:13.5px;
+         font-weight:700; background:#fff; color:#333; font-family:inherit; cursor:pointer; }
+  .pill.on{ background:#f1f8f2; border-color:var(--green); color:var(--green);
+            box-shadow:inset 0 0 0 1px var(--green); }
+  .pill i{ font-style:normal; margin-left:5px; font-size:10.5px; color:var(--amber);
+           background:var(--amberbg); border-radius:5px; padding:0 5px; }
+  .pill.off{ opacity:.45; }
+  .stp{ display:flex; align-items:center; gap:10px; }
+  .stp button{ width:44px; height:40px; border:1px solid var(--line); border-radius:10px;
+               background:#fff; font-size:19px; font-weight:800; color:#333; font-family:inherit; }
+  .stp .v{ flex:1; text-align:center; font-size:17px; font-weight:800; }
+  .stp .v small{ display:block; font-size:11px; color:var(--sub); font-weight:600; }
+  .box{ border-radius:10px; padding:9px 11px; font-size:12.5px; font-weight:700; }
+  .box.ok{ background:#e8f5e9; border:1px solid #a5d6a7; color:#1b5e20; }
+  .box.ng{ background:var(--redbg); border:1px solid #ef9a9a; color:#7f1d1d; white-space:pre-wrap; }
+  .box.info{ background:#e3f2fd; border:1px solid #90caf9; color:#0d47a1; }
+  .bar{ position:sticky; bottom:0; background:#fafbfc; border-top:1px solid var(--line);
+        display:flex; gap:9px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); }
+  .bar button{ flex:1; border:0; border-radius:11px; padding:13px; font-size:15px;
+               font-weight:800; font-family:inherit; }
+  .bar .c{ background:#fff; color:#333; border:1px solid var(--line); }
+  .bar .s{ background:var(--green); color:#fff; }
+  .bar .s:disabled{ background:#a5d6a7; }
+  .job.tap{ cursor:pointer; }
+  .owner{ margin:0 0 10px; font-size:12px; color:var(--sub); background:#fff;
+          border:1px dashed var(--line); border-radius:10px; padding:8px 11px; }
+
   .foot{ margin-top:22px; font-size:11.5px; color:var(--sub); line-height:1.8; }
   .rel{ display:block; width:100%; margin-top:16px; padding:13px; font-family:inherit;
         font-size:14px; font-weight:700; color:#fff; background:var(--green);
@@ -142,6 +182,13 @@
   </div>
 
   <div id="body"><div class="center">読み込み中…</div></div>
+</div>
+
+<!-- ★v7.45 担当を決めるシート（段2） -->
+<div class="ovl" id="ovl" onclick="if(event.target===this)closeEdit()">
+  <div class="sheet" id="sheet"></div>
+</div>
+<div class="wrap" style="padding-top:0">
   <button class="rel" id="rel" onclick="reload()" style="display:none">🔄 最新の状態にする</button>
   <div class="foot" id="foot"></div>
 </div>
@@ -164,7 +211,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.43';
+const APP_VER = 'v7.45';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -246,7 +293,8 @@ function checkHtml(j){
 function jobHtml(j){
   if(j.kind === 'check') return checkHtml(j);
   const noStaff = !j.staff || !j.staff.length;
-  const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
+  const editable = !j.isPast;                       // ★v7.45 過去は編集できない（F-8）
+  const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '') + (editable ? ' tap' : '');
   const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
   // ★v7.37 同日INは一番の事故要因（次のゲストが来るまでに終わらせないといけない）
   const isSameDay = !!(j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし');
@@ -290,7 +338,8 @@ function jobHtml(j){
   }else{
     chkCell = '<span class="v"><span class="t">—</span></span>';
   }
-  return '<div class="'+cls+'">'
+  return '<div class="'+cls+'"'
+    +   (editable ? ' onclick="openEdit(\''+esc(j.jobKey)+'\')"' : '')+'>'
     +   '<div class="top">'
     +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
     +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
@@ -346,7 +395,14 @@ function drawJobs(){
     });
   });
 
-  let h = '<div class="sum">'
+  // ★v7.45 オーナー対応は一覧から外している。消えたことが分かるよう件数だけ出す
+  let h = '';
+  if(DATA.ownerCount){
+    h += '<div class="owner">オーナー対応 '+DATA.ownerCount+'件は一覧に出していません'
+       + '（手配の必要がないため）。'
+       + '<a href="javascript:void(0)" onclick="showOwner()" style="color:#2e7d32;font-weight:700">表示</a></div>';
+  }
+  h += '<div class="sum">'
     + '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
     + '<div class="bad"><b>'+shortJ.length+'</b><span>人数 不足</span></div>'
     + '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
@@ -499,6 +555,204 @@ function drawStaff(){
   $('body').innerHTML = h;
 }
 
+
+// ============================================================
+// ★v7.45【段2】担当を決めて保存する
+//   できること: 清掃担当 / 募集人数 / チェック担当 だけ。
+//   ⚠️ 時刻・清掃日は触りません（段3・段4）。
+//   保存の可否・整合はすべてサーバー側（AssignApply.gs）が判定します。
+//   画面は「選ばせて送るだけ」。ここで判定を二重に持つと必ずズレます。
+// ============================================================
+const OUTSIDE = ['外注','オーナー'];
+let ED = null;      // 編集中の状態
+
+function findJob(jobKey){
+  let hit = null;
+  (DATA.areas||[]).forEach(function(a){
+    a.jobs.forEach(function(j){ if(j.kind!=='check' && j.jobKey===jobKey && !hit) hit = j; });
+  });
+  return hit;
+}
+
+// その日その物件に出せる人（シフト提出者を先に、未提出も選べる）
+function pickable(j){
+  const okProp = function(s){ return s.propsAll || (s.props||[]).indexOf(j.pid) >= 0; };
+  const shifted = [], others = [];
+  (DATA.staff||[]).forEach(function(s){
+    if(!okProp(s)) return;
+    const mk = (s.shift||{})[j.ymd];
+    (mk && mk !== '×' ? shifted : others).push(s);
+  });
+  const by = function(a,b){ return a.disp < b.disp ? -1 : 1; };
+  return { shifted: shifted.sort(by), others: others.sort(by) };
+}
+
+function kindAt(s, ymd){
+  const tf = s.trainFrom||'', sf = s.soloFrom||'';
+  if(!tf && !sf) return '';
+  if(tf && ymd < tf) return '稼働前';
+  return (sf && ymd >= sf) ? '独り立ち' : '研修';
+}
+
+function openEdit(jobKey){
+  const j = findJob(jobKey);
+  if(!j) return;
+  ED = { j: j,
+         staff: (j.staff||[]).slice(),
+         chk:   (j.chk||[]).slice(),
+         need:  String(j.need||''),
+         busy:  false, err: '' };
+  drawEdit();
+  $('ovl').classList.add('on');
+}
+function closeEdit(){ $('ovl').classList.remove('on'); ED = null; }
+
+function togStaff(n){ tog(ED.staff, n); drawEdit(); }
+function togChk(n){   tog(ED.chk,   n); drawEdit(); }
+function tog(arr, n){ const i = arr.indexOf(n); if(i>=0) arr.splice(i,1); else arr.push(n); }
+function bumpNeed(d){
+  let n = parseInt(ED.need,10); if(!isFinite(n)) n = 0;
+  n += d; if(n < 0) n = 0; if(n > 9) n = 9;
+  ED.need = n ? String(n) : '';
+  drawEdit();
+}
+
+function pillHtml(label, on, fn, sub){
+  return '<button class="pill'+(on?' on':'')+'" onclick="'+fn+'">'+esc(label)
+       + (sub ? '<i>'+esc(sub)+'</i>' : '')+'</button>';
+}
+
+function drawEdit(){
+  const j = ED.j, P = pickable(j);
+  const isTrainee = function(s){ return kindAt(s, j.ymd) === '研修'; };
+  const q = function(x){ return "'"+String(x).replace(/'/g,"\\'")+"'"; };
+
+  const staffPills = function(list){
+    return list.map(function(s){
+      const k = kindAt(s, j.ymd);
+      return pillHtml(s.disp, ED.staff.indexOf(s.disp)>=0, 'togStaff('+q(s.disp)+')',
+                      k==='研修' ? '研修' : (k==='稼働前' ? '稼働前' : ''));
+    }).join('');
+  };
+  // チェック担当は独り立ちのみ（研修中は見る側になれない）
+  const chkList = P.shifted.concat(P.others).filter(function(s){ return !isTrainee(s); });
+
+  const nowN = ED.staff.length;
+  const needN = parseInt(ED.need,10);
+  const hasSolo = ED.staff.some(function(n){
+    if(OUTSIDE.indexOf(n) >= 0) return false;
+    const s = (DATA.staff||[]).find(function(x){ return x.disp===n || x.name===n; });
+    return s ? kindAt(s, j.ymd) !== '研修' && kindAt(s, j.ymd) !== '稼働前' : false;
+  });
+  const needChk = nowN > 0 && !hasSolo;
+  const isOwner = ED.staff.indexOf('オーナー') >= 0;
+
+  let info = '';
+  if(isOwner){
+    info = '<div class="box info">オーナー対応にすると、この予定は一覧から外れます。</div>';
+  }else if(needChk){
+    info = '<div class="box info">🟡 独り立ちのスタッフがいないため、チェックが必要です。</div>';
+  }else if(nowN){
+    info = '<div class="box ok">✅ チェックは不要です（独り立ちが入っています）。</div>';
+  }
+
+  $('sheet').innerHTML =
+      '<div class="hd"><b>'+esc(j.prop)+'</b>'
+    +   '<small>'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
+    +   (j.std ? '　標準'+esc(j.std) : '')+'</small></div>'
+
+    + '<div class="sec"><div class="lb">清掃担当　'
+    +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
+    +   (P.shifted.length
+        ? '<div style="font-size:11px;color:#666;margin-bottom:5px">この日シフト提出</div>'
+          +'<div class="pills">'+staffPills(P.shifted)+'</div>' : '')
+    +   (P.others.length
+        ? '<div style="font-size:11px;color:#666;margin:9px 0 5px">シフト未提出（それでも選べます）</div>'
+          +'<div class="pills">'+staffPills(P.others)+'</div>' : '')
+    +   '<div style="font-size:11px;color:#666;margin:9px 0 5px">人以外の枠</div>'
+    +   '<div class="pills">'+OUTSIDE.map(function(n){
+          return pillHtml(n, ED.staff.indexOf(n)>=0, 'togStaff('+q(n)+')'); }).join('')+'</div>'
+    + '</div>'
+
+    + '<div class="sec"><div class="lb">募集人数</div>'
+    +   '<div class="stp"><button onclick="bumpNeed(-1)">−</button>'
+    +     '<span class="v">'+(ED.need ? ED.need+'名' : '未設定')
+    +       '<small>'+(needN>0 && nowN<needN ? 'あと'+(needN-nowN)+'名' : '　')+'</small></span>'
+    +     '<button onclick="bumpNeed(1)">＋</button></div>'
+    + '</div>'
+
+    + '<div class="sec"><div class="lb">チェック担当'
+    +   (j.chkDate && j.chkDate!==j.ymd ? '　<span style="color:#1565c0">'+esc(fmtMD(j.chkDate))+'</span>' : '')
+    +   '</div>'
+    +   '<div class="pills">'+chkList.map(function(s){
+          return pillHtml(s.disp, ED.chk.indexOf(s.disp)>=0, 'togChk('+q(s.disp)+')'); }).join('')+'</div>'
+    +   '<div style="font-size:11px;color:#666;margin-top:6px">研修中の方はチェック担当にできません</div>'
+    + '</div>'
+
+    + (info ? '<div class="sec">'+info+'</div>' : '')
+    + (ED.err ? '<div class="sec"><div class="box ng">'+esc(ED.err)+'</div></div>' : '')
+
+    + '<div class="bar"><button class="c" onclick="closeEdit()">やめる</button>'
+    +   '<button class="s" id="ed-save" onclick="saveEdit()"'+(ED.busy?' disabled':'')+'>'
+    +   (ED.busy ? '保存しています…' : 'この内容で保存')+'</button></div>';
+}
+
+// ★v7.45 オーナー対応の一覧。タップすれば担当を付け替えて一覧に戻せる
+function showOwner(){
+  const list = DATA.ownerJobs || [];
+  if(!list.length) return;
+  ED = null;
+  $('sheet').innerHTML =
+      '<div class="hd"><b>オーナー対応</b><small>'+list.length+'件。一覧には出していません</small></div>'
+    + '<div class="sec"><div class="lb">担当を付け替えると一覧に戻ります</div>'
+    +   '<div class="pills">'+list.map(function(o){
+          const q = "openOwner('" + String(o.jobKey).replace(/'/g,"") + "')";
+          return '<button class="pill" onclick="'+q+'">'
+               + esc(fmtMD(o.ymd))+'　'+esc(o.prop)+'</button>'; }).join('')+'</div></div>'
+    + '<div class="bar"><button class="c" onclick="closeEdit()">閉じる</button></div>';
+  $('ovl').classList.add('on');
+}
+function openOwner(jobKey){
+  const o = (DATA.ownerJobs||[]).find(function(x){ return x.jobKey===jobKey; });
+  if(!o) return;
+  ED = { j: { row:o.row, jobKey:o.jobKey, ver:o.ver, ymd:o.ymd, wd:'', prop:o.prop, pid:o.pid,
+              start:'', end:'', std:'', staff:['オーナー'], chk:[], need:'' },
+         staff:['オーナー'], chk:[], need:'', busy:false, err:'' };
+  drawEdit();
+}
+
+function saveEdit(){
+  if(!ED || ED.busy) return;
+  ED.busy = true; ED.err = ''; drawEdit();
+  const j = ED.j;
+  const payload = { items: [{
+    row: j.row, jobKey: j.jobKey, ver: (j.ver==null?'':String(j.ver)),
+    staff: ED.staff, chk: ED.chk, need: ED.need }] };
+
+  jsonp(GAS_URL+'?mode=ab_apply&userId='+encodeURIComponent(me.userId)
+        +'&payload='+encodeURIComponent(JSON.stringify(payload)))
+  .then(function(res){
+    if(res && res.ok){
+      closeEdit();
+      $('msg').className = 'msg';
+      $('msg').textContent = res.message || '保存しました。';
+      reload();
+      return;
+    }
+    let m = (res && res.message) || '保存できませんでした。';
+    if(res && res.ng && res.ng.length){
+      m += '\n\n' + res.ng.map(function(x){ return '・'+x.prop+'：'+x.why; }).join('\n');
+    }
+    if(res && res.why) m += '\n\n【原因】'+res.why;
+    ED.busy = false; ED.err = m; drawEdit();
+  })
+  .catch(function(err){
+    ED.busy = false;
+    ED.err = '通信できませんでした。電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）';
+    drawEdit();
+  });
+}
+
 function draw(){
   if(!DATA) return;
   if(TAB==='staff') drawStaff(); else drawJobs();
@@ -521,8 +775,9 @@ function render(d){
 
   $('rel').style.display='block';
   $('foot').innerHTML =
-      'この画面は<b>見るだけ</b>です。登録・変更はまだできません。<br>'
-    + '直すときは、これまでどおりスプレッドシートか本部へご連絡ください。';
+      '予定をタップすると<b>担当・募集人数・チェック担当</b>を変えられます。<br>'
+    + '清掃日と時刻はまだ変えられません（スプレッドシートか本部へ）。<br>'
+    + '過去の予定は変更できません。';
   draw();
 }
 
