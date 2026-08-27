@@ -120,6 +120,16 @@
   .strip .dd .n{ font-size:17px; font-weight:800; line-height:1.25; }
   .strip .dd .m{ font-size:10px; color:var(--sub); }
   .strip .dd.sat .n{ color:#1565c0; } .strip .dd.sun .n{ color:var(--red); }
+  /* ★v7.78 祝日 */
+  .strip .dd.hol .n{ color:var(--red); }
+  .strip .dd.hol .w{ color:var(--red); }
+  .strip .dd .h{ font-size:8.5px; color:var(--red); font-weight:700; line-height:1.2;
+                 white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .strip .dd.on .h{ color:#ffe0e0; }
+  .dayhd.red{ color:var(--red); }
+  .dayhd .hol{ font-size:12px; color:var(--red); font-weight:700; margin-left:8px; }
+  .pill.hol{ color:var(--red); border-color:#f4b6b6; }
+  .pill.on.hol{ color:#fff; }
   .strip .dd.on{ background:var(--green); border-color:var(--green); }
   .strip .dd.on .n,.strip .dd.on .w,.strip .dd.on .m{ color:#fff; }
   .strip .pips{ display:flex; justify-content:center; gap:3px; margin-top:3px; height:7px; }
@@ -357,7 +367,78 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.77';
+const APP_VER = 'v7.78';
+// ============================================================
+// ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
+//   土日は色を分けていたのに祝日は平日と同じ色だった。
+//   民泊はチェックアウトが祝日に固まる。ここを見落とすと手配が丸ごと遅れる。
+//
+//   ⚠️ 外部のカレンダーAPIは引かない。通信が増えるし、
+//      LIFFが開かないときに原因の切り分けができなくなる。
+//      日本の祝日は計算で出せる（春分・秋分は1980〜2099年で正しい近似式）。
+//   ⚠️ 振替休日（日曜が祝日→翌平日）と国民の休日（祝日に挟まれた平日）も見る。
+// ============================================================
+var HOL_TBL = {};
+function ymdOf(d){
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function holTable(y){
+  if(HOL_TBL[y]) return HOL_TBL[y];
+  var k = function(mm,dd){ return y+'-'+('0'+mm).slice(-2)+'-'+('0'+dd).slice(-2); };
+  var nthMon = function(mm,n){                 // その月の第n月曜
+    var d = new Date(y, mm-1, 1);
+    return 1 + ((8 - d.getDay()) % 7) + (n-1)*7;
+  };
+  var eq = function(a,b){                      // 春分・秋分（1980〜2099）
+    return Math.floor(a + b*(y-1980) - Math.floor((y-1980)/4));
+  };
+  var t = {};
+  t[k(1,1)]   = '元日';
+  t[k(1, nthMon(1,2))]   = '成人の日';
+  t[k(2,11)]  = '建国記念の日';
+  t[k(2,23)]  = '天皇誕生日';
+  t[k(3, eq(20.8431,0.242194))] = '春分の日';
+  t[k(4,29)]  = '昭和の日';
+  t[k(5,3)]   = '憲法記念日';
+  t[k(5,4)]   = 'みどりの日';
+  t[k(5,5)]   = 'こどもの日';
+  t[k(7, nthMon(7,3))]   = '海の日';
+  t[k(8,11)]  = '山の日';
+  t[k(9, nthMon(9,3))]   = '敬老の日';
+  t[k(9, eq(23.2488,0.242194))] = '秋分の日';
+  t[k(10, nthMon(10,2))] = 'スポーツの日';
+  t[k(11,3)]  = '文化の日';
+  t[k(11,23)] = '勤労感謝の日';
+
+  // 振替休日：日曜が祝日なら、次の平日（すでに祝日ならさらに次）
+  Object.keys(t).slice().forEach(function(d){
+    var dt = new Date(d+'T00:00:00');
+    if(dt.getDay() !== 0) return;
+    var n = new Date(dt.getTime());
+    do { n = new Date(n.getTime()+86400000); } while(t[ymdOf(n)]);
+    t[ymdOf(n)] = '振替休日';
+  });
+  // 国民の休日：祝日と祝日に挟まれた平日（9月のシルバーウィーク）
+  Object.keys(t).slice().forEach(function(d){
+    var dt = new Date(d+'T00:00:00');
+    var a = new Date(dt.getTime()+86400000);
+    var b = new Date(dt.getTime()+2*86400000);
+    if(t[ymdOf(a)] || a.getDay()===0 || a.getDay()===6) return;
+    if(t[ymdOf(b)]) t[ymdOf(a)] = '国民の休日';
+  });
+  HOL_TBL[y] = t;
+  return t;
+}
+function holName(ymd){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd||''))) return '';
+  return holTable(+String(ymd).slice(0,4))[ymd] || '';
+}
+/** 赤で出す日か（日曜 or 祝日） */
+function isRedDay(ymd){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd||''))) return false;
+  return new Date(ymd+'T00:00:00').getDay() === 0 || !!holName(ymd);
+}
+
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -427,7 +508,9 @@ function checkHtml(j){
   const none = !j.staff || !j.staff.length;
   return '<div class="job chk'+(j.isPast?' past':'')+'">'
     +   '<div class="top">'
-    +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
+    +     '<span class="d"'+(isRedDay(j.ymd)?' style="color:var(--red)"':'')+'>'
+    +        esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
+    +        (holName(j.ymd)?'<span style="font-size:10.5px;margin-left:5px">'+esc(holName(j.ymd))+'</span>':'')
     +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
     +     '<span class="p">'+esc(j.prop)+' <span class="badge ck">チェック</span></span>'
     +   '</div>'
@@ -668,10 +751,13 @@ function drawJobs(){
     const wrn = js.filter(function(j){ return j.needChk; }).length;
     const wat = js.filter(function(j){ return waitCount(j)>0; }).length;   // ★v7.73 返事待ち
     const w = new Date(d+'T00:00:00').getDay();
-    strip += '<div class="dd'+(d===DAY?' on':'')+(w===0?' sun':'')+(w===6?' sat':'')+'"'
+    const hn = holName(d);                                     // ★v7.78 祝日
+    strip += '<div class="dd'+(d===DAY?' on':'')+(w===0?' sun':'')+(w===6?' sat':'')
+          +  (hn?' hol':'')+'"'
           +  ' onclick="pickDay(\''+d+'\')">'
           +  '<div class="w">'+WD[w]+'</div><div class="n">'+(+d.split('-')[2])+'</div>'
-          +  '<div class="m">'+(+d.split('-')[1])+'月</div>'
+          +  '<div class="m">'+(hn ? '' : (+d.split('-')[1])+'月')+'</div>'
+          +  (hn?'<div class="h">'+esc(hn)+'</div>':'')
           +  '<div class="pips">'+(bad?'<i class="pip r"></i>':'')+(wrn?'<i class="pip y"></i>':'')
           +    (wat?'<i class="pip w"></i>':'')+'</div>'
           +  '</div>';
@@ -829,7 +915,10 @@ function drawJobs(){
   }
 
   const nBad = needStaff.length, nChk = needChk.length;
-  const head = '<div class="dayhd">'+esc(fmtMD(DAY))+'('+esc(WD[new Date(DAY+'T00:00:00').getDay()])+')'
+  const holDay = holName(DAY);                                 // ★v7.78
+  const head = '<div class="dayhd'+(isRedDay(DAY)?' red':'')+'">'
+    + esc(fmtMD(DAY))+'('+esc(WD[new Date(DAY+'T00:00:00').getDay()])+')'
+    + (holDay?'<span class="hol">'+esc(holDay)+'</span>':'')
     + (DAY===DATA.today?'<span class="today">本日</span>':'')
     + '<small>'+clean.length+'件'
     + (nBad?'　🔴'+nBad:'')+(nChk?'　🟡'+nChk:'')+'</small></div>';
@@ -1124,8 +1213,8 @@ function bumpNeed(d){
   drawEdit();
 }
 
-function pillHtml(label, on, fn, sub){
-  return '<button class="pill'+(on?' on':'')+'" onclick="'+fn+'">'+esc(label)
+function pillHtml(label, on, fn, sub, cls){
+  return '<button class="pill'+(on?' on':'')+(cls?' '+cls:'')+'" onclick="'+fn+'">'+esc(label)
        + (sub ? '<i>'+esc(sub)+'</i>' : '')+'</button>';
 }
 
@@ -1333,7 +1422,8 @@ function drawReorder(){
 
   $('rsheet').innerHTML =
       '<div class="hd"><b>'+esc(ROD.nm)+' さんの回る順番</b>'
-    +   '<small>'+esc(fmtMD(DAY))+'　'+ROD.list.length+'件'
+    +   '<small><span'+(isRedDay(DAY)?' style="color:var(--red);font-weight:700"':'')+'>'
+    +   esc(fmtMD(DAY))+(holName(DAY)?' '+esc(holName(DAY)):'')+'</span>　'+ROD.list.length+'件'
     +   (ROD.move?'　'+moveIcon(ROD.move)+' '+esc(ROD.move):'　🔴 移動手段が未登録')+'</small></div>'
     + '<div class="sec"><div class="lb">≡ をつまんで上下に動かしてください</div>'
     +   rows
@@ -1558,7 +1648,9 @@ function drawEdit(){
       (ED.err ? '<div class="sec" style="background:var(--redbg)"><div class="box ng">'
                 + esc(ED.err)+'</div></div>' : '')
     + '<div class="hd"><b>'+esc(j.prop)+'</b>'
-    +   '<small>'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
+    +   '<small><span'+(isRedDay(j.ymd)?' style="color:var(--red);font-weight:700"':'')+'>'
+    +   esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
+    +   (holName(j.ymd)?' '+esc(holName(j.ymd)):'')+'</span>　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
     +   (j.std ? '　標準'+esc(j.std) : '')
     +   '<br>'+(j.timeBy ? '🕒 この時刻は '+esc(j.timeBy)+' が決めました'
                          : '🕒 既定のまま（まだ誰も時刻を決めていません）')
@@ -1635,7 +1727,9 @@ function drawEdit(){
     +   '</div><div class="pills">'
     +   dateRange(j).map(function(d){
           const w = new Date(d+'T00:00:00').getDay();
-          return pillHtml(fmtMD(d)+'('+WD[w]+')', ED.date===d, 'setDate('+q(d)+')'); }).join('')
+          const hn = holName(d);                                  // ★v7.78 祝日
+          return pillHtml(fmtMD(d)+'('+WD[w]+')', ED.date===d, 'setDate('+q(d)+')',
+                          hn || '', isRedDay(d) ? 'hol' : ''); }).join('')
     +   '</div>'
     +   (j.outD ? '<div style="font-size:11px;color:#666;margin-top:6px">'
         + 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません</div>' : '')
@@ -1657,7 +1751,8 @@ function drawEdit(){
             + chkDates.map(function(d){
                 const w = new Date(d+'T00:00:00').getDay();
                 const lbl = fmtMD(d)+'('+WD[w]+')'+(d===ED.date?' 清掃と同じ日':'');
-                return pillHtml(lbl, (ED.chkDate||ED.date)===d, 'setChkDate('+q(d)+')'); }).join('')
+                return pillHtml(lbl, (ED.chkDate||ED.date)===d, 'setChkDate('+q(d)+')',
+                                holName(d) || '', isRedDay(d) ? 'hol' : ''); }).join('')
             + '</div>'
             + (j.nextIn ? '<div style="font-size:11px;color:#666;margin-top:6px">次回IN '
                 + esc(fmtMD(j.nextIn))+' '+esc(j.inT||'')+' まで</div>' : '')

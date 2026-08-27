@@ -262,6 +262,67 @@
   }
 
   // ---- 日付ヘルパ ----
+  var HOL_TBL = {};
+  function ymdOf(d){
+    return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  }
+  function holTable(y){
+    if(HOL_TBL[y]) return HOL_TBL[y];
+    var k = function(mm,dd){ return y+'-'+('0'+mm).slice(-2)+'-'+('0'+dd).slice(-2); };
+    var nthMon = function(mm,n){                 // その月の第n月曜
+      var d = new Date(y, mm-1, 1);
+      return 1 + ((8 - d.getDay()) % 7) + (n-1)*7;
+    };
+    var eq = function(a,b){                      // 春分・秋分（1980〜2099）
+      return Math.floor(a + b*(y-1980) - Math.floor((y-1980)/4));
+    };
+    var t = {};
+    t[k(1,1)]   = '元日';
+    t[k(1, nthMon(1,2))]   = '成人の日';
+    t[k(2,11)]  = '建国記念の日';
+    t[k(2,23)]  = '天皇誕生日';
+    t[k(3, eq(20.8431,0.242194))] = '春分の日';
+    t[k(4,29)]  = '昭和の日';
+    t[k(5,3)]   = '憲法記念日';
+    t[k(5,4)]   = 'みどりの日';
+    t[k(5,5)]   = 'こどもの日';
+    t[k(7, nthMon(7,3))]   = '海の日';
+    t[k(8,11)]  = '山の日';
+    t[k(9, nthMon(9,3))]   = '敬老の日';
+    t[k(9, eq(23.2488,0.242194))] = '秋分の日';
+    t[k(10, nthMon(10,2))] = 'スポーツの日';
+    t[k(11,3)]  = '文化の日';
+    t[k(11,23)] = '勤労感謝の日';
+  
+    // 振替休日：日曜が祝日なら、次の平日（すでに祝日ならさらに次）
+    Object.keys(t).slice().forEach(function(d){
+      var dt = new Date(d+'T00:00:00');
+      if(dt.getDay() !== 0) return;
+      var n = new Date(dt.getTime());
+      do { n = new Date(n.getTime()+86400000); } while(t[ymdOf(n)]);
+      t[ymdOf(n)] = '振替休日';
+    });
+    // 国民の休日：祝日と祝日に挟まれた平日（9月のシルバーウィーク）
+    Object.keys(t).slice().forEach(function(d){
+      var dt = new Date(d+'T00:00:00');
+      var a = new Date(dt.getTime()+86400000);
+      var b = new Date(dt.getTime()+2*86400000);
+      if(t[ymdOf(a)] || a.getDay()===0 || a.getDay()===6) return;
+      if(t[ymdOf(b)]) t[ymdOf(a)] = '国民の休日';
+    });
+    HOL_TBL[y] = t;
+    return t;
+  }
+  function holName(ymd){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd||''))) return '';
+    return holTable(+String(ymd).slice(0,4))[ymd] || '';
+  }
+  /** 赤で出す日か（日曜 or 祝日） */
+  function isRedDay(ymd){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd||''))) return false;
+    return new Date(ymd+'T00:00:00').getDay() === 0 || !!holName(ymd);
+  }
+
   function ymd(d){
     var y=d.getFullYear(), m=('0'+(d.getMonth()+1)).slice(-2), da=('0'+d.getDate()).slice(-2);
     return y+'-'+m+'-'+da;
@@ -410,6 +471,8 @@
       cell.className = 'cell';
       var dow2 = dt.getDay();
       if (dow2===0) cell.classList.add('sun');
+      // ★v7.78 祝日も赤にする（土日だけ色が付いていて祝日が平日と同じだった）
+      if (holName(ymd(dt))) cell.classList.add('sun');
       if (dow2===6) cell.classList.add('sat');
       cell.textContent = d;
 
