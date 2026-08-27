@@ -279,10 +279,30 @@ function drawStaff(){
     + '<div><b>'+st.filter(function(x){return x.active;}).length+'</b><span>稼働中</span></div>'
     + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修';}).length+'</b><span>研修中</span></div>'
     + '<div class="bad"><b>'+st.filter(function(x){return x.active&&!x.move;}).length+'</b><span>移動手段 未設定</span></div>'
+    + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修'&&(x.done||0)>=3;}).length+'</b><span>独り立ち判断</span></div>'
     + '</div>';
 
-  st.forEach(function(s){
+  const order = st.slice().sort(function(a,b){
+    if(a.active !== b.active) return a.active ? -1 : 1;
+    const ar = (a.kind==='研修') ? 0 : 1, br = (b.kind==='研修') ? 0 : 1;
+    if(ar !== br) return ar - br;                       // 研修中を先頭に（判断が要る人）
+    if(ar===0) return (b.done||0) - (a.done||0);        // 研修中は実績の多い順
+    return a.disp < b.disp ? -1 : 1;
+  });
+  order.forEach(function(s){
     const shiftN = Object.keys(s.shift||{}).length;
+    const doneN = s.done || 0;
+    // ★行頭の + で三項演算子を繋ぐと構文エラーになる。先に組み立てる
+    let trainRow = '';
+    if(s.kind === '研修'){
+      const col = (doneN >= 3) ? 'color:#2e7d32' : 'color:#a06a00';
+      trainRow = '<span class="k">実績</span><span>'
+        + '<b style="font-size:15px;'+col+'">'+doneN+'回</b>'
+        + (s.doneCheck ? ' <span style="color:#666;font-size:12px">＋チェック'+s.doneCheck+'回</span>' : '')
+        + (s.lastDone  ? ' <span style="color:#666;font-size:12px">最終 '+esc(s.lastDone.slice(5))+'</span>' : '')
+        + (doneN >= 3  ? ' <span class="badge so">独り立ち判断</span>' : '')
+        + '</span>';
+    }
     const kb = s.kind==='研修'     ? '<span class="badge tr">研修中</span>'
              : s.kind==='独り立ち' ? '<span class="badge so">独り立ち</span>'
              : s.kind==='稼働前'   ? '<span class="badge ng">稼働前</span>'
@@ -294,6 +314,7 @@ function drawStaff(){
     h += '<div class="st'+(s.active?'':' off')+'">'
       +   '<div class="n">'+esc(s.disp)+kb+(s.active?'':'<span class="badge ng">稼働停止</span>')+'</div>'
       +   '<div class="rows">'
+      +     trainRow
       +     '<span class="k">対応可物件</span><span>'+props+'</span>'
       +     '<span class="k">移動手段</span><span>'
       +        (s.move ? esc(s.move) : '<span style="color:#c62828;font-weight:700">未設定</span>')
