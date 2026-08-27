@@ -363,7 +363,12 @@ async function load(){
     const days = $('f-days').value || '14';
     const res = await jsonp(GAS_URL+'?mode=ab_board&days='+encodeURIComponent(days)
                  +'&userId='+encodeURIComponent(me.userId));
-    if(!res || !res.ok){ showErr((res && res.message) || '読み込めませんでした。'); return; }
+    if(!res || !res.ok){
+      // ★v7.34 なぜ開けないのかまで出す。「権限がありません」だけだと原因に辿り着けない
+      let msg = (res && res.message) || '読み込めませんでした。';
+      if(res && res.why) msg += '\n\n【原因】' + res.why;
+      showErr(msg); return;
+    }
     render(res);
   }catch(err){
     showErr('読み込みに失敗しました。\n電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）');
@@ -371,7 +376,13 @@ async function load(){
 }
 
 (async function(){
-  const dbg = new URLSearchParams(location.search).get('debug');
+  // ★v7.34 ?debug=<Uxxxx> のように山カッコごと貼られる事故が起きたので、掃除してから使う
+  const dbg = (new URLSearchParams(location.search).get('debug') || '')
+                .replace(/[​-‍﻿]/g,'')
+                .replace(/[\s　]+/g,'')
+                .replace(/^[<＜"'“”]+/,'')
+                .replace(/[>＞"'“”]+$/,'')
+                .trim();
   if(dbg){
     me = { userId: dbg, name: '(debug)' };
     load();
