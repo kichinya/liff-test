@@ -367,7 +367,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.79';
+const APP_VER = 'v7.81';
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -575,7 +575,7 @@ function jobHtml(j){
     chkCell = '<span class="v"><span class="t">—</span></span>';
   }
   return '<div class="'+cls+'"'
-    +   (editable ? ' onclick="openEdit(\''+esc(j.jobKey)+'\')"' : '')+'>'
+    +   (editable ? ' onclick="openEdit(\''+esc(j.jobKey)+'\','+(j.kind==='check'?'true':'false')+')"' : '')+'>'
     +   '<div class="top">'
     +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
     +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
@@ -676,6 +676,13 @@ function offerOf(j, name){
   return '';
 }
 function waitCount(j){ return ((j&&j.offer&&j.offer.pending)||[]).length; }
+// ★v7.81 いま編集中の担当名を、返事の状況つきで並べる（要約表示に使う）
+function staffLabelOf(names, j){
+  return (names||[]).map(function(n){
+    const st = offerOf(j, n);
+    return n + (st==='wait' ? ' ⏳' : (st==='ok' ? ' ✅' : ''));
+  }).join('・');
+}
 function isOver(j){ return !!(j && j.offer && j.offer.over && waitCount(j)); }
 // 担当名の並び。返事待ちには ⏳、承諾済みには ✅ を付ける
 function staffLabel(j){
@@ -795,7 +802,7 @@ function drawJobs(){
     if(needChk.length){
       tray += '<div class="th y">🟡 チェック未定 '+needChk.length+'件</div>'
            +  needChk.map(function(j){
-                return '<div class="tcard y" onclick="openEdit(\''+esc(j.jobKey)+'\')">'
+                return '<div class="tcard y" onclick="openEdit(\''+esc(j.jobKey)+'\',true)">'
                      + '<span class="p">'+esc(j.prop)
                      +   '<small>清掃 '+esc(j.staff.join('・'))+'（'+esc(j.chkWhy||'')+'）</small></span>'
                      + '<span class="n">チェック<em>要 1名</em></span></div>';
@@ -854,7 +861,7 @@ function drawJobs(){
       }
       const isChk = st.kind==='チェック';
       const cls = 'stop'+(isChk?' b':(st.j.needChk?' y':' g'));
-      inner += '<div class="'+cls+'" onclick="openEdit(\''+esc(st.j.jobKey)+'\')">'
+      inner += '<div class="'+cls+'" onclick="openEdit(\''+esc(st.j.jobKey)+'\','+(isChk?'true':'false')+')">'
             +   '<span class="tm">'+esc(st.t||'--:--')+(st.end?'<small>〜'+esc(st.end)+'</small>':'')+'</span>'
             +   '<div class="bx"><div class="p">'+esc(st.j.prop)
             +     (isChk?' <span class="badge ck">チェック</span>':'')
@@ -1123,10 +1130,21 @@ function kindAt(s, ymd){
   return (sf && ymd >= sf) ? '独り立ち' : '研修';
 }
 
-function openEdit(jobKey){
+// ★v7.81【チェックのカードを開いたら、チェックの画面を出す】社長指摘 2026-08-27
+//   「チェック担当のカードを開いたのに、現在の清掃担当や清掃担当の変更もできるようになっており、
+//     チェック担当が下部にあったので勘違いしました」
+//
+//   チェックのカードから開いても、中身は清掃の編集画面そのものだった。
+//   一番上に清掃担当がずらりと並び、チェック担当はスクロールしないと出てこない。
+//   見間違えるだけでなく、チェックを直しに来て清掃担当を触ってしまう事故になる。
+//   → チェックから開いたときは、清掃のブロックをたたんで要約だけにし、
+//     チェックの欄をすぐ触れる位置に出す。清掃を直したいときは自分で開く。
+function openEdit(jobKey, fromCheck){
   const j = findJob(jobKey);
   if(!j) return;
   ED = { j: j,
+         focus: fromCheck ? 'check' : 'clean',   // ★v7.81
+         openClean: !fromCheck,                  // 清掃のブロックを開いているか
          staff: (j.staff||[]).slice(),
          chk:   (j.chk||[]).slice(),
          need:  String(j.need||''),
@@ -1140,6 +1158,7 @@ function openEdit(jobKey){
   $('ovl').classList.add('on');
 }
 function closeEdit(){ $('ovl').classList.remove('on'); ED = null; }
+function toggleClean(){ if(ED){ ED.openClean = !ED.openClean; drawEdit(); } }
 
 function togStaff(n){
   // ★v7.79 清掃担当に入れたら、チェック担当からは外す（同一人物にしない）
@@ -1552,8 +1571,18 @@ function drawEdit(){
   //   ⚠️ 判定する日は【チェックをする日】。清掃日ではない
   //     （8/30清掃・8/31チェックで、8/31に独り立ちする人がいる）。
   const chkDay = ED.chkDate || ED.date;
-  const canCheck = function(s){ return kindAt(s, chkDay) === '独り立ち'; };
-  const noDates  = function(s){ return kindAt(s, chkDay) === ''; };
+  // ★v7.80【列が読めていないときは厳しく判定しない】
+  //   スタッフマスタの見出しがずれていると、全員が「日付未登録」に見える。
+  //   そのまま弾くとチェック担当を1人も選べず、手配が完全に止まる。
+  //   1人でも日付が読めていれば「列は合っている」とみなす。0人なら緩める。
+  const datesOk = (DATA.staff||[]).some(function(x){ return x.trainFrom || x.soloFrom; });
+  const canCheck = function(s){
+    const k = kindAt(s, chkDay);
+    if(k === '研修' || k === '稼働前') return false;      // ここは常に外す
+    if(k === '独り立ち') return true;
+    return !datesOk;                                      // '' は、列が読めていないときだけ通す
+  };
+  const noDates  = function(s){ return datesOk && kindAt(s, chkDay) === ''; };
   const isTrainee = function(s){ return kindAt(s, j.ymd) === '研修'; };
   const q = function(x){ return "'"+String(x).replace(/'/g,"\\'")+"'"; };
 
@@ -1633,7 +1662,10 @@ function drawEdit(){
   const hasSolo = ED.staff.some(function(n){
     if(OUTSIDE.indexOf(n) >= 0) return false;
     const s = (DATA.staff||[]).find(function(x){ return x.disp===n || x.name===n; });
-    return s ? kindAt(s, ED.date) === '独り立ち' : false;
+    if(!s) return false;
+    const k = kindAt(s, ED.date);
+    if(k === '研修' || k === '稼働前') return false;
+    return (k === '独り立ち') || !datesOk;   // ★v7.80 列が読めていないときは従来どおり
   });
   const needChk = nowN > 0 && !hasSolo;
   const isOwner = ED.staff.indexOf('オーナー') >= 0;
@@ -1653,7 +1685,8 @@ function drawEdit(){
     });
     return w.join('・');
   })();
-  const showChk = needChk || ED.chk.length > 0;
+  // ★v7.81 チェックのカードから開いたときは、チェック欄を必ず出す
+  const showChk = needChk || ED.chk.length > 0 || ED.focus === 'check';
   const chkDates = (function(){
     const out = [], from = ED.date, to = j.nextIn || '';
     let d = new Date(from+'T00:00:00');
@@ -1686,8 +1719,21 @@ function drawEdit(){
   $('sheet').innerHTML =
       (ED.err ? '<div class="sec" style="background:var(--redbg)"><div class="box ng">'
                 + esc(ED.err)+'</div></div>' : '')
-    + '<div class="hd"><b>'+esc(j.prop)+'</b>'
-    +   '<small><span'+(isRedDay(j.ymd)?' style="color:var(--red);font-weight:700"':'')+'>'
+    + '<div class="hd"><b>'+(ED.focus==='check'?'🔍 チェック　':'')+esc(j.prop)+'</b>'
+    // ★v7.81 チェックから開いたときは【チェックの日時】を大きく出す。
+    //   ここに清掃の時刻が出ていると、どちらの予定を見ているのか分からない。
+    +   (ED.focus==='check'
+        ? '<small style="color:#1565c0;font-weight:700;font-size:13px">'
+          + (function(){ const d = ED.chkDate || ED.date;
+              return '<span'+(isRedDay(d)?' style="color:var(--red)"':'')+'>'
+                   + esc(fmtMD(d))+'('+esc(WD[new Date(d+'T00:00:00').getDay()])+')'
+                   + (holName(d)?' '+esc(holName(d)):'')+'</span>　'
+                   + esc(ED.chkTime || '（時刻未定）'); })()
+          + '</small>'
+          + '<small style="color:#1565c0">この画面はチェックの予定です。'
+          + '清掃の担当や時間はここでは変えません。</small><small>清掃は '
+        : '<small>')
+    +   '<span'+(isRedDay(j.ymd)?' style="color:var(--red);font-weight:700"':'')+'>'
     +   esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
     +   (holName(j.ymd)?' '+esc(holName(j.ymd)):'')+'</span>　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
     +   (j.std ? '　標準'+esc(j.std) : '')
@@ -1700,6 +1746,8 @@ function drawEdit(){
           + '</span>' : '')
     +   '</small></div>'
 
+    // ★v7.81 チェックから開いたときは、この塊をたたんで要約だけにする
+    + (ED.openClean ? (''
     + '<div class="sec"><div class="lb">清掃担当　'
     +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span>'
     +   // ★v7.75 募集より多く依頼してよい。承諾が募集人数に達したら残りは自動で見送りになる
@@ -1773,6 +1821,18 @@ function drawEdit(){
     +   (j.outD ? '<div style="font-size:11px;color:#666;margin-top:6px">'
         + 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません</div>' : '')
     + '</div>'
+    + '<div class="sec" style="padding-top:0"><button class="pill" onclick="toggleClean()">'
+    +   '▲ 清掃の欄を閉じる</button></div>'
+      ) : (
+        '<div class="sec"><div class="lb">この清掃（変更しません）</div>'
+      + '<div style="font-size:13px;color:#333;font-weight:700">'
+      +   esc(fmtMD(ED.date))+'　'+esc(ED.start||'--:--')+'〜'+esc(ED.end||'--:--')+'</div>'
+      + '<div style="font-size:12px;color:var(--sub);margin-top:3px">清掃担当　'
+      +   esc((ED.staff.length ? staffLabelOf(ED.staff, j) : '（未アサイン）'))+'</div>'
+      + '<div class="pills" style="margin-top:8px">'
+      +   '<button class="pill" onclick="toggleClean()">▼ 清掃の担当・時間も変更する</button></div>'
+      + '</div>'
+      ))
 
     // ★v7.57 チェックは【必要なときだけ】出す。
     //   独り立ちが入っていれば不要なので、欄そのものを出さない（迷わせない）。
@@ -1792,6 +1852,13 @@ function drawEdit(){
         + (chkSame.length
           ? '<div style="font-size:11px;color:#666;margin-top:4px">'
             + '清掃担当のため候補から外しています: '+esc(chkSame.map(function(s){return s.disp;}).join('・'))
+            + '</div>' : '')
+        + (!datesOk
+          ? '<div class="box ng" style="margin-top:7px;font-size:11.5px">'
+            + '🔴 スタッフマスタの研修開始日・独り立ち日が1件も読めていません。'
+            + '列の名前がずれている可能性があります。<br>'
+            + '　　いまは研修中・稼働前の方だけを除いています（従来どおり）。<br>'
+            + '　　AssignApply.gs → previewCheckEligibility() で原因が分かります。'
             + '</div>' : '')
         + (chkNoDate.length
           ? '<div class="box ng" style="margin-top:7px;font-size:11.5px">'
