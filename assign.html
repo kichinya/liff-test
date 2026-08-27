@@ -277,7 +277,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.51';
+const APP_VER = 'v7.56';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -827,6 +827,10 @@ function openEdit(jobKey){
          staff: (j.staff||[]).slice(),
          chk:   (j.chk||[]).slice(),
          need:  String(j.need||''),
+         start: j.start||'', end: j.end||'',      // ★v7.55 段3
+         date:  j.ymd,                            // ★v7.55 段4
+         memo:  '',                               // 縮めた理由
+         note:  '',                               // ★v7.56 依頼するときの特記事項
          busy:  false, err: '' };
   drawEdit();
   $('ovl').classList.add('on');
@@ -836,6 +840,51 @@ function closeEdit(){ $('ovl').classList.remove('on'); ED = null; }
 function togStaff(n){ tog(ED.staff, n); drawEdit(); }
 function togChk(n){   tog(ED.chk,   n); drawEdit(); }
 function tog(arr, n){ const i = arr.indexOf(n); if(i>=0) arr.splice(i,1); else arr.push(n); }
+// ★v7.55 時刻の増減。30分きざみ。既存の値は丸めない（10:21 のような値がある）
+function hm2min(t){ const m=String(t||'').match(/^(\d{1,2}):(\d{1,2})$/); return m ? (+m[1])*60+(+m[2]) : null; }
+function min2hm(n){ n=Math.max(0,Math.min(47*60+59,n)); return Math.floor(n/60)+':'+('0'+(n%60)).slice(-2); }
+function bumpStart(d){
+  const s0 = hm2min(ED.start), e0 = hm2min(ED.end);
+  if(s0==null) return;
+  const span = (e0!=null) ? e0-s0 : null;
+  ED.start = min2hm(s0 + d*30);
+  if(span!=null) ED.end = min2hm(hm2min(ED.start) + span);   // 所要はそのままで前後に動かす
+  drawEdit();
+}
+function bumpSpan(d){
+  const s0 = hm2min(ED.start), e0 = hm2min(ED.end);
+  if(s0==null || e0==null) return;
+  const n = Math.max(30, (e0-s0) + d*30);
+  ED.end = min2hm(s0 + n);
+  drawEdit();
+}
+function setSpan(n){
+  const s0 = hm2min(ED.start); if(s0==null) return;
+  ED.end = min2hm(s0 + n); drawEdit();
+}
+function setDate(d){ ED.date = d; drawEdit(); }
+function setMemo(m){ ED.memo = (ED.memo===m ? '' : m); drawEdit(); }
+function setNote(v){ ED.note = String(v||'').slice(0,200); }   // 入力のたびに描き直さない（カーソルが飛ぶ）
+// 標準清掃時間「3時間」「2.5時間」「180分」→ 分
+function stdMin(std){
+  const s = String(std||'');
+  let m = s.match(/([\d.]+)\s*時間/); if(m) return Math.round(parseFloat(m[1])*60);
+  m = s.match(/([\d.]+)\s*分/);       if(m) return Math.round(parseFloat(m[1]));
+  return null;
+}
+// 清掃日として選べる範囲: チェックアウト日 〜 次回IN
+function dateRange(j){
+  const from = j.outD || j.ymd, to = j.nextIn || '';
+  const out = [];
+  let d = new Date((from<j.ymd?from:j.ymd)+'T00:00:00');
+  const end = to ? new Date(to+'T00:00:00') : new Date(new Date(j.ymd+'T00:00:00').getTime()+3*86400000);
+  for(let i=0;i<14 && d<=end;i++){
+    const y = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+    out.push(y); d = new Date(d.getTime()+86400000);
+  }
+  return out;
+}
+
 function bumpNeed(d){
   let n = parseInt(ED.need,10); if(!isFinite(n)) n = 0;
   n += d; if(n < 0) n = 0; if(n > 9) n = 9;
@@ -849,6 +898,8 @@ function pillHtml(label, on, fn, sub){
 }
 
 function drawEdit(){
+  // ★v7.56 描き直す前に、入力中の特記事項を拾っておく
+  try { const t = document.getElementById('ed-note'); if(t) ED.note = t.value; } catch(e){}
   const j = ED.j, P = pickable(j);
   const isTrainee = function(s){ return kindAt(s, j.ymd) === '研修'; };
   const q = function(x){ return "'"+String(x).replace(/'/g,"\\'")+"'"; };
@@ -862,6 +913,14 @@ function drawEdit(){
   };
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
   const chkList = P.shifted.concat(P.others).filter(function(s){ return !isTrainee(s); });
+
+  // ★v7.56 今回あらたに依頼することになる人（外注・オーナーは除く）
+  const was = {}; (j.staff||[]).forEach(function(x){ was[x]=1; });
+  const addNames = ED.staff.filter(function(x){ return !was[x] && OUTSIDE.indexOf(x)<0; });
+
+  const stdN = stdMin(j.std);
+  const spanNow = (function(){ const a=hm2min(ED.start), b=hm2min(ED.end); return (a==null||b==null)?null:(b-a); })();
+  const cutN = (stdN!=null && spanNow!=null) ? (stdN - spanNow) : 0;
 
   const nowN = ED.staff.length;
   const needN = parseInt(ED.need,10);
@@ -880,6 +939,15 @@ function drawEdit(){
     info = '<div class="box info">🟡 独り立ちのスタッフがいないため、チェックが必要です。</div>';
   }else if(nowN){
     info = '<div class="box ok">✅ チェックは不要です（独り立ちが入っています）。</div>';
+  }
+  // ★v7.55 巻いたときの効果。あくまで【予定ベースの見込み】。
+  //   実際の支払は勤怠ログの打刻で決まるので、断定しない（F-10）。
+  if(cutN>0 && nowN){
+    info += '<div class="box info" style="margin-top:8px">⏱ 標準より <b>'+cutN+'分</b> 短くしています。'
+          + '<br>業務委託費の見込み <b>▲'+Math.round(1600*cutN/60*nowN).toLocaleString()+'円</b>'
+          + '（1,600円 × '+cutN+'分 × '+nowN+'名）'
+          + '<br><span style="font-weight:400">※ 予定ベースの見込みです。実際の支払は打刻で決まります。'
+          + 'オーナー請求は標準清掃時間ベースなので変わりません。</span></div>';
   }
 
   $('sheet').innerHTML =
@@ -907,6 +975,46 @@ function drawEdit(){
     +     '<button onclick="bumpNeed(1)">＋</button></div>'
     + '</div>'
 
+    // ★v7.55 段3 時刻。前倒しと短縮を分けて操作する
+    + '<div class="sec"><div class="lb">時間'
+    +   (spanNow!=null ? '　<span style="'+(cutN>0?'color:#1565c0':'color:#666')+'">'
+          + Math.floor(spanNow/60)+'時間'+(spanNow%60?(spanNow%60)+'分':'')
+          + (cutN>0 ? '（標準から −'+cutN+'分）' : (cutN<0 ? '（標準より +'+(-cutN)+'分）' : ''))
+          + '</span>' : '')+'</div>'
+    +   '<div class="stp"><button onclick="bumpStart(-1)">−</button>'
+    +     '<span class="v">'+esc(ED.start||'--:--')+'〜'+esc(ED.end||'--:--')
+    +       '<small>開始を30分ずつ動かす'+(j.outT?'／OUT '+esc(j.outT)+' 以降':'')+'</small></span>'
+    +     '<button onclick="bumpStart(1)">＋</button></div>'
+    +   '<div class="lb" style="margin:11px 0 6px">所要時間</div>'
+    +   '<div class="stp"><button onclick="bumpSpan(-1)">−</button>'
+    +     '<span class="v">'+(spanNow!=null ? Math.floor(spanNow/60)+'h'+('0'+(spanNow%60)).slice(-2) : '—')
+    +       '<small>30分ずつ</small></span>'
+    +     '<button onclick="bumpSpan(1)">＋</button></div>'
+    +   (stdN ? '<div class="pills" style="margin-top:8px">'
+        + pillHtml('標準どおり', spanNow===stdN, 'setSpan('+stdN+')')
+        + pillHtml('−30分', spanNow===stdN-30, 'setSpan('+(stdN-30)+')')
+        + pillHtml('−1時間', spanNow===stdN-60, 'setSpan('+(stdN-60)+')')
+        + pillHtml('＋30分', spanNow===stdN+30, 'setSpan('+(stdN+30)+')')
+        + '</div>' : '')
+    +   (cutN>0 ? '<div class="lb" style="margin:11px 0 6px">短縮した理由（記録に残します）</div>'
+        + '<div class="pills">'
+        + ['2名で対応','ベテラン','連泊なし','少人数の宿泊','その他'].map(function(m){
+            return pillHtml(m, ED.memo===m, 'setMemo('+q(m)+')'); }).join('')
+        + '</div>' : '')
+    + '</div>'
+
+    // ★v7.55 段4 清掃日
+    + '<div class="sec"><div class="lb">清掃日'
+    +   (j.nextIn ? '　<span style="color:#666">次回IN '+esc(fmtMD(j.nextIn))+' '+esc(j.inT||'')+' まで</span>' : '')
+    +   '</div><div class="pills">'
+    +   dateRange(j).map(function(d){
+          const w = new Date(d+'T00:00:00').getDay();
+          return pillHtml(fmtMD(d)+'('+WD[w]+')', ED.date===d, 'setDate('+q(d)+')'); }).join('')
+    +   '</div>'
+    +   (j.outD ? '<div style="font-size:11px;color:#666;margin-top:6px">'
+        + 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません</div>' : '')
+    + '</div>'
+
     + '<div class="sec"><div class="lb">チェック担当'
     +   (j.chkDate && j.chkDate!==j.ymd ? '　<span style="color:#1565c0">'+esc(fmtMD(j.chkDate))+'</span>' : '')
     +   '</div>'
@@ -915,6 +1023,19 @@ function drawEdit(){
     +   '<div style="font-size:11px;color:#666;margin-top:6px">研修中の方はチェック担当にできません</div>'
     + '</div>'
 
+    // ★v7.56 新しく依頼する人がいるときだけ、特記事項の欄を出す
+    + (addNames.length
+        ? '<div class="sec"><div class="lb">'+esc(addNames.join('・'))+' さんへの特記事項（任意）</div>'
+          + '<textarea id="ed-note" rows="3" oninput="setNote(this.value)" '
+          + 'placeholder="例）鍵は玄関前のキーボックス（1234）。ゴミ出しは火曜の朝です。" '
+          + 'style="width:100%;padding:10px;font-size:14px;font-family:inherit;'
+          + 'border:1px solid var(--line);border-radius:10px;resize:vertical">'+esc(ED.note)+'</textarea>'
+          + '<div class="box info" style="margin-top:9px">📨 保存すると<b>'+esc(addNames.join('・'))
+          + '</b> さんへLINEで依頼が届きます。<br>'
+          + '<b>[お受けします] を押してもらうと確定</b>になります。'
+          + '<br><span style="font-weight:400">押されるまでは「指名済（返事待ち）」です。'
+          + '断られた場合はその方だけ担当から外れ、管理グループへ通知します。</span></div></div>'
+        : '')
     + (info ? '<div class="sec">'+info+'</div>' : '')
     + (ED.err ? '<div class="sec"><div class="box ng">'+esc(ED.err)+'</div></div>' : '')
 
@@ -953,7 +1074,8 @@ function saveEdit(){
   const j = ED.j;
   const payload = { items: [{
     row: j.row, jobKey: j.jobKey, ver: (j.ver==null?'':String(j.ver)),
-    staff: ED.staff, chk: ED.chk, need: ED.need }] };
+    staff: ED.staff, chk: ED.chk, need: ED.need,
+    start: ED.start, end: ED.end, date: ED.date, memo: ED.memo, note: ED.note }] };
 
   jsonp(GAS_URL+'?mode=ab_apply&userId='+encodeURIComponent(me.userId)
         +'&payload='+encodeURIComponent(JSON.stringify(payload)))
