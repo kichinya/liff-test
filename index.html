@@ -92,6 +92,12 @@
   .pNm{ font-size:14px; font-weight:700; line-height:1.4; }
   .pSub{ font-size:11px; color:var(--sub); margin-top:3px; line-height:1.6; }
   .pSub .wn{ color:#c62828; }
+  .pDur{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .pDur .l{ font-size:12px; color:#666; min-width:74px; }
+  .pDur button{ border:1px solid var(--line); background:#fff; border-radius:8px;
+                padding:5px 10px; font-size:12.5px; font-weight:700; font-family:inherit; color:#333; }
+  .pDur .d{ font-size:12px; color:#666; }
+  .pDur .d em{ font-style:normal; margin-left:5px; color:#1565c0; font-weight:700; }
   .pLock{ font-size:11px; color:#c62828; margin-top:5px; }
   .pItem select{ margin-top:6px; width:100%; padding:9px; font-size:15px;
     border:1px solid var(--line); border-radius:8px; background:#fff; }
@@ -1178,6 +1184,39 @@
       });
   }
 
+  // ★v7.70【終了時刻を本人が変える】社長確定 2026-08-27
+  //   ・2名以上で入る日は 30分ほど短くできる
+  //   ・研修中の方と一緒の日は長くなるので、延長はいつでもできる
+  //   ・1人の日の短縮は本部へ（新人が独断で短くすると品質事故になる）
+  var MP_CUT_MULTI_MAX = 30, MP_EXT_MAX = 120, MP_DUR_MIN = 15;
+  function curDur(it){ return (it._dur != null) ? it._dur : (it.dur || 0); }
+  function durLabelOf(m){
+    if (!(m > 0)) return '';
+    var h = Math.floor(m / 60), mm = m % 60;
+    return (h ? h + '時間' : '') + (mm ? mm + '分' : (h ? '' : '0分'));
+  }
+  function planDur(di, i, delta){
+    var d = PLAN_DAYS[di], it = d.items[i];
+    if (!it || !(it.dur > 0) || it.started) return;
+    var now = curDur(it), next = now + delta * 15;
+    if (next < MP_DUR_MIN) return;
+    var diff = next - it.dur;
+    if (diff < 0 && !it.multi){
+      setPlanMsg(di, '1名で入る日は短くできません。\n短くしたい理由がある場合は本部へご連絡ください。', 'err');
+      return;
+    }
+    if (diff < 0 && -diff > MP_CUT_MULTI_MAX){
+      setPlanMsg(di, '短くできるのは ' + MP_CUT_MULTI_MAX + '分までです。', 'err'); return;
+    }
+    if (diff > MP_EXT_MAX){
+      setPlanMsg(di, '延ばせるのは ' + MP_EXT_MAX + '分までです。', 'err'); return;
+    }
+    it._dur = next;
+    d._dirty = true;
+    setPlanMsg(di, '', '');
+    renderPlan(di);
+  }
+
   function renderPlan(only){
     var host = $('p-list');
     if (only == null) host.innerHTML = '';
@@ -1207,6 +1246,19 @@
             '<select ' + (it.locked?'disabled':'') +
               ' onchange="planTime(' + di + ',' + i + ',this.value)">' + planOptions(it) + '</select>' +
             (it.locked ? '<div class="pLock">🔒 ' + esc(it.lockReason) + '</div>' : '') +
+            // ★v7.70 終了時刻（所要時間）の調整
+            (it.dur > 0 && !it.started
+              ? ('<div class="pDur">' +
+                   '<span class="l">終了 ' + esc(m2hm(hm2m(it.start) + curDur(it))) + '</span>' +
+                   '<button onclick="planDur(' + di + ',' + i + ',-1)">−15分</button>' +
+                   '<button onclick="planDur(' + di + ',' + i + ',1)">＋15分</button>' +
+                   '<span class="d">' + esc(durLabelOf(curDur(it))) +
+                     (curDur(it) !== it.dur
+                       ? '<em>' + (curDur(it) > it.dur ? '＋' : '−') +
+                         Math.abs(curDur(it) - it.dur) + '分</em>' : '') +
+                   '</span>' +
+                 '</div>')
+              : '') +
             // ★v5.15 辞退はここから。2名で入る予定でも押せる（自分だけ抜ける）。
             (it.canDecline
               ? ('<div class="pDec" id="p-dec-' + di + '-' + i + '">' +
@@ -1253,7 +1305,11 @@
     if (why){ setPlanMsg(di, 'この並びでは回れません。\n' + why, 'err'); return; }
 
     var plan = d.items.slice().sort(function(a,b){ return hm2m(a.start) - hm2m(b.start); })
-      .map(function(it){ return it.key + ':' + String(it.start).replace(':',''); }).join(',');
+      // ★v7.70 終了時刻（所要分）も送る。変えていなければ元の値をそのまま。
+      .map(function(it){
+        var du = (it._dur != null) ? it._dur : it.dur;
+        return it.key + ':' + String(it.start).replace(':','') + (du > 0 ? ':' + du : '');
+      }).join(',');
 
     planBusy = true;
     var btn = $('p-save-' + di);
