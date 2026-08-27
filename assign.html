@@ -206,6 +206,11 @@
   .pill.on.ng{ background:#fff3f3; border-color:#e53935; color:#b71c1c;
                box-shadow:inset 0 0 0 1px #e53935; }
   .pill.ask{ border-style:dashed; color:#8a6d00; }
+  /* ★v7.76 要確認。赤（＝だめ）ではなく橙（＝判断してください） */
+  .pill.warn{ border-color:#f0b429; background:#fffaf0; color:#8a5a00; }
+  .pill.on.warn{ background:#f1f8f2; border-color:var(--green); color:var(--green);
+                 box-shadow:inset 0 0 0 1px var(--green); }
+  .pill.warn i.b{ color:#8a5a00; background:#fdf0d5; }
   /* ★v7.73 返事待ちは「選択済みの緑」にしない。押されるまでは決まっていない */
   .pill.on.wait{ background:#fffdf5; border:1px dashed #d8c48a; color:#8a6d00; box-shadow:none; }
   .pill.on.wait i.b{ color:#8a6d00; background:#fdf6e3; }
@@ -328,7 +333,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.75';
+const APP_VER = 'v7.76';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -630,6 +635,7 @@ function drawJobs(){
   const clean = js.filter(function(j){ return j.kind!=='check'; });
   const checks = js.filter(function(j){ return j.kind==='check'; });
   const fp = $('f-prop').value;
+  const fa = $('f-area').value;                    // ★v7.76 空いている人の絞り込みにも使う
   const pass = function(j){ return !fp || j.pid===fp; };
 
   // ---- 未アサインの箱 ----
@@ -755,14 +761,21 @@ function drawJobs(){
   });
 
   // ---- シフトは出ているが、まだ入っていない人 ----
+  // ★v7.76【エリアで絞ったら、空いている人もそのエリアの人だけ】社長指摘 2026-08-27
+  //   湘南で絞っているのに逗子の人が「空いています」と出ると、
+  //   声をかけてから「その物件は対応していません」と分かる。手戻りになる。
   const free = (DATA.staff||[]).filter(function(s){
     if(lanes[s.disp]) return false;
+    if(fa && (s.areas||[]).indexOf(fa) < 0) return false;                 // エリア絞り込み
+    if(fp && !(s.propsAll || (s.props||[]).indexOf(fp) >= 0)) return false; // 物件絞り込み
     const mk = (s.shift||{})[DAY];
     return mk && mk!=='×';
   }).sort(function(a,b){ return a.disp<b.disp?-1:1; });
   let freeHtml = '';
   if(free.length){
-    freeHtml = '<div class="sec2">シフトは出ているが、まだ入っていない人 '+free.length+'名</div>'
+    const areaNm = fa ? ((DATA.areas||[]).find(function(a){return a.id===fa;})||{}).label : '';
+    freeHtml = '<div class="sec2">'+(areaNm?esc(areaNm)+'で':'')
+      + 'シフトは出ているが、まだ入っていない人 '+free.length+'名</div>'
       + '<div class="freerow">'+free.map(function(s){
           const k = kindAt(s, DAY);
           return '<span class="fchip">'+esc(s.disp)
@@ -933,7 +946,15 @@ function findJob(jobKey){
 //     ③ シフトなし × 予定あり … すでに出勤している日。頼める可能性が高い
 //     ④ シフトなし × 予定なし … 入れるか分からない。声かけが要る
 function pickable(j){
-  const okProp = function(s){ return s.propsAll || (s.props||[]).indexOf(j.pid) >= 0; };
+  // ★v7.76【対応可物件が空＝エリア内すべて】社長指摘 2026-08-27
+  //   対応可物件が空欄の人は「エリア内すべて」の意味であって「全国どこでも」ではない。
+  //   エリアを見ずに通していたので、逗子の人が湘南の物件の候補に出ていた。
+  //   声をかけてから「その物件は対応していません」と分かる＝手戻り。
+  const jArea = ((DATA.props||[]).find(function(p){ return p.pid===j.pid; })||{}).area || '';
+  const okProp = function(s){
+    if(!s.propsAll) return (s.props||[]).indexOf(j.pid) >= 0;   // 物件を挙げている人はそれで判断
+    return !jArea || (s.areas||[]).indexOf(jArea) >= 0;         // 空欄の人は担当エリアで判断
+  };
   const day = ED ? ED.date : j.ymd;
   const g = { shiftFree: [], shiftBusy: [], noShiftBusy: [], noShiftFree: [] };
   (DATA.staff||[]).forEach(function(s){
@@ -1112,7 +1133,9 @@ function candStatus(s, j){
       else { why.push('このあと '+x.prop+' へ 移動'+mn+'分 → 空き'+gap+'分 ✅'); }
     }
   });
-  return { txt: list + (why.length ? '\n' + why.join('\n') : ''), ng: ng, n: mine.length };
+  // ★v7.76 バッジに「どこにアサイン済みか」を出すため、最初の予定を返す
+  return { txt: list + (why.length ? '\n' + why.join('\n') : ''), ng: ng, n: mine.length,
+           first: { prop: mine[0].prop, start: mine[0].start || '', end: mine[0].end || '' } };
 }
 
 // ★v7.72【ピルに載せる短いバッジ】社長指摘 2026-08-27
@@ -1129,11 +1152,22 @@ function candBadge(s, j){
   if(of === 'wait') return { sub: (isOver(j)?'⏳期限切れ':'⏳返事待ち'), ng: false, ask: false, wait: true, st: st };
   if(of === 'ok')   return { sub: '✅承諾', ng: false, ask: false, st: st };
   if(of === 'ng')   return { sub: '✕辞退', ng: true,  ask: false, st: st };
-  let sub = '';
-  if(st.ng)        sub = '✕回れない';
-  else if(st.n)    sub = '他' + st.n + '件';
-  else if(st.ask)  sub = '？未提出';
-  return { sub: sub, ng: !!st.ng, ask: !!st.ask, st: st };
+
+  // ★v7.76【出勤している＝回れない、ではない】社長指摘 2026-08-27
+  //   旧: その日ほかに予定があって移動が足りないと「✕回れない」と赤で出していた。
+  //       これは画面が勝手に「無理だ」と決めつけている。
+  //       実際は、順番を入れ替える・時間をずらす・途中合流するなど手はある。
+  //   新: どこにアサイン済みかを名前で出す（「Umito 10:00〜」）。
+  //       重なり・移動不足は【要確認】として橙で出すが、赤で止めない。
+  //       選べば、シフト提出組と同じように本人へ確認の通知が飛ぶ。
+  if(st.n){
+    const lab = st.first
+      ? (st.first.prop + (st.first.start ? ' ' + st.first.start + '〜' : ''))
+      : ('他' + st.n + '件');
+    const more = (st.n > 1) ? ' 他' + (st.n - 1) + '件' : '';
+    return { sub: lab + more, ng: false, ask: false, warn: !!st.ng, st: st };
+  }
+  return { sub: (st.ask ? '？未提出' : ''), ng: false, ask: !!st.ask, st: st };
 }
 
 function drawEdit(){
@@ -1147,7 +1181,8 @@ function drawEdit(){
   const staffCands = function(list){
     const withSt = list.map(function(s){ return { s: s, b: candBadge(s, j) }; });
     withSt.sort(function(a,b){
-      if(a.b.ng !== b.b.ng) return a.b.ng ? 1 : -1;         // 回れない人は下
+      const aw = (a.b.ng||a.b.warn)?1:0, bw = (b.b.ng||b.b.warn)?1:0;
+      if(aw !== bw) return aw - bw;                         // 要確認・辞退は下
       if(a.b.st.n !== b.b.st.n) return a.b.st.n - b.b.st.n; // 予定が少ない人が上
       return a.s.disp < b.s.disp ? -1 : 1;
     });
@@ -1156,6 +1191,7 @@ function drawEdit(){
       const k = kindAt(s, j.ymd);
       const on = ED.staff.indexOf(s.disp) >= 0;
       return '<button class="pill'+(on?' on':'')+(b.ng?' ng':'')+(b.ask?' ask':'')+(b.wait?' wait':'')
+           + (b.warn?' warn':'')
            + '" onclick="togStaff('+q(s.disp)+')">'+esc(s.disp)
            + (k==='研修'?'<i>研修</i>':(k==='稼働前'?'<i>稼働前</i>':''))
            + (b.sub ? '<i class="b">'+esc(b.sub)+'</i>' : '')
@@ -1163,18 +1199,24 @@ function drawEdit(){
     }).join('');
   };
   // ★v7.72 選んだ人の分だけ、その日の予定と移動時間を出す（全員分を出すと長すぎる）
+  // ★v7.76 選んだ人に加えて【要確認】の人も出す。
+  //   赤で止めるのをやめた以上、なぜ要確認なのかが見えないと判断できない。
   const chosenDetail = (function(){
-    const rows = ED.staff.map(function(n){
-      if(OUTSIDE.indexOf(n) >= 0) return '';
-      const s = staffOf(n);
-      if(!s) return '';
+    const seen2 = {}, out2 = [];
+    const add2 = function(s){
+      if(!s || seen2[s.disp]) return;
       const st = candStatus(s, j);
-      if(!st.n) return '';                       // その日ほかに予定が無い人は出さない
-      return '<div class="cd'+(st.ng?' ng':'')+'"><b>'+esc(s.disp)
-           + (s.move?'　<span style="font-weight:400;color:#777">'+esc(s.move)+'</span>':'')
-           + '</b>'+esc(st.txt)+'</div>';
-    }).filter(String);
-    return rows.length ? '<div class="cds">'+rows.join('')+'</div>' : '';
+      if(!st.n) return;                          // その日ほかに予定が無い人は出さない
+      seen2[s.disp] = 1;
+      out2.push('<div class="cd'+(st.ng?' ng':'')+'"><b>'+esc(s.disp)
+              + (s.move?'　<span style="font-weight:400;color:#777">'+esc(s.move)+'</span>':'')
+              + '</b>'+esc(st.txt)+'</div>');
+    };
+    ED.staff.forEach(function(n){ if(OUTSIDE.indexOf(n)<0) add2(staffOf(n)); });
+    [P.shiftFree, P.shiftBusy, P.noShiftBusy, P.noShiftFree].forEach(function(g){
+      g.forEach(function(s){ if(candStatus(s, j).ng) add2(s); });
+    });
+    return out2.length ? '<div class="cds">'+out2.join('')+'</div>' : '';
   })();
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
   // ★v7.71 チェック担当は4分類をまとめて（シフト提出者を先に）
@@ -1264,8 +1306,10 @@ function drawEdit(){
           ? '<span style="color:#2e6da4;font-weight:400">　多めに打診中（承諾が'+needN+'名に達したら、残りの方には見送りをお伝えします）</span>'
           : '')+'</div>'
     +   [['📅 シフト提出あり・空いています', P.shiftFree, ''],
-         ['📅 シフト提出あり・別の予定あり', P.shiftBusy, ''],
-         ['🔸 シフト未提出だが、この日は出勤しています', P.noShiftBusy, ''],
+         ['📅 シフト提出あり・すでに入っている現場あり', P.shiftBusy,
+          '回れそうなら選んでください。本人に確認の通知が飛びます'],
+         ['🔸 シフト未提出だが、この日は出勤しています', P.noShiftBusy,
+          '出勤日なので追加をお願いしやすい方です'],
          ['⚪ シフト未提出・予定なし', P.noShiftFree, 'この日入れるかは分かりません。声をかけてから決めてください']]
         .map(function(g){
           if(!g[1].length) return '';
