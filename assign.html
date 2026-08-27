@@ -104,6 +104,9 @@
   .badge.so{ background:#e8f5e9; color:var(--green); border:1px solid #a5d6a7; }
   .badge.ng{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; }
   .badge.ck{ background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }  /* ★v7.42 別日のチェック */
+  /* ★v7.63 その時刻を誰が決めたか */
+  .badge.by{ background:#ede7f6; color:#4527a0; border:1px solid #b39ddb; }
+  .badge.def{ background:#f2f3f5; color:#8a8f96; border:1px solid var(--line); }
 
   /* ★v7.50 案E スタッフ別ルート */
   .strip{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 10px; }
@@ -277,7 +280,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.57';
+const APP_VER = 'v7.63';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -615,7 +618,10 @@ function drawJobs(){
       inner += '<div class="'+cls+'" onclick="openEdit(\''+esc(st.j.jobKey)+'\')">'
             +   '<span class="tm">'+esc(st.t||'--:--')+(st.end?'<small>〜'+esc(st.end)+'</small>':'')+'</span>'
             +   '<div class="bx"><div class="p">'+esc(st.j.prop)
-            +     (isChk?' <span class="badge ck">チェック</span>':'')+'</div>'
+            +     (isChk?' <span class="badge ck">チェック</span>':'')
+            +     (!isChk ? (st.j.timeBy
+                  ? ' <span class="badge by">🕒 '+esc(st.j.timeBy)+'</span>'
+                  : ' <span class="badge def">既定のまま</span>') : '')+'</div>'
             +     '<div class="d">'
             +       (isChk ? ('清掃 '+esc((st.j.cleanStaff||st.j.staff||[]).join('・')))
                            : ((st.j.nights?st.j.nights+'泊 ':'')+(st.j.guests?st.j.guests+'名 ':'')
@@ -998,7 +1004,9 @@ function drawEdit(){
                 + esc(ED.err)+'</div></div>' : '')
     + '<div class="hd"><b>'+esc(j.prop)+'</b>'
     +   '<small>'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
-    +   (j.std ? '　標準'+esc(j.std) : '')+'</small></div>'
+    +   (j.std ? '　標準'+esc(j.std) : '')
+    +   '<br>'+(j.timeBy ? '🕒 この時刻は '+esc(j.timeBy)+' が決めました'
+                         : '🕒 既定のまま（まだ誰も時刻を決めていません）')+'</small></div>'
 
     + '<div class="sec"><div class="lb">清掃担当　'
     +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
