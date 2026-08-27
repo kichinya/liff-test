@@ -233,11 +233,15 @@
         <option value="30">1か月</option>
       </select>
     </div>
-    <div class="r">
+    <div class="r" id="r-area" style="display:none">
+      <label>エリア</label>
+      <select id="f-area" onchange="onArea()"><option value="">すべて</option></select>
+    </div>
+    <div class="r" id="r-prop">
       <label>物件</label>
       <select id="f-prop" onchange="draw()"><option value="">すべて</option></select>
     </div>
-    <div class="r">
+    <div class="r" id="r-bad">
       <label class="chk"><input type="checkbox" id="f-bad" onchange="draw()">
         <span>決まっていない日だけ</span></label>
     </div>
@@ -273,7 +277,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.50';
+const APP_VER = 'v7.51';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -306,10 +310,13 @@ function showErr(text){
 }
 
 function tab(name){
+  // ★v7.51 タブごとに出す絞り込みを変える
   TAB = name;
   $('tb-jobs').className  = (name==='jobs')  ? 'on' : '';
   $('tb-staff').className = (name==='staff') ? 'on' : '';
-  $('filt').style.display = (name==='jobs') ? 'block' : 'none';
+  $('filt').style.display = 'block';
+  $('r-prop').style.display = (name==='jobs') ? 'flex' : 'none';
+  $('r-bad').style.display  = (name==='jobs') ? 'flex' : 'none';
   draw();
 }
 
@@ -441,15 +448,19 @@ function groupHtml(title, cls, jobs){
 //   未アサインは上の赤い箱に置き、タップして担当を決める。
 // ============================================================
 function dayList(){
+  const fa = $('f-area').value;                   // ★v7.51 エリア絞り込み
   const seen = {}, out = [];
   (DATA.areas||[]).forEach(function(a){
+    if(fa && a.id !== fa) return;
     a.jobs.forEach(function(j){ if(!seen[j.ymd]){ seen[j.ymd]=1; out.push(j.ymd); } });
   });
   return out.sort();
 }
 function jobsOf(ymd){
+  const fa = $('f-area').value;                   // ★v7.51 エリア絞り込み
   const out = [];
   (DATA.areas||[]).forEach(function(a){
+    if(fa && a.id !== fa) return;
     a.jobs.forEach(function(j){ if(j.ymd===ymd) out.push(Object.assign({area:a.id, areaLabel:a.label}, j)); });
   });
   return out;
@@ -480,6 +491,21 @@ function shortOf(j){
   const n = parseInt(j.need,10);
   return (n>0) ? Math.max(0, n - (j.staff||[]).length) : 0;
 }
+
+// ★v7.51 選んだエリアの物件だけを物件セレクトに出す
+function fillProps(){
+  const a = $('f-area').value;
+  const keep = $('f-prop').value;
+  let opt = '<option value="">すべて</option>';
+  (DATA.props||[]).forEach(function(p){
+    if(a && p.area !== a) return;
+    opt += '<option value="'+esc(p.pid)+'">'+esc(p.name)+'</option>';
+  });
+  $('f-prop').innerHTML = opt;
+  const still = (DATA.props||[]).some(function(p){ return p.pid===keep && (!a || p.area===a); });
+  $('f-prop').value = still ? keep : '';
+}
+function onArea(){ fillProps(); draw(); }
 
 function drawJobs(){
   let days = dayList();
@@ -683,7 +709,9 @@ function drawStaff(){
   //   （近藤さんのように湘南と横須賀を兼ねる人がいるため、片方に寄せると探せなくなる）
   const labels = DATA.areaLabels || {};
   const areaIds = Object.keys(labels);
-  const groups = areaIds.length ? areaIds.map(function(aid){
+  const fa2 = $('f-area').value;                  // ★v7.51 スタッフもエリアで絞る
+  const areaIds2 = fa2 ? areaIds.filter(function(a){ return a===fa2; }) : areaIds;
+  const groups = areaIds2.length ? areaIds2.map(function(aid){
     return { id:aid, label: labels[aid]||aid,
              list: st.filter(function(s){ return (s.areas||[]).indexOf(aid) >= 0; }).sort(sortFn) };
   }).filter(function(g){ return g.list.length; }) : [{ id:'', label:'', list: st.slice().sort(sortFn) }];
@@ -961,15 +989,22 @@ function render(d){
   $('msg').className='msg'; $('msg').textContent='';
   $('lead').textContent = d.name+' さん　'+fmtMD(d.from)+'〜'+fmtMD(d.to)+' の予定　'+APP_VER;
   $('tabs').style.display='flex';
-  $('filt').style.display = (TAB==='jobs') ? 'block' : 'none';
+  // ★v7.51 スタッフタブでもエリアで絞れる。物件と「決まっていない日だけ」は予定タブだけ
+  $('filt').style.display = 'block';
+  $('r-prop').style.display = (TAB==='jobs') ? 'flex' : 'none';
+  $('r-bad').style.display  = (TAB==='jobs') ? 'flex' : 'none';
 
-  const keep = $('f-prop').value;
-  let opt = '<option value="">すべて</option>';
-  (d.props||[]).forEach(function(p){
-    opt += '<option value="'+esc(p.pid)+'">'+esc(p.name)+'</option>';
-  });
-  $('f-prop').innerHTML = opt;
-  if(keep) $('f-prop').value = keep;
+  // ★v7.51 エリア → 物件 の順で絞る。エリアが1つだけの人には出さない
+  const labels = d.areaLabels || {};
+  const aids = Object.keys(labels);
+  const keepA = $('f-area').value;
+  let aopt = '<option value="">すべて</option>';
+  aids.forEach(function(a){ aopt += '<option value="'+esc(a)+'">'+esc(labels[a]||a)+'</option>'; });
+  $('f-area').innerHTML = aopt;
+  if(keepA && aids.indexOf(keepA)>=0) $('f-area').value = keepA;
+  $('r-area').style.display = (aids.length > 1) ? 'flex' : 'none';
+
+  fillProps();
 
   $('rel').style.display='block';
   $('foot').innerHTML =
