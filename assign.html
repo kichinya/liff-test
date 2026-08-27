@@ -328,7 +328,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.73';
+const APP_VER = 'v7.75';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -445,7 +445,9 @@ function jobHtml(j){
   if(needN > 0){
     const short = (nowN < needN);
     needTxt = '<b'+(short?' style="color:#c62828"':'')+'>'+nowN+' / '+needN+'名</b>'
-            + (short ? ' <span style="color:#c62828;font-weight:700">あと'+(needN-nowN)+'名</span>' : '');
+            + (short ? ' <span style="color:#c62828;font-weight:700">あと'+(needN-nowN)+'名</span>' : '')
+            // ★v7.75 多めに打診しているのは正常な状態。赤くしない
+            + (nowN>needN ? ' <span style="color:#2e6da4;font-weight:700">多めに打診中</span>' : '');
   }
   const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(fmtMD(j.chkDate))+'）' : '';
   // ★v7.35 チェックが要るのは【外注】と【研修中】が入っているジョブだけ。
@@ -1256,7 +1258,11 @@ function drawEdit(){
     +   '</small></div>'
 
     + '<div class="sec"><div class="lb">清掃担当　'
-    +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
+    +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span>'
+    +   // ★v7.75 募集より多く依頼してよい。承諾が募集人数に達したら残りは自動で見送りになる
+        ((needN>0 && nowN>needN)
+          ? '<span style="color:#2e6da4;font-weight:400">　多めに打診中（承諾が'+needN+'名に達したら、残りの方には見送りをお伝えします）</span>'
+          : '')+'</div>'
     +   [['📅 シフト提出あり・空いています', P.shiftFree, ''],
          ['📅 シフト提出あり・別の予定あり', P.shiftBusy, ''],
          ['🔸 シフト未提出だが、この日は出勤しています', P.noShiftBusy, ''],
