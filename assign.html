@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- ★LINE内ブラウザが古い版を掴む事故を避けるため、HTML自体はキャッシュさせない -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>アサイン管理</title>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<style>
+  :root{ --green:#2e7d32; --line:#e0e0e0; --bg:#f7f8f7; --ink:#222; --sub:#666;
+         --red:#c62828; --redbg:#ffebee; --amber:#a06a00; --amberbg:#fff8e1; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+    -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+  .wrap{ max-width:640px; margin:0 auto; padding:14px 14px 40px; }
+  h1{ font-size:18px; margin:4px 0 2px; display:flex; align-items:center; gap:8px; }
+  .lead{ color:var(--sub); font-size:12px; margin:0 0 12px; }
+  .msg{ font-size:13px; margin:10px 0; white-space:pre-wrap; }
+  .msg.err{ color:var(--red); background:var(--redbg); border:1px solid #ef9a9a;
+            border-radius:10px; padding:12px; }
+  .center{ text-align:center; color:var(--sub); font-size:13px; padding:24px 8px; }
+
+  /* サマリ */
+  .sum{ display:flex; gap:8px; margin:0 0 14px; }
+  .sum > div{ flex:1; background:#fff; border:1px solid var(--line); border-radius:12px;
+              padding:10px 8px; text-align:center; }
+  .sum b{ display:block; font-size:22px; line-height:1.2; }
+  .sum span{ font-size:11px; color:var(--sub); }
+  .sum .bad b{ color:var(--red); }
+  .sum .warn b{ color:var(--amber); }
+
+  /* エリア見出し */
+  .area{ margin:20px 0 8px; font-size:14px; font-weight:700;
+         display:flex; align-items:center; gap:8px; }
+  .area .cnt{ font-weight:400; font-size:12px; color:var(--sub); }
+
+  /* グループ見出し */
+  .grp{ margin:14px 0 6px; font-size:13px; font-weight:700; }
+  .grp.bad{ color:var(--red); }
+  .grp.warn{ color:var(--amber); }
+  .grp.ok{ color:var(--green); }
+
+  /* ジョブ行 */
+  .job{ background:#fff; border:1px solid var(--line); border-radius:12px;
+        padding:11px 12px; margin-bottom:8px; }
+  .job.bad{ border-color:#ef9a9a; background:#fffafa; }
+  .job.past{ opacity:.62; }
+  .job .top{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .job .d{ font-size:13px; font-weight:700; }
+  .job .d .today{ color:#fff; background:var(--green); border-radius:6px;
+                  font-size:10px; padding:1px 6px; margin-left:6px; }
+  .job .p{ font-size:14px; font-weight:700; flex:1; min-width:120px; }
+  .job .t{ font-size:12px; color:var(--sub); }
+  .job .rows{ margin-top:7px; display:grid; grid-template-columns:auto 1fr; gap:3px 8px;
+              font-size:12.5px; align-items:baseline; }
+  .job .k{ color:var(--sub); white-space:nowrap; }
+  .job .v.none{ color:var(--red); font-weight:700; }
+  .job .memo{ margin-top:6px; font-size:12px; color:var(--sub);
+              background:var(--amberbg); border-radius:8px; padding:6px 8px; }
+  .tag{ display:inline-block; font-size:11px; border-radius:6px; padding:1px 6px;
+        margin-left:6px; border:1px solid var(--line); color:var(--sub); }
+  .tag.sd{ color:#b71c1c; border-color:#ef9a9a; background:var(--redbg); }
+
+  .foot{ margin-top:22px; font-size:11.5px; color:var(--sub); line-height:1.8; }
+  .rel{ display:block; width:100%; margin-top:16px; padding:13px;
+        font-size:14px; font-weight:700; color:#fff; background:var(--green);
+        border:0; border-radius:12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📋 アサイン管理</h1>
+  <div class="lead" id="lead">読み込み中…</div>
+  <div id="msg" class="msg"></div>
+  <div id="body"><div class="center">読み込み中…</div></div>
+  <button class="rel" id="rel" onclick="load()" style="display:none">🔄 最新の状態にする</button>
+  <div class="foot" id="foot"></div>
+</div>
+
+<script>
+// ============================================================
+// アサイン管理ダッシュボード（段1・表示のみ）
+//
+// ⚠️ この画面は【1セルも書きません】。見るだけです。
+//    登録・変更は段2以降。
+//
+// ★LIFF_ID は LINE Developers でアプリを作ってから差し替えます。
+//   それまでは PC のブラウザで
+//     assign.html?debug=<管理者のLINE userId>
+//   と開けば、LIFF なしで中身を確認できます。
+// ============================================================
+const LIFF_ID = '';   // ★ここに 2010751229-xxxxxxxx を入れる（未設定なら debug モードのみ）
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
+const DAYS = 14;
+
+const $ = function(id){ return document.getElementById(id); };
+const esc = function(s){ return String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+let me = null;
+
+function jsonp(url){
+  return new Promise(function(resolve,reject){
+    const cb = 'ab_'+Date.now()+'_'+Math.floor(Math.random()*100000);
+    const s = document.createElement('script');
+    const t = setTimeout(function(){
+      cleanup(); reject(new Error('時間内に応答がありませんでした'));
+    }, 25000);
+    function cleanup(){
+      clearTimeout(t);
+      try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+      if(s.parentNode) s.parentNode.removeChild(s);
+    }
+    window[cb] = function(d){ cleanup(); resolve(d); };
+    s.onerror = function(){ cleanup(); reject(new Error('通信に失敗しました')); };
+    s.src = url + '&callback=' + cb;
+    document.body.appendChild(s);
+  });
+}
+
+function showErr(text){
+  $('msg').className = 'msg err';
+  $('msg').textContent = text;
+  $('body').innerHTML = '';
+  $('rel').style.display = 'block';
+}
+
+// ---- 描画 ----
+function jobHtml(j){
+  const noStaff = !j.staff || !j.staff.length;
+  const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
+  const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
+  const sd = (j.sameDay && j.sameDay !== '' && j.sameDay !== '×' && j.sameDay !== 'なし')
+             ? '<span class="tag sd">同日IN ' + esc(j.inT||'') + '</span>' : '';
+  const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（' + esc(j.chkDate.slice(5)) + '）' : '';
+  return ''
+    + '<div class="'+cls+'">'
+    +   '<div class="top">'
+    +     '<span class="d">'+esc(j.ymd.slice(5))+'('+esc(j.wd)+')'
+    +        (j.isToday ? '<span class="today">本日</span>' : '') + '</span>'
+    +     '<span class="p">'+esc(j.prop)+'</span>'
+    +   '</div>'
+    +   '<div class="rows">'
+    +     '<span class="k">時間</span><span class="v">'+esc(time)
+    +        (j.std ? ' <span class="t">/ 標準'+esc(j.std)+'</span>' : '') + sd + '</span>'
+    +     '<span class="k">清掃</span><span class="v'+(noStaff?' none':'')+'">'
+    +        (noStaff ? '未アサイン' : esc(j.staff.join('・'))) + '</span>'
+    +     '<span class="k">チェック</span><span class="v'+((!j.chk||!j.chk.length)?' none':'')+'">'
+    +        ((!j.chk||!j.chk.length) ? '未定' : esc(j.chk.join('・')) + chkDay
+    +          + (j.chkTime ? ' <span class="t">'+esc(j.chkTime)+'</span>' : '')) + '</span>'
+    +     '<span class="k">状態</span><span class="v"><span class="t">'
+    +        esc(j.assign || '—') + (j.guests ? ' / '+esc(j.guests)+'名' : '') + '</span></span>'
+    +   '</div>'
+    +   (j.memo ? '<div class="memo">'+esc(j.memo)+'</div>' : '')
+    + '</div>';
+}
+
+function groupHtml(title, cls, jobs){
+  if(!jobs.length) return '';
+  return '<div class="grp '+cls+'">'+title+'　'+jobs.length+'件</div>'
+       + jobs.map(jobHtml).join('');
+}
+
+function render(d){
+  $('msg').className='msg'; $('msg').textContent='';
+  $('lead').textContent = d.name + ' さん　' + d.from.slice(5) + '〜' + d.to.slice(5) + ' の予定';
+
+  let all=[], noStaff=[], noChk=[];
+  d.areas.forEach(function(a){
+    a.jobs.forEach(function(j){
+      all.push(j);
+      if(!j.staff || !j.staff.length) noStaff.push(j);
+      else if(!j.chk || !j.chk.length) noChk.push(j);
+    });
+  });
+
+  let h = ''
+    + '<div class="sum">'
+    +   '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
+    +   '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
+    +   '<div><b>'+all.length+'</b><span>予定 合計</span></div>'
+    + '</div>';
+
+  if(!all.length){
+    h += '<div class="center">この期間の予定はありません。</div>';
+  }
+
+  d.areas.forEach(function(a){
+    const bad = a.jobs.filter(function(j){ return !j.staff || !j.staff.length; });
+    const wrn = a.jobs.filter(function(j){ return (j.staff&&j.staff.length) && (!j.chk||!j.chk.length); });
+    const ok  = a.jobs.filter(function(j){ return (j.staff&&j.staff.length) && (j.chk&&j.chk.length); });
+    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+a.jobs.length+'件</span></div>';
+    if(!a.jobs.length){ h += '<div class="center">予定はありません。</div>'; return; }
+    h += groupHtml('🔴 清掃が決まっていない', 'bad',  bad);
+    h += groupHtml('🟡 チェックが決まっていない', 'warn', wrn);
+    h += groupHtml('✅ 決まっている', 'ok', ok);
+  });
+
+  $('body').innerHTML = h;
+  $('rel').style.display = 'block';
+  $('foot').innerHTML =
+      'この画面は<b>見るだけ</b>です。登録・変更はまだできません。<br>'
+    + '直すときは、これまでどおりスプレッドシートか本部へご連絡ください。';
+}
+
+async function load(){
+  $('body').innerHTML = '<div class="center">読み込み中…</div>';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=ab_board&days='+DAYS
+                 +'&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){ showErr((res && res.message) || '読み込めませんでした。'); return; }
+    render(res);
+  }catch(err){
+    showErr('読み込みに失敗しました。\n電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）');
+  }
+}
+
+(async function(){
+  // ★PCブラウザでの確認用。?debug=<userId> で LIFF を使わずに開ける
+  const dbg = new URLSearchParams(location.search).get('debug');
+  if(dbg){
+    me = { userId: dbg, name: '(debug)' };
+    $('lead').textContent = '確認モード（LIFFなし）';
+    load();
+    return;
+  }
+  if(!LIFF_ID){
+    showErr('準備中です。\n\nLIFF ID が未設定です。LINE Developers でアプリを作成し、\nassign.html の LIFF_ID に設定してください。');
+    return;
+  }
+  try{
+    await liff.init({ liffId: LIFF_ID });
+    if(!liff.isLoggedIn()){ liff.login(); return; }
+    const prof = await liff.getProfile();
+    me = { userId: prof.userId, name: prof.displayName };
+    load();
+  }catch(e){
+    showErr('LINEの情報を取得できませんでした。\nLINEアプリから開き直してください。\n\n（'+e.message+'）');
+  }
+})();
+</script>
+</body>
+</html>
