@@ -277,7 +277,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.56';
+const APP_VER = 'v7.57';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -831,6 +831,7 @@ function openEdit(jobKey){
          date:  j.ymd,                            // ★v7.55 段4
          memo:  '',                               // 縮めた理由
          note:  '',                               // ★v7.56 依頼するときの特記事項
+         chkDate: j.chkDate||'', chkTime: j.chkTime||'',   // ★v7.57
          busy:  false, err: '' };
   drawEdit();
   $('ovl').classList.add('on');
@@ -838,7 +839,15 @@ function openEdit(jobKey){
 function closeEdit(){ $('ovl').classList.remove('on'); ED = null; }
 
 function togStaff(n){ tog(ED.staff, n); drawEdit(); }
-function togChk(n){   tog(ED.chk,   n); drawEdit(); }
+function togChk(n){
+  tog(ED.chk, n);
+  // ★v7.57 チェック担当を決めたら、日と時刻に既定を入れておく（空のまま保存されると意味がない）
+  if(ED.chk.length){
+    if(!ED.chkDate) ED.chkDate = ED.date;
+    if(!ED.chkTime) ED.chkTime = ED.end || '16:00';
+  }
+  drawEdit();
+}
 function tog(arr, n){ const i = arr.indexOf(n); if(i>=0) arr.splice(i,1); else arr.push(n); }
 // ★v7.55 時刻の増減。30分きざみ。既存の値は丸めない（10:21 のような値がある）
 function hm2min(t){ const m=String(t||'').match(/^(\d{1,2}):(\d{1,2})$/); return m ? (+m[1])*60+(+m[2]) : null; }
@@ -863,6 +872,15 @@ function setSpan(n){
   ED.end = min2hm(s0 + n); drawEdit();
 }
 function setDate(d){ ED.date = d; drawEdit(); }
+// ★v7.57 チェック対応日・時刻
+function setChkDate(d){ ED.chkDate = d; if(!ED.chkTime) ED.chkTime = ED.end || '16:00'; drawEdit(); }
+function bumpChkTime(d){
+  let n = hm2min(ED.chkTime);
+  if(n==null) n = hm2min(ED.end) || 16*60;
+  ED.chkTime = min2hm(n + d*30);
+  if(!ED.chkDate) ED.chkDate = ED.date;
+  drawEdit();
+}
 function setMemo(m){ ED.memo = (ED.memo===m ? '' : m); drawEdit(); }
 function setNote(v){ ED.note = String(v||'').slice(0,200); }   // 入力のたびに描き直さない（カーソルが飛ぶ）
 // 標準清掃時間「3時間」「2.5時間」「180分」→ 分
@@ -932,6 +950,31 @@ function drawEdit(){
   const needChk = nowN > 0 && !hasSolo;
   const isOwner = ED.staff.indexOf('オーナー') >= 0;
 
+  // ★v7.57 チェック欄を出すかどうか
+  const chkWhyNow = (function(){
+    const w = [];
+    ED.staff.forEach(function(n){
+      if(n==='外注'){ if(w.indexOf('外注')<0) w.push('外注'); return; }
+      if(n==='オーナー') return;
+      const s2 = staffOf(n);
+      const k = s2 ? kindAt(s2, ED.date) : undefined;
+      if(k==='研修'||k==='稼働前'){ if(w.indexOf('研修中')<0) w.push('研修中'); }
+      else if(k===undefined){ if(w.indexOf('外注')<0) w.push('外注'); }
+    });
+    return w.join('・');
+  })();
+  const showChk = needChk || ED.chk.length > 0;
+  const chkDates = (function(){
+    const out = [], from = ED.date, to = j.nextIn || '';
+    let d = new Date(from+'T00:00:00');
+    const end = to ? new Date(to+'T00:00:00') : new Date(d.getTime()+2*86400000);
+    for(let i=0;i<8 && d<=end;i++){
+      out.push(d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2));
+      d = new Date(d.getTime()+86400000);
+    }
+    return out;
+  })();
+
   let info = '';
   if(isOwner){
     info = '<div class="box info">オーナー対応にすると、この予定は一覧から外れます。</div>';
@@ -951,7 +994,9 @@ function drawEdit(){
   }
 
   $('sheet').innerHTML =
-      '<div class="hd"><b>'+esc(j.prop)+'</b>'
+      (ED.err ? '<div class="sec" style="background:var(--redbg)"><div class="box ng">'
+                + esc(ED.err)+'</div></div>' : '')
+    + '<div class="hd"><b>'+esc(j.prop)+'</b>'
     +   '<small>'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
     +   (j.std ? '　標準'+esc(j.std) : '')+'</small></div>'
 
@@ -1015,13 +1060,34 @@ function drawEdit(){
         + 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません</div>' : '')
     + '</div>'
 
-    + '<div class="sec"><div class="lb">チェック担当'
-    +   (j.chkDate && j.chkDate!==j.ymd ? '　<span style="color:#1565c0">'+esc(fmtMD(j.chkDate))+'</span>' : '')
-    +   '</div>'
-    +   '<div class="pills">'+chkList.map(function(s){
-          return pillHtml(s.disp, ED.chk.indexOf(s.disp)>=0, 'togChk('+q(s.disp)+')'); }).join('')+'</div>'
-    +   '<div style="font-size:11px;color:#666;margin-top:6px">研修中の方はチェック担当にできません</div>'
-    + '</div>'
+    // ★v7.57 チェックは【必要なときだけ】出す。
+    //   独り立ちが入っていれば不要なので、欄そのものを出さない（迷わせない）。
+    //   ただし既にチェック担当が入っている場合は、外せるように出す。
+    + (showChk
+      ? '<div class="sec"><div class="lb">チェック担当'
+        + (needChk ? '　<span style="color:#a06a00">必要（'+esc(chkWhyNow)+'）</span>'
+                   : '　<span style="color:#666">不要ですが設定されています</span>')+'</div>'
+        + '<div class="pills">'+chkList.map(function(s){
+            return pillHtml(s.disp, ED.chk.indexOf(s.disp)>=0, 'togChk('+q(s.disp)+')'); }).join('')+'</div>'
+        + '<div style="font-size:11px;color:#666;margin-top:6px">研修中の方はチェック担当にできません</div>'
+        + (ED.chk.length
+          ? '<div class="lb" style="margin:12px 0 6px">チェック対応日</div>'
+            + '<div class="pills">'
+            + chkDates.map(function(d){
+                const w = new Date(d+'T00:00:00').getDay();
+                const lbl = fmtMD(d)+'('+WD[w]+')'+(d===ED.date?' 清掃と同じ日':'');
+                return pillHtml(lbl, (ED.chkDate||ED.date)===d, 'setChkDate('+q(d)+')'); }).join('')
+            + '</div>'
+            + (j.nextIn ? '<div style="font-size:11px;color:#666;margin-top:6px">次回IN '
+                + esc(fmtMD(j.nextIn))+' '+esc(j.inT||'')+' まで</div>' : '')
+            + '<div class="lb" style="margin:12px 0 6px">チェック時刻</div>'
+            + '<div class="stp"><button onclick="bumpChkTime(-1)">−</button>'
+            +   '<span class="v">'+esc(ED.chkTime||'--:--')
+            +     '<small>'+(ED.end?'清掃終了 '+esc(ED.end)+' の直後を目安に':'30分ずつ')+'</small></span>'
+            +   '<button onclick="bumpChkTime(1)">＋</button></div>'
+          : '')
+        + '</div>'
+      : '')
 
     // ★v7.56 新しく依頼する人がいるときだけ、特記事項の欄を出す
     + (addNames.length
@@ -1072,10 +1138,26 @@ function saveEdit(){
   if(!ED || ED.busy) return;
   ED.busy = true; ED.err = ''; drawEdit();
   const j = ED.j;
-  const payload = { items: [{
-    row: j.row, jobKey: j.jobKey, ver: (j.ver==null?'':String(j.ver)),
-    staff: ED.staff, chk: ED.chk, need: ED.need,
-    start: ED.start, end: ED.end, date: ED.date, memo: ED.memo, note: ED.note }] };
+  // ★v7.57【変えたものだけ送る】
+  //   触っていない項目まで送ると、サーバー側が「変更した」と誤判定する。
+  //   清掃日が空の行は ymd がチェックアウト日で埋まるため、毎回「日付を変えた」ことになっていた。
+  const it = { row: j.row, jobKey: j.jobKey, ver: (j.ver==null?'':String(j.ver)) };
+  const same = function(a,b){ return JSON.stringify(a)===JSON.stringify(b); };
+  if(!same(ED.staff, j.staff||[]))    it.staff = ED.staff;
+  if(!same(ED.chk,   j.chk||[]))      it.chk   = ED.chk;
+  if(ED.need    !== String(j.need||''))    it.need    = ED.need;
+  if(ED.start   !== (j.start||''))         it.start   = ED.start;
+  if(ED.end     !== (j.end||''))           it.end     = ED.end;
+  if(ED.date    !== j.ymd)                 it.date    = ED.date;
+  if(ED.chkDate !== (j.chkDate||''))       it.chkDate = ED.chkDate;
+  if(ED.chkTime !== (j.chkTime||''))       it.chkTime = ED.chkTime;
+  if(ED.memo) it.memo = ED.memo;
+  if(ED.note) it.note = ED.note;
+
+  if(Object.keys(it).length <= 3){
+    ED.busy = false; ED.err = '変更されていません。'; drawEdit(); return;
+  }
+  const payload = { items: [it] };
 
   jsonp(GAS_URL+'?mode=ab_apply&userId='+encodeURIComponent(me.userId)
         +'&payload='+encodeURIComponent(JSON.stringify(payload)))
@@ -1093,6 +1175,7 @@ function saveEdit(){
     }
     if(res && res.why) m += '\n\n【原因】'+res.why;
     ED.busy = false; ED.err = m; drawEdit();
+    try { $('sheet').scrollTop = 0; } catch(e){}      // ★v7.57 エラーを見落とさないよう先頭へ
   })
   .catch(function(err){
     ED.busy = false;
