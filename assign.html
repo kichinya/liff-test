@@ -367,7 +367,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.78';
+const APP_VER = 'v7.79';
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -1141,7 +1141,14 @@ function openEdit(jobKey){
 }
 function closeEdit(){ $('ovl').classList.remove('on'); ED = null; }
 
-function togStaff(n){ tog(ED.staff, n); drawEdit(); }
+function togStaff(n){
+  // ★v7.79 清掃担当に入れたら、チェック担当からは外す（同一人物にしない）
+  if(ED.staff.indexOf(n) < 0){
+    const i = ED.chk.indexOf(n);
+    if(i >= 0) ED.chk.splice(i, 1);
+  }
+  tog(ED.staff, n); drawEdit();
+}
 function togChk(n){
   tog(ED.chk, n);
   // ★v7.57 チェック担当を決めたら、日と時刻に既定を入れておく（空のまま保存されると意味がない）
@@ -1534,6 +1541,19 @@ function drawEdit(){
   // ★v7.56 描き直す前に、入力中の特記事項を拾っておく
   try { const t = document.getElementById('ed-note'); if(t) ED.note = t.value; } catch(e){}
   const j = ED.j, P = pickable(j);
+  // ★v7.79【チェック担当にできるのは「独り立ちが確認できる人」だけ】社長指摘 2026-08-27
+  //   「アサインされている研修中の山口さんがチェックのアサインに出現して選択できる」
+  //
+  //   原因は kindAt の空欄あつかい。研修開始日も独り立ち日も未登録だと '' が返り、
+  //   「研修ではない」＝チェックできる、と通していた。
+  //   ⚠️ 空欄は「ベテラン」ではなく「分からない」。分からない人に検品は任せられない。
+  //   → 研修・稼働前・未登録は、すべてチェック担当から外す（安全側に倒す）。
+  //     ただし黙って消すとマスタが直らないので、誰が未登録なのかを画面に出す。
+  //   ⚠️ 判定する日は【チェックをする日】。清掃日ではない
+  //     （8/30清掃・8/31チェックで、8/31に独り立ちする人がいる）。
+  const chkDay = ED.chkDate || ED.date;
+  const canCheck = function(s){ return kindAt(s, chkDay) === '独り立ち'; };
+  const noDates  = function(s){ return kindAt(s, chkDay) === ''; };
   const isTrainee = function(s){ return kindAt(s, j.ymd) === '研修'; };
   const q = function(x){ return "'"+String(x).replace(/'/g,"\\'")+"'"; };
 
@@ -1580,8 +1600,20 @@ function drawEdit(){
   })();
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
   // ★v7.71 チェック担当は4分類をまとめて（シフト提出者を先に）
-  const chkList = P.shiftFree.concat(P.shiftBusy, P.noShiftBusy, P.noShiftFree)
-                    .filter(function(s){ return !isTrainee(s); });
+  // ★v7.79 チェック担当の候補
+  //   ① 独り立ちが確認できる
+  //   ② その日の清掃担当に入っていない（清掃した本人が自分の仕事を検品しても意味がない）
+  const allCands = P.shiftFree.concat(P.shiftBusy, P.noShiftBusy, P.noShiftFree);
+  const chkList = allCands.filter(function(s){
+    if(!canCheck(s)) return false;
+    if(ED.staff.indexOf(s.disp) >= 0) return false;      // ★清掃担当と同じ人にはしない
+    return true;
+  });
+  // マスタが未登録で候補から外れた人（誰を直せばよいか出す）
+  const chkNoDate = allCands.filter(noDates);
+  // 清掃担当なので外した人（「なぜ出ないのか」が分からないと迷う）
+  const chkSame = allCands.filter(function(s){
+    return canCheck(s) && ED.staff.indexOf(s.disp) >= 0; });
 
   // ★v7.56 今回あらたに依頼することになる人（外注・オーナーは除く）
   const was = {}; (j.staff||[]).forEach(function(x){ was[x]=1; });
@@ -1593,10 +1625,15 @@ function drawEdit(){
 
   const nowN = ED.staff.length;
   const needN = parseInt(ED.need,10);
+  // ★v7.79【ここにも同じ穴があった】社長指摘 2026-08-27
+  //   「研修でも稼働前でもない＝独り立ち」と数えていたので、
+  //   日付が未登録（kindAt が ''）の人がいると「独り立ちが入っている」ことになり、
+  //   🔴 チェックが要る現場なのに「チェックは不要です」と出ていた。
+  //   → 独り立ちだと確認できる人だけを数える。
   const hasSolo = ED.staff.some(function(n){
     if(OUTSIDE.indexOf(n) >= 0) return false;
     const s = (DATA.staff||[]).find(function(x){ return x.disp===n || x.name===n; });
-    return s ? kindAt(s, j.ymd) !== '研修' && kindAt(s, j.ymd) !== '稼働前' : false;
+    return s ? kindAt(s, ED.date) === '独り立ち' : false;
   });
   const needChk = nowN > 0 && !hasSolo;
   const isOwner = ED.staff.indexOf('オーナー') >= 0;
@@ -1610,6 +1647,8 @@ function drawEdit(){
       const s2 = staffOf(n);
       const k = s2 ? kindAt(s2, ED.date) : undefined;
       if(k==='研修'||k==='稼働前'){ if(w.indexOf('研修中')<0) w.push('研修中'); }
+      // ★v7.79 日付未登録は「独り立ちだと確認できない」。理由に出す
+      else if(k===''){ if(w.indexOf('独り立ちが未確認の方')<0) w.push('独り立ちが未確認の方'); }
       else if(k===undefined){ if(w.indexOf('外注')<0) w.push('外注'); }
     });
     return w.join('・');
@@ -1742,9 +1781,25 @@ function drawEdit(){
       ? '<div class="sec"><div class="lb">チェック担当'
         + (needChk ? '　<span style="color:#a06a00">必要（'+esc(chkWhyNow)+'）</span>'
                    : '　<span style="color:#666">不要ですが設定されています</span>')+'</div>'
-        + '<div class="pills">'+chkList.map(function(s){
-            return pillHtml(s.disp, ED.chk.indexOf(s.disp)>=0, 'togChk('+q(s.disp)+')'); }).join('')+'</div>'
-        + '<div style="font-size:11px;color:#666;margin-top:6px">研修中の方はチェック担当にできません</div>'
+        + '<div class="pills">'+(chkList.length
+            ? chkList.map(function(s){
+                return pillHtml(s.disp, ED.chk.indexOf(s.disp)>=0, 'togChk('+q(s.disp)+')'); }).join('')
+            : '<span style="font-size:12px;color:#c62828;font-weight:700">'
+              + 'チェックをお願いできる方がいません。外注かオーナーでの対応をご検討ください。</span>')+'</div>'
+        + '<div style="font-size:11px;color:#666;margin-top:6px">'
+        +   'チェック担当は独り立ちの方のみです。研修中・稼働前の方、清掃担当ご本人は出ません。</div>'
+        // ★v7.79 なぜ出ないのかを書く。黙って消すとマスタが直らない
+        + (chkSame.length
+          ? '<div style="font-size:11px;color:#666;margin-top:4px">'
+            + '清掃担当のため候補から外しています: '+esc(chkSame.map(function(s){return s.disp;}).join('・'))
+            + '</div>' : '')
+        + (chkNoDate.length
+          ? '<div class="box ng" style="margin-top:7px;font-size:11.5px">'
+            + '🔴 スタッフマスタに研修開始日・独り立ち日が入っていないため、'
+            + 'チェック担当にできない方がいます<br>'
+            + '　　'+esc(chkNoDate.map(function(s){return s.disp;}).join('・'))
+            + '<br>　　独り立ちの方であれば、スタッフマスタの「独り立ち日」を入れてください。'
+            + '</div>' : '')
         + (ED.chk.length
           ? '<div class="lb" style="margin:12px 0 6px">チェック対応日</div>'
             + '<div class="pills">'
