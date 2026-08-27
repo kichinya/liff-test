@@ -190,6 +190,18 @@ function jobHtml(j){
   const sd = (j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし')
              ? '<span class="tag sd">同日IN '+esc(j.inT||'')+'</span>' : '';
   const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(j.chkDate.slice(5))+'）' : '';
+  // ★v7.35 チェックが要るのは【外注】と【研修中】が入っているジョブだけ。
+  //   それ以外は空欄でも「—」と出す（全部に「未定」と出ると本当に見るべき所が埋もれる）
+  const hasChk = !!(j.chk && j.chk.length);
+  let chkCell;
+  if(hasChk){
+    chkCell = '<span class="v">'+esc(j.chk.join('・'))+chkDay
+            + (j.chkTime ? ' <span class="t">'+esc(j.chkTime)+'</span>' : '')+'</span>';
+  }else if(j.needChk){
+    chkCell = '<span class="v none">未定 <span class="t">（'+esc(j.chkWhy||'')+'が入っています）</span></span>';
+  }else{
+    chkCell = '<span class="v"><span class="t">—</span></span>';
+  }
   return '<div class="'+cls+'">'
     +   '<div class="top">'
     +     '<span class="d">'+esc(j.ymd.slice(5))+'('+esc(j.wd)+')'
@@ -201,9 +213,7 @@ function jobHtml(j){
     +        (j.std ? ' <span class="t">/ 標準'+esc(j.std)+'</span>' : '')+sd+'</span>'
     +     '<span class="k">清掃</span><span class="v'+(noStaff?' none':'')+'">'
     +        (noStaff ? '未アサイン' : esc(j.staff.join('・')))+'</span>'
-    +     '<span class="k">チェック</span><span class="v'+((!j.chk||!j.chk.length)?' none':'')+'">'
-    +        ((!j.chk||!j.chk.length) ? '未定' : (esc(j.chk.join('・'))+chkDay+(j.chkTime?' <span class="t">'+esc(j.chkTime)+'</span>':'')))
-    +     '</span>'
+    +     '<span class="k">チェック</span>'+chkCell
     +     '<span class="k">状態</span><span class="v"><span class="t">'
     +        esc(j.assign||'—')+(j.guests?' / '+esc(j.guests)+'名':'')+'</span></span>'
     +   '</div>'
@@ -222,8 +232,7 @@ function drawJobs(){
     if(fp && j.pid !== fp) return false;
     if(onlyBad){
       const ns = !j.staff || !j.staff.length;
-      const nc = !j.chk   || !j.chk.length;
-      if(!ns && !nc) return false;
+      if(!ns && !j.needChk) return false;          // ★v7.35 チェック不要のジョブは「決まっていない」に含めない
     }
     return true;
   };
@@ -233,7 +242,7 @@ function drawJobs(){
     a.jobs.filter(pass).forEach(function(j){
       all.push(j);
       if(!j.staff || !j.staff.length) noStaff.push(j);
-      else if(!j.chk || !j.chk.length) noChk.push(j);
+      else if(j.needChk) noChk.push(j);            // ★v7.35 外注・研修中が入っているものだけ
     });
   });
 
@@ -253,11 +262,11 @@ function drawJobs(){
     const js = a.jobs.filter(pass);
     if(!js.length) return;
     const bad = js.filter(function(j){ return !j.staff || !j.staff.length; });
-    const wrn = js.filter(function(j){ return (j.staff&&j.staff.length)&&(!j.chk||!j.chk.length); });
-    const ok  = js.filter(function(j){ return (j.staff&&j.staff.length)&&(j.chk&&j.chk.length); });
+    const wrn = js.filter(function(j){ return (j.staff&&j.staff.length)&&j.needChk; });
+    const ok  = js.filter(function(j){ return (j.staff&&j.staff.length)&&!j.needChk; });
     h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.length+'件</span></div>';
     h += groupHtml('🔴 清掃が決まっていない','bad',bad);
-    h += groupHtml('🟡 チェックが決まっていない','warn',wrn);
+    h += groupHtml('🟡 チェックが決まっていない（外注・研修中）','warn',wrn);
     h += groupHtml('✅ 決まっている','ok',ok);
   });
   $('body').innerHTML = h;
@@ -282,14 +291,24 @@ function drawStaff(){
     + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修'&&(x.done||0)>=3;}).length+'</b><span>独り立ち判断</span></div>'
     + '</div>';
 
-  const order = st.slice().sort(function(a,b){
+  const sortFn = function(a,b){
     if(a.active !== b.active) return a.active ? -1 : 1;
     const ar = (a.kind==='研修') ? 0 : 1, br = (b.kind==='研修') ? 0 : 1;
     if(ar !== br) return ar - br;                       // 研修中を先頭に（判断が要る人）
     if(ar===0) return (b.done||0) - (a.done||0);        // 研修中は実績の多い順
     return a.disp < b.disp ? -1 : 1;
-  });
-  order.forEach(function(s){
+  };
+
+  // ★v7.35 エリアごとに分ける。両エリア担当の人は【どちらにも】出す。
+  //   （近藤さんのように湘南と横須賀を兼ねる人がいるため、片方に寄せると探せなくなる）
+  const labels = DATA.areaLabels || {};
+  const areaIds = Object.keys(labels);
+  const groups = areaIds.length ? areaIds.map(function(aid){
+    return { id:aid, label: labels[aid]||aid,
+             list: st.filter(function(s){ return (s.areas||[]).indexOf(aid) >= 0; }).sort(sortFn) };
+  }).filter(function(g){ return g.list.length; }) : [{ id:'', label:'', list: st.slice().sort(sortFn) }];
+
+  const cardHtml = function(s){
     const shiftN = Object.keys(s.shift||{}).length;
     const doneN = s.done || 0;
     // ★行頭の + で三項演算子を繋ぐと構文エラーになる。先に組み立てる
@@ -307,14 +326,35 @@ function drawStaff(){
              : s.kind==='独り立ち' ? '<span class="badge so">独り立ち</span>'
              : s.kind==='稼働前'   ? '<span class="badge ng">稼働前</span>'
              : '<span class="badge ng">区分未設定</span>';
+
+    // ★v7.35 研修中なのに「独り立ち日」が未来＝まだ研修、という状態を見えるようにする。
+    //   日付を入れたのに反映されていないように見えるのは、たいていこれ。
+    let soloRow = '';
+    if(s.kind==='研修' && s.soloFrom){
+      soloRow = '<span class="k">独り立ち予定</span><span>'+esc(s.soloFrom)
+              + ' <span class="t">（この日から時給が変わります）</span></span>';
+    }else if(s.kind==='研修'){
+      soloRow = '<span class="k">独り立ち予定</span>'
+              + '<span><span style="color:#a06a00;font-weight:700">未設定</span>'
+              + ' <span class="t">スタッフマスタ P列「独り立ち日」</span></span>';
+    }
+
+    // ★v7.35 稼働回数は勤怠ログから毎回その場で数えた最新値
+    const workRow = '<span class="k">稼働回数</span><span>'
+      + '<b>'+(s.mDone||0)+'回</b> <span class="t">今月</span>'
+      + ' <span style="color:#666;font-size:12px">/ 累計 '+(s.tDone||0)+'回</span>'
+      + '</span>';
+
     const props = s.propsAll ? 'エリア内すべて'
                 : (s.props.length
                     ? s.props.map(function(p){ return esc(propName[p]||p); }).join('・')
                     : '<span style="color:#c62828;font-weight:700">なし</span>');
-    h += '<div class="st'+(s.active?'':' off')+'">'
+    return '<div class="st'+(s.active?'':' off')+'">'
       +   '<div class="n">'+esc(s.disp)+kb+(s.active?'':'<span class="badge ng">稼働停止</span>')+'</div>'
       +   '<div class="rows">'
       +     trainRow
+      +     soloRow
+      +     workRow
       +     '<span class="k">対応可物件</span><span>'+props+'</span>'
       +     '<span class="k">移動手段</span><span>'
       +        (s.move ? esc(s.move) : '<span style="color:#c62828;font-weight:700">未設定</span>')
@@ -324,6 +364,11 @@ function drawStaff(){
       +     '</span>'
       +   '</div>'
       + '</div>';
+  };
+
+  groups.forEach(function(g){
+    if(g.label) h += '<div class="area">【'+esc(g.label)+'】<span class="cnt">'+g.list.length+'名</span></div>';
+    h += g.list.map(cardHtml).join('');
   });
   $('body').innerHTML = h;
 }
