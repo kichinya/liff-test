@@ -3,7 +3,6 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<!-- ★LINE内ブラウザが古い版を掴む事故を避けるため、HTML自体はキャッシュさせない -->
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -18,14 +17,31 @@
     -webkit-text-size-adjust:100%; text-size-adjust:100%; }
   .wrap{ max-width:640px; margin:0 auto; padding:14px 14px 40px; }
   h1{ font-size:18px; margin:4px 0 2px; display:flex; align-items:center; gap:8px; }
-  .lead{ color:var(--sub); font-size:12px; margin:0 0 12px; }
+  .lead{ color:var(--sub); font-size:12px; margin:0 0 10px; }
   .msg{ font-size:13px; margin:10px 0; white-space:pre-wrap; }
   .msg.err{ color:var(--red); background:var(--redbg); border:1px solid #ef9a9a;
             border-radius:10px; padding:12px; }
   .center{ text-align:center; color:var(--sub); font-size:13px; padding:24px 8px; }
 
+  /* タブ */
+  .tabs{ display:flex; gap:6px; margin:0 0 12px; }
+  .tabs button{ flex:1; padding:10px 6px; font-size:13px; font-weight:700; font-family:inherit;
+    border:1px solid var(--line); background:#fff; color:var(--sub); border-radius:10px; }
+  .tabs button.on{ background:var(--green); border-color:var(--green); color:#fff; }
+
+  /* 絞り込み */
+  .filt{ background:#fff; border:1px solid var(--line); border-radius:12px;
+         padding:10px 12px; margin-bottom:12px; }
+  .filt .r{ display:flex; align-items:center; gap:8px; margin:6px 0; }
+  .filt .r:first-child{ margin-top:0; }
+  .filt label{ font-size:12px; color:var(--sub); white-space:nowrap; min-width:52px; }
+  .filt select{ flex:1; padding:8px; font-size:14px; font-family:inherit;
+    border:1px solid var(--line); border-radius:8px; background:#fff; }
+  .filt .chk{ display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; }
+  .filt .chk input{ width:20px; height:20px; accent-color:#c62828; }
+
   /* サマリ */
-  .sum{ display:flex; gap:8px; margin:0 0 14px; }
+  .sum{ display:flex; gap:8px; margin:0 0 6px; }
   .sum > div{ flex:1; background:#fff; border:1px solid var(--line); border-radius:12px;
               padding:10px 8px; text-align:center; }
   .sum b{ display:block; font-size:22px; line-height:1.2; }
@@ -33,18 +49,12 @@
   .sum .bad b{ color:var(--red); }
   .sum .warn b{ color:var(--amber); }
 
-  /* エリア見出し */
   .area{ margin:20px 0 8px; font-size:14px; font-weight:700;
          display:flex; align-items:center; gap:8px; }
   .area .cnt{ font-weight:400; font-size:12px; color:var(--sub); }
-
-  /* グループ見出し */
   .grp{ margin:14px 0 6px; font-size:13px; font-weight:700; }
-  .grp.bad{ color:var(--red); }
-  .grp.warn{ color:var(--amber); }
-  .grp.ok{ color:var(--green); }
+  .grp.bad{ color:var(--red); } .grp.warn{ color:var(--amber); } .grp.ok{ color:var(--green); }
 
-  /* ジョブ行 */
   .job{ background:#fff; border:1px solid var(--line); border-radius:12px;
         padding:11px 12px; margin-bottom:8px; }
   .job.bad{ border-color:#ef9a9a; background:#fffafa; }
@@ -65,8 +75,21 @@
         margin-left:6px; border:1px solid var(--line); color:var(--sub); }
   .tag.sd{ color:#b71c1c; border-color:#ef9a9a; background:var(--redbg); }
 
+  /* スタッフ */
+  .st{ background:#fff; border:1px solid var(--line); border-radius:12px;
+       padding:11px 12px; margin-bottom:8px; }
+  .st.off{ opacity:.55; }
+  .st .n{ font-size:14px; font-weight:700; }
+  .st .rows{ margin-top:6px; display:grid; grid-template-columns:auto 1fr; gap:3px 8px;
+             font-size:12.5px; align-items:baseline; }
+  .st .k{ color:var(--sub); white-space:nowrap; }
+  .badge{ display:inline-block; font-size:11px; border-radius:6px; padding:1px 7px; margin-left:7px; }
+  .badge.tr{ background:var(--amberbg); color:var(--amber); border:1px solid #ffe082; }
+  .badge.so{ background:#e8f5e9; color:var(--green); border:1px solid #a5d6a7; }
+  .badge.ng{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; }
+
   .foot{ margin-top:22px; font-size:11.5px; color:var(--sub); line-height:1.8; }
-  .rel{ display:block; width:100%; margin-top:16px; padding:13px;
+  .rel{ display:block; width:100%; margin-top:16px; padding:13px; font-family:inherit;
         font-size:14px; font-weight:700; color:#fff; background:var(--green);
         border:0; border-radius:12px; }
 </style>
@@ -76,8 +99,33 @@
   <h1>📋 アサイン管理</h1>
   <div class="lead" id="lead">読み込み中…</div>
   <div id="msg" class="msg"></div>
+
+  <div class="tabs" id="tabs" style="display:none">
+    <button id="tb-jobs"  class="on" onclick="tab('jobs')">📋 予定</button>
+    <button id="tb-staff"        onclick="tab('staff')">👥 スタッフ</button>
+  </div>
+
+  <div class="filt" id="filt" style="display:none">
+    <div class="r">
+      <label>期間</label>
+      <select id="f-days" onchange="reload()">
+        <option value="7">1週間</option>
+        <option value="14" selected>2週間</option>
+        <option value="30">1か月</option>
+      </select>
+    </div>
+    <div class="r">
+      <label>物件</label>
+      <select id="f-prop" onchange="draw()"><option value="">すべて</option></select>
+    </div>
+    <div class="r">
+      <label class="chk"><input type="checkbox" id="f-bad" onchange="draw()">
+        <span>決まっていないものだけ</span></label>
+    </div>
+  </div>
+
   <div id="body"><div class="center">読み込み中…</div></div>
-  <button class="rel" id="rel" onclick="load()" style="display:none">🔄 最新の状態にする</button>
+  <button class="rel" id="rel" onclick="reload()" style="display:none">🔄 最新の状態にする</button>
   <div class="foot" id="foot"></div>
 </div>
 
@@ -85,31 +133,29 @@
 // ============================================================
 // アサイン管理ダッシュボード（段1・表示のみ）
 //
-// ⚠️ この画面は【1セルも書きません】。見るだけです。
-//    登録・変更は段2以降。
+// ⚠️ この画面は【1セルも書きません】。見るだけです。登録・変更は段2以降。
 //
 // ★LIFF_ID は LINE Developers でアプリを作ってから差し替えます。
 //   それまでは PC のブラウザで
 //     assign.html?debug=<管理者のLINE userId>
 //   と開けば、LIFF なしで中身を確認できます。
 // ============================================================
-const LIFF_ID = '';   // ★ここに 2010751229-xxxxxxxx を入れる（未設定なら debug モードのみ）
+const LIFF_ID = '';   // ★ここに 2010751229-xxxxxxxx を入れる
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
-const DAYS = 14;
 
 const $ = function(id){ return document.getElementById(id); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
 
 let me = null;
+let DATA = null;
+let TAB = 'jobs';
 
 function jsonp(url){
   return new Promise(function(resolve,reject){
     const cb = 'ab_'+Date.now()+'_'+Math.floor(Math.random()*100000);
     const s = document.createElement('script');
-    const t = setTimeout(function(){
-      cleanup(); reject(new Error('時間内に応答がありませんでした'));
-    }, 25000);
+    const t = setTimeout(function(){ cleanup(); reject(new Error('時間内に応答がありませんでした')); }, 25000);
     function cleanup(){
       clearTimeout(t);
       try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
@@ -123,94 +169,178 @@ function jsonp(url){
 }
 
 function showErr(text){
-  $('msg').className = 'msg err';
-  $('msg').textContent = text;
-  $('body').innerHTML = '';
-  $('rel').style.display = 'block';
+  $('msg').className='msg err'; $('msg').textContent=text;
+  $('body').innerHTML=''; $('rel').style.display='block';
+  $('tabs').style.display='none'; $('filt').style.display='none';
 }
 
-// ---- 描画 ----
+function tab(name){
+  TAB = name;
+  $('tb-jobs').className  = (name==='jobs')  ? 'on' : '';
+  $('tb-staff').className = (name==='staff') ? 'on' : '';
+  $('filt').style.display = (name==='jobs') ? 'block' : 'none';
+  draw();
+}
+
+// ---- 予定 ----
 function jobHtml(j){
   const noStaff = !j.staff || !j.staff.length;
   const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
   const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
-  const sd = (j.sameDay && j.sameDay !== '' && j.sameDay !== '×' && j.sameDay !== 'なし')
-             ? '<span class="tag sd">同日IN ' + esc(j.inT||'') + '</span>' : '';
-  const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（' + esc(j.chkDate.slice(5)) + '）' : '';
-  return ''
-    + '<div class="'+cls+'">'
+  const sd = (j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし')
+             ? '<span class="tag sd">同日IN '+esc(j.inT||'')+'</span>' : '';
+  const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(j.chkDate.slice(5))+'）' : '';
+  return '<div class="'+cls+'">'
     +   '<div class="top">'
     +     '<span class="d">'+esc(j.ymd.slice(5))+'('+esc(j.wd)+')'
-    +        (j.isToday ? '<span class="today">本日</span>' : '') + '</span>'
+    +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
     +     '<span class="p">'+esc(j.prop)+'</span>'
     +   '</div>'
     +   '<div class="rows">'
     +     '<span class="k">時間</span><span class="v">'+esc(time)
-    +        (j.std ? ' <span class="t">/ 標準'+esc(j.std)+'</span>' : '') + sd + '</span>'
+    +        (j.std ? ' <span class="t">/ 標準'+esc(j.std)+'</span>' : '')+sd+'</span>'
     +     '<span class="k">清掃</span><span class="v'+(noStaff?' none':'')+'">'
-    +        (noStaff ? '未アサイン' : esc(j.staff.join('・'))) + '</span>'
+    +        (noStaff ? '未アサイン' : esc(j.staff.join('・')))+'</span>'
     +     '<span class="k">チェック</span><span class="v'+((!j.chk||!j.chk.length)?' none':'')+'">'
-    +        ((!j.chk||!j.chk.length) ? '未定' : esc(j.chk.join('・')) + chkDay
-    +          + (j.chkTime ? ' <span class="t">'+esc(j.chkTime)+'</span>' : '')) + '</span>'
+    +        ((!j.chk||!j.chk.length) ? '未定' : (esc(j.chk.join('・'))+chkDay+(j.chkTime?' <span class="t">'+esc(j.chkTime)+'</span>':'')))
+    +     '</span>'
     +     '<span class="k">状態</span><span class="v"><span class="t">'
-    +        esc(j.assign || '—') + (j.guests ? ' / '+esc(j.guests)+'名' : '') + '</span></span>'
+    +        esc(j.assign||'—')+(j.guests?' / '+esc(j.guests)+'名':'')+'</span></span>'
     +   '</div>'
     +   (j.memo ? '<div class="memo">'+esc(j.memo)+'</div>' : '')
     + '</div>';
 }
-
 function groupHtml(title, cls, jobs){
   if(!jobs.length) return '';
-  return '<div class="grp '+cls+'">'+title+'　'+jobs.length+'件</div>'
-       + jobs.map(jobHtml).join('');
+  return '<div class="grp '+cls+'">'+title+'　'+jobs.length+'件</div>'+jobs.map(jobHtml).join('');
 }
 
-function render(d){
-  $('msg').className='msg'; $('msg').textContent='';
-  $('lead').textContent = d.name + ' さん　' + d.from.slice(5) + '〜' + d.to.slice(5) + ' の予定';
+function drawJobs(){
+  const fp = $('f-prop').value;
+  const onlyBad = $('f-bad').checked;
+  const pass = function(j){
+    if(fp && j.pid !== fp) return false;
+    if(onlyBad){
+      const ns = !j.staff || !j.staff.length;
+      const nc = !j.chk   || !j.chk.length;
+      if(!ns && !nc) return false;
+    }
+    return true;
+  };
 
   let all=[], noStaff=[], noChk=[];
-  d.areas.forEach(function(a){
-    a.jobs.forEach(function(j){
+  DATA.areas.forEach(function(a){
+    a.jobs.filter(pass).forEach(function(j){
       all.push(j);
       if(!j.staff || !j.staff.length) noStaff.push(j);
       else if(!j.chk || !j.chk.length) noChk.push(j);
     });
   });
 
-  let h = ''
-    + '<div class="sum">'
-    +   '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
-    +   '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
-    +   '<div><b>'+all.length+'</b><span>予定 合計</span></div>'
+  let h = '<div class="sum">'
+    + '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
+    + '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
+    + '<div><b>'+all.length+'</b><span>予定 合計</span></div>'
     + '</div>';
 
   if(!all.length){
-    h += '<div class="center">この期間の予定はありません。</div>';
+    h += '<div class="center">'+(($('f-prop').value||onlyBad)
+        ? 'この条件に合う予定はありません。' : 'この期間の予定はありません。')+'</div>';
+    $('body').innerHTML = h; return;
   }
 
-  d.areas.forEach(function(a){
-    const bad = a.jobs.filter(function(j){ return !j.staff || !j.staff.length; });
-    const wrn = a.jobs.filter(function(j){ return (j.staff&&j.staff.length) && (!j.chk||!j.chk.length); });
-    const ok  = a.jobs.filter(function(j){ return (j.staff&&j.staff.length) && (j.chk&&j.chk.length); });
-    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+a.jobs.length+'件</span></div>';
-    if(!a.jobs.length){ h += '<div class="center">予定はありません。</div>'; return; }
-    h += groupHtml('🔴 清掃が決まっていない', 'bad',  bad);
-    h += groupHtml('🟡 チェックが決まっていない', 'warn', wrn);
-    h += groupHtml('✅ 決まっている', 'ok', ok);
+  DATA.areas.forEach(function(a){
+    const js = a.jobs.filter(pass);
+    if(!js.length) return;
+    const bad = js.filter(function(j){ return !j.staff || !j.staff.length; });
+    const wrn = js.filter(function(j){ return (j.staff&&j.staff.length)&&(!j.chk||!j.chk.length); });
+    const ok  = js.filter(function(j){ return (j.staff&&j.staff.length)&&(j.chk&&j.chk.length); });
+    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.length+'件</span></div>';
+    h += groupHtml('🔴 清掃が決まっていない','bad',bad);
+    h += groupHtml('🟡 チェックが決まっていない','warn',wrn);
+    h += groupHtml('✅ 決まっている','ok',ok);
   });
-
   $('body').innerHTML = h;
-  $('rel').style.display = 'block';
+}
+
+// ---- スタッフ ----
+function drawStaff(){
+  const st = DATA.staff || [];
+  if(!st.length){ $('body').innerHTML='<div class="center">対象のスタッフがいません。</div>'; return; }
+  const propName = {};
+  (DATA.props||[]).forEach(function(p){ propName[p.pid]=p.name; });
+
+  const nDays = (function(){
+    const a=new Date(DATA.from+'T00:00:00'), b=new Date(DATA.to+'T00:00:00');
+    return Math.round((b-a)/86400000)+1;
+  })();
+
+  let h = '<div class="sum">'
+    + '<div><b>'+st.filter(function(x){return x.active;}).length+'</b><span>稼働中</span></div>'
+    + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修';}).length+'</b><span>研修中</span></div>'
+    + '<div class="bad"><b>'+st.filter(function(x){return x.active&&!x.move;}).length+'</b><span>移動手段 未設定</span></div>'
+    + '</div>';
+
+  st.forEach(function(s){
+    const shiftN = Object.keys(s.shift||{}).length;
+    const kb = s.kind==='研修'     ? '<span class="badge tr">研修中</span>'
+             : s.kind==='独り立ち' ? '<span class="badge so">独り立ち</span>'
+             : s.kind==='稼働前'   ? '<span class="badge ng">稼働前</span>'
+             : '<span class="badge ng">区分未設定</span>';
+    const props = s.propsAll ? 'エリア内すべて'
+                : (s.props.length
+                    ? s.props.map(function(p){ return esc(propName[p]||p); }).join('・')
+                    : '<span style="color:#c62828;font-weight:700">なし</span>');
+    h += '<div class="st'+(s.active?'':' off')+'">'
+      +   '<div class="n">'+esc(s.disp)+kb+(s.active?'':'<span class="badge ng">稼働停止</span>')+'</div>'
+      +   '<div class="rows">'
+      +     '<span class="k">対応可物件</span><span>'+props+'</span>'
+      +     '<span class="k">移動手段</span><span>'
+      +        (s.move ? esc(s.move) : '<span style="color:#c62828;font-weight:700">未設定</span>')
+      +     '</span>'
+      +     '<span class="k">提出シフト</span><span>'
+      +        (shiftN ? (shiftN+'日 / '+nDays+'日') : '<span style="color:#a06a00;font-weight:700">未提出</span>')
+      +     '</span>'
+      +   '</div>'
+      + '</div>';
+  });
+  $('body').innerHTML = h;
+}
+
+function draw(){
+  if(!DATA) return;
+  if(TAB==='staff') drawStaff(); else drawJobs();
+}
+
+function render(d){
+  DATA = d;
+  $('msg').className='msg'; $('msg').textContent='';
+  $('lead').textContent = d.name+' さん　'+d.from.slice(5)+'〜'+d.to.slice(5)+' の予定';
+  $('tabs').style.display='flex';
+  $('filt').style.display = (TAB==='jobs') ? 'block' : 'none';
+
+  const keep = $('f-prop').value;
+  let opt = '<option value="">すべて</option>';
+  (d.props||[]).forEach(function(p){
+    opt += '<option value="'+esc(p.pid)+'">'+esc(p.name)+'</option>';
+  });
+  $('f-prop').innerHTML = opt;
+  if(keep) $('f-prop').value = keep;
+
+  $('rel').style.display='block';
   $('foot').innerHTML =
       'この画面は<b>見るだけ</b>です。登録・変更はまだできません。<br>'
     + '直すときは、これまでどおりスプレッドシートか本部へご連絡ください。';
+  draw();
 }
 
+async function reload(){ await load(); }
+
 async function load(){
-  $('body').innerHTML = '<div class="center">読み込み中…</div>';
+  $('body').innerHTML='<div class="center">読み込み中…</div>';
   try{
-    const res = await jsonp(GAS_URL+'?mode=ab_board&days='+DAYS
+    const days = $('f-days').value || '14';
+    const res = await jsonp(GAS_URL+'?mode=ab_board&days='+encodeURIComponent(days)
                  +'&userId='+encodeURIComponent(me.userId));
     if(!res || !res.ok){ showErr((res && res.message) || '読み込めませんでした。'); return; }
     render(res);
@@ -220,11 +350,9 @@ async function load(){
 }
 
 (async function(){
-  // ★PCブラウザでの確認用。?debug=<userId> で LIFF を使わずに開ける
   const dbg = new URLSearchParams(location.search).get('debug');
   if(dbg){
     me = { userId: dbg, name: '(debug)' };
-    $('lead').textContent = '確認モード（LIFFなし）';
     load();
     return;
   }
