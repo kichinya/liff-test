@@ -71,6 +71,22 @@
   .job .v.none{ color:var(--red); font-weight:700; }
   .job .memo{ margin-top:6px; font-size:12px; color:var(--sub);
               background:var(--amberbg); border-radius:8px; padding:6px 8px; }
+  /* ★v7.36 未アサイン行の「この日シフトを出している人」 */
+  .cand{ margin-top:8px; font-size:12px; color:#1b5e20; background:#e8f5e9;
+         border:1px solid #a5d6a7; border-radius:8px; padding:7px 9px; font-weight:700; }
+  .cand.none{ color:#8d6e63; background:#fafafa; border-color:var(--line); font-weight:400; }
+  .cand .chips{ margin-top:6px; display:flex; flex-wrap:wrap; gap:6px; }
+  .cand .chip{ display:inline-block; background:#fff; border:1px solid #a5d6a7;
+               border-radius:999px; padding:3px 10px; font-weight:700; color:#222; }
+  .cand .chip i{ font-style:normal; margin-left:5px; font-size:10px; font-weight:700;
+                 color:#a06a00; background:var(--amberbg); border-radius:5px; padding:0 5px; }
+  .cand .chip u{ text-decoration:none; margin-left:5px; font-size:11px; font-weight:400; color:#666; }
+  .cand .chip em{ font-style:normal; margin-left:5px; font-size:11px; color:#00695c; }
+  /* ★v7.36 スタッフの提出シフト（日付そのもの） */
+  .days{ display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }
+  .days span{ font-size:11px; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#333; }
+  .days span.sat{ color:#1565c0; border-color:#90caf9; background:#e3f2fd; }
+  .days span.sun{ color:#c62828; border-color:#ef9a9a; background:var(--redbg); }
   .tag{ display:inline-block; font-size:11px; border-radius:6px; padding:1px 6px;
         margin-left:6px; border:1px solid var(--line); color:var(--sub); }
   .tag.sd{ color:#b71c1c; border-color:#ef9a9a; background:var(--redbg); }
@@ -183,6 +199,23 @@ function tab(name){
 }
 
 // ---- 予定 ----
+// ★v7.36 未アサインの行に「その日シフトを出している人」を出す。
+//   誰に連絡すればいいかが、この画面だけで分かるようにするため。
+function candHtml(j){
+  if(j.staff && j.staff.length) return '';
+  const c = j.cands || [];
+  if(!c.length){
+    return '<div class="cand none">この日シフトを出している対応可能スタッフはいません</div>';
+  }
+  const chips = c.map(function(x){
+    const tr = (x.kind==='研修') ? '<i>研修</i>' : '';
+    const mv = x.move ? '<u>'+esc(x.move)+'</u>' : '';
+    return '<span class="chip">'+esc(x.disp)+tr+mv
+         + (x.mark && x.mark!=='○' && x.mark!=='◯' ? '<em>'+esc(x.mark)+'</em>' : '')+'</span>';
+  }).join('');
+  return '<div class="cand">📣 この日シフト提出 '+c.length+'名<div class="chips">'+chips+'</div></div>';
+}
+
 function jobHtml(j){
   const noStaff = !j.staff || !j.staff.length;
   const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
@@ -218,6 +251,7 @@ function jobHtml(j){
     +        esc(j.assign||'—')+(j.guests?' / '+esc(j.guests)+'名':'')+'</span></span>'
     +   '</div>'
     +   (j.memo ? '<div class="memo">'+esc(j.memo)+'</div>' : '')
+    +   candHtml(j)
     + '</div>';
 }
 function groupHtml(title, cls, jobs){
@@ -272,6 +306,26 @@ function drawJobs(){
   $('body').innerHTML = h;
 }
 
+// ★v7.36 提出シフトは「何日ぶん出したか」ではなく【いつ出しているか】を出す。
+//   件数だけでは、その日に頼めるかどうか分からない。
+const WD = ['日','月','火','水','木','金','土'];
+function shiftHtml(shift, nDays){
+  const days = Object.keys(shift||{}).sort();
+  if(!days.length) return '<span style="color:#a06a00;font-weight:700">未提出</span>';
+  const ng = /[×✕✖xX✗]|不可|なし|休|NG/;
+  const chips = days.map(function(d){
+    const mk  = String(shift[d]||'');
+    const w   = new Date(d+'T00:00:00').getDay();
+    const cls = (w===0) ? ' class="sun"' : (w===6 ? ' class="sat"' : '');
+    const bad = ng.test(mk);
+    const lbl = d.slice(5).replace('-','/')+'('+WD[w]+')'
+              + (mk && mk!=='○' && mk!=='◯' ? ' '+mk : '');
+    return '<span'+(bad?' style="color:#aaa;text-decoration:line-through"':cls)+'>'+esc(lbl)+'</span>';
+  }).join('');
+  return '<span style="color:#666;font-size:12px">'+days.length+'日 / '+nDays+'日</span>'
+       + '<div class="days">'+chips+'</div>';
+}
+
 // ---- スタッフ ----
 function drawStaff(){
   const st = DATA.staff || [];
@@ -284,10 +338,11 @@ function drawStaff(){
     return Math.round((b-a)/86400000)+1;
   })();
 
+  // ★v7.36 稼働していない人はサーバー側で外してあるので、ここは全員が稼働中
   let h = '<div class="sum">'
-    + '<div><b>'+st.filter(function(x){return x.active;}).length+'</b><span>稼働中</span></div>'
+    + '<div><b>'+st.length+'</b><span>稼働中</span></div>'
     + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修';}).length+'</b><span>研修中</span></div>'
-    + '<div class="bad"><b>'+st.filter(function(x){return x.active&&!x.move;}).length+'</b><span>移動手段 未設定</span></div>'
+    + '<div class="bad"><b>'+st.filter(function(x){return !x.move;}).length+'</b><span>移動手段 未設定</span></div>'
     + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修'&&(x.done||0)>=3;}).length+'</b><span>独り立ち判断</span></div>'
     + '</div>';
 
@@ -359,9 +414,7 @@ function drawStaff(){
       +     '<span class="k">移動手段</span><span>'
       +        (s.move ? esc(s.move) : '<span style="color:#c62828;font-weight:700">未設定</span>')
       +     '</span>'
-      +     '<span class="k">提出シフト</span><span>'
-      +        (shiftN ? (shiftN+'日 / '+nDays+'日') : '<span style="color:#a06a00;font-weight:700">未提出</span>')
-      +     '</span>'
+      +     '<span class="k">提出シフト</span><span>'+shiftHtml(s.shift, nDays)+'</span>'
       +   '</div>'
       + '</div>';
   };
