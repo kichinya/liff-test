@@ -243,6 +243,26 @@
   .srow .s{ display:block; margin-top:3px; font-size:11.5px; color:var(--sub);
             white-space:pre-wrap; line-height:1.5; }
   .srow.ng .s{ color:#b71c1c; font-weight:700; }
+  /* ★v7.77 回る順番のドラッグ並べ替え */
+  .rodb{ margin-left:8px; font-size:11px; font-weight:800; font-family:inherit; cursor:pointer;
+         border:1px solid var(--line); background:#fff; color:#2e6da4; border-radius:8px; padding:2px 9px; }
+  .rrow{ display:flex; align-items:stretch; gap:9px; background:#fff; border:1px solid var(--line);
+         border-radius:11px; padding:9px 10px; margin-bottom:7px; }
+  .rrow.drag{ opacity:.35; }
+  .rrow.moved{ border-color:#90caf9; background:#f5fbff; }
+  .rrow .gr{ width:34px; flex:0 0 34px; display:flex; align-items:center; justify-content:center;
+             font-size:19px; color:#9aa0a6; cursor:grab; touch-action:none; user-select:none;
+             border-right:1px dashed var(--line); }
+  .rrow .in{ flex:1; min-width:0; }
+  .rrow .in .p{ font-size:13.5px; font-weight:800; color:#222; }
+  .rrow .in .t{ font-size:12px; color:var(--sub); margin-top:2px; }
+  .rrow .in .t b{ color:#1565c0; }
+  .rrow .in .t s{ color:#b0b4b9; }
+  .rrow .in .w{ font-size:11px; color:var(--red); font-weight:700; margin-top:3px; }
+  .rhop{ font-size:11px; color:var(--sub); margin:-3px 0 7px 44px; }
+  .rhop.ng{ color:var(--red); font-weight:700; }
+  .rghost{ position:fixed; z-index:99; pointer-events:none; opacity:.92;
+           box-shadow:0 6px 18px rgba(0,0,0,.22); }
   .stp{ display:flex; align-items:center; gap:10px; }
   .stp button{ width:44px; height:40px; border:1px solid var(--line); border-radius:10px;
                background:#fff; font-size:19px; font-weight:800; color:#333; font-family:inherit; }
@@ -307,6 +327,10 @@
 </div>
 
 <!-- ★v7.45 担当を決めるシート（段2） -->
+<div class="ovl" id="rovl" onclick="if(event.target===this)closeReorder()">
+  <div class="sheet" id="rsheet"></div>
+</div>
+
 <div class="ovl" id="ovl" onclick="if(event.target===this)closeEdit()">
   <div class="sheet" id="sheet"></div>
 </div>
@@ -333,7 +357,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.76';
+const APP_VER = 'v7.77';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -600,6 +624,29 @@ function fillProps(){
 }
 function onArea(){ fillProps(); draw(); }
 
+// ★v7.77 その日の予定を人ごとに束ねる。drawJobs と並べ替えの両方から使う。
+//   ⚠️ 物件の絞り込み（f-prop）は掛ける。エリアは jobsOf が既に効かせている。
+function lanesOf(ymd){
+  const fp = $('f-prop').value;
+  const pass = function(j){ return !fp || j.pid===fp; };
+  const js = jobsOf(ymd);
+  const clean  = js.filter(function(j){ return j.kind!=='check'; });
+  const checks = js.filter(function(j){ return j.kind==='check'; });
+  const lanes = {};
+  const push = function(nm, stop){ (lanes[nm] = lanes[nm] || []).push(stop); };
+  clean.filter(pass).forEach(function(j){
+    (j.staff||[]).forEach(function(nm){ push(nm, {j:j, kind:'清掃', t:j.start||'', end:j.end||''}); });
+  });
+  checks.concat(clean.filter(function(j){ return pass(j) && j.chk && j.chk.length && (!j.chkDate || j.chkDate===ymd); }))
+    .forEach(function(j){
+      (j.chk||[]).forEach(function(nm){ push(nm, {j:j, kind:'チェック', t:j.chkTime||'', end:''}); });
+    });
+  Object.keys(lanes).forEach(function(nm){
+    lanes[nm].sort(function(x,y){ return (x.t||'99:99') < (y.t||'99:99') ? -1 : 1; });
+  });
+  return lanes;
+}
+
 function drawJobs(){
   let days = dayList();
   // ★v7.50「決まっていない日だけ」＝未アサイン・人数不足・チェック未定がある日に絞る
@@ -689,16 +736,8 @@ function drawJobs(){
     tray += '</div>';
   }
 
-  // ---- 人ごとに束ねる ----
-  const lanes = {};   // name → [stop]
-  const push = function(nm, stop){ (lanes[nm] = lanes[nm] || []).push(stop); };
-  clean.filter(pass).forEach(function(j){
-    (j.staff||[]).forEach(function(nm){ push(nm, {j:j, kind:'清掃', t:j.start||'', end:j.end||''}); });
-  });
-  checks.concat(clean.filter(function(j){ return pass(j) && j.chk && j.chk.length && (!j.chkDate || j.chkDate===DAY); }))
-    .forEach(function(j){
-      (j.chk||[]).forEach(function(nm){ push(nm, {j:j, kind:'チェック', t:j.chkTime||'', end:''}); });
-    });
+  // ---- 人ごとに束ねる ----（★v7.77 並べ替えからも使うので関数に出した）
+  const lanes = lanesOf(DAY);
 
   const OUT = ['外注','オーナー'];
   const names = Object.keys(lanes).sort(function(a,b){
@@ -753,9 +792,15 @@ function drawJobs(){
                                  +(st.j.nextIn===st.j.ymd?' ⚠️':''):'')))
             +     '</div></div></div>';
     });
+    // ★v7.77 清掃が2件以上ある人だけ、順番の並べ替えを出す
+    const nClean = stops.filter(function(x){ return x.kind==='清掃'; }).length;
+    const rodBtn = (!isOut && nClean >= 2)
+      ? '<button class="rodb" onclick="event.stopPropagation();startReorder('
+        + "'"+String(nm).replace(/'/g,"\\'")+"'" + ')">≡ 順番</button>' : '';
     body += '<div class="lane'+(isOut?' out':'')+'">'
          +  '<div class="hd"><span class="nm">'+esc(nm)+'</span>'+kb
          +    (s&&s.move?'<span class="mv">'+esc(s.move)+'</span>':'')
+         +    rodBtn
          +    '<span class="sum">'+stops.length+'件</span></div>'
          +  '<div class="body">'+inner+'</div></div>';
   });
@@ -1167,7 +1212,232 @@ function candBadge(s, j){
     const more = (st.n > 1) ? ' 他' + (st.n - 1) + '件' : '';
     return { sub: lab + more, ng: false, ask: false, warn: !!st.ng, st: st };
   }
-  return { sub: (st.ask ? '？未提出' : ''), ng: false, ask: !!st.ask, st: st };
+  // ★v7.77 「？未提出」は全員に付いて、研修・稼働前のバッジが埋もれる（社長指摘 2026-08-27）。
+  //   シフト未提出はグループの見出しで分かるので、ピルには出さない。
+  return { sub: '', ng: false, ask: !!st.ask, st: st };
+}
+
+
+// ============================================================
+// ★v7.77【回る順番をドラッグで入れ替える】社長指摘 2026-08-27
+//   「ドラッグで順番を変えられたりできるイメージじゃなかったですか？」
+//
+//   管理者は「誰を入れるか」より先に「どう回るか」を考える。
+//   1件ずつ開いて時刻を打ち直すのではなく、順番を入れ替えたら
+//   前の現場の終わり＋移動時間から、後ろの時刻が全部ついてくるようにする。
+//
+//   【動かすもの】清掃の開始・終了時刻だけ。
+//   【動かさないもの】担当・清掃日・チェック。順番の話に混ぜない。
+//   ⚠️ 所要時間（終了−開始）は各現場そのまま持ち回る。勝手に短くしない。
+//   ⚠️ 2名以上の現場は、相手の予定も動く。赤で警告してから保存させる。
+// ============================================================
+var ROD = null;   // { nm, move, list:[{j,dur,origStart,origEnd}], drag:{...} }
+
+function startReorder(nm){
+  var s = staffOf(nm);
+  var stops = (lanesOf(DAY)[nm]||[]).filter(function(x){ return x.kind==='清掃'; });
+  if(stops.length < 2){
+    $('msg').className='msg'; $('msg').textContent='この日は1件だけなので、並べ替えるものがありません。';
+    setTimeout(function(){ $('msg').textContent=''; }, 2600); return;
+  }
+  ROD = { nm: nm, move: s ? s.move : '', drag: null, tight: false,
+    list: stops.map(function(x){
+      var a = hm2min(x.j.start), b = hm2min(x.j.end);
+      return { j: x.j, dur: (a!=null&&b!=null&&b>a) ? (b-a) : (stdMin(x.j.std)||120),
+               origStart: x.j.start||'', origEnd: x.j.end||'' };
+    }) };
+  drawReorder();
+  $('rovl').classList.add('on');
+}
+function closeReorder(){ $('rovl').classList.remove('on'); ROD = null; }
+function rodTight(){ if(ROD){ ROD.tight = !ROD.tight; drawReorder(); } }
+
+/**
+ * 並べた順に時刻を組み直す。
+ * ★v7.77【勝手に前倒ししない】
+ *   単純に「前の終わり＋移動」で詰めると、順番を変えていないのに
+ *   14:00 の予定が 13:20 に繰り上がってしまう。
+ *   管理者がわざと空けた間（次のチェックアウト待ち・昼休憩など）を
+ *   画面が黙って潰すことになる。
+ *   → もとの開始時刻より早くはしない（max をとる）。
+ *      並べ替えていなければ、1件も変わらない。
+ *   → 先頭だけは、その日のいちばん早い開始に合わせる
+ *      （後ろにあった現場を先頭に持ってきたとき、17時のまま動かないと意味がない）。
+ *   ROD.tight = true のときだけ、もとの時刻を無視してぴったり詰める。
+ */
+function rodPlan(){
+  var out = [];
+  var base = null;
+  ROD.list.forEach(function(x){
+    var v = hm2min(x.origStart);
+    if(v != null && (base == null || v < base)) base = v;
+  });
+  if(base == null) base = 9*60;
+
+  var t = base;
+  ROD.list.forEach(function(x, i){
+    var mv = 0, unknown = false;
+    if(i > 0){
+      var prev = ROD.list[i-1];
+      var m = (prev.j.pid === x.j.pid) ? 0 : travelMin(prev.j.pid, x.j.pid, ROD.move);
+      if(m == null){ unknown = true; m = 0; }
+      mv = m;
+      t = t + mv;
+      if(t % 5) t += (5 - t % 5);            // 5分きざみに切り上げ
+    }
+    if(!ROD.tight && i > 0){
+      var orig = hm2min(x.origStart);        // もとより早くはしない
+      if(orig != null && orig > t) t = orig;
+    }
+    var over = (t + x.dur) > (23*60 + 59);   // 日をまたぐ＝組めていない
+    out.push({ x: x, start: min2hm(t), end: min2hm(t + x.dur),
+               mv: mv, unknown: unknown, over: over });
+    t = t + x.dur;
+  });
+  return out;
+}
+
+function drawReorder(){
+  var plan = rodPlan();
+  var rows = plan.map(function(p, i){
+    var x = p.x, j = x.j;
+    var moved = (p.start !== x.origStart) || (p.end !== x.origEnd);
+    var multi = (j.staff||[]).filter(function(n){ return OUTSIDE.indexOf(n)<0; }).length > 1;
+    var hop = '';
+    if(i > 0){
+      hop = '<div class="rhop'+(p.unknown?' ng':'')+'">'
+          + (p.mv===0 && !p.unknown ? '　同じ物件（移動なし）'
+             : (p.unknown ? '　'+moveIcon(ROD.move)+' 移動時間が分かりません（0分で計算しています）'
+                          : '　'+moveIcon(ROD.move)+' 移動 '+p.mv+'分'))+'</div>';
+    }
+    var late = j.nextIn===j.ymd && j.inT && hm2min(p.end)!=null && hm2min(j.inT)!=null
+               && hm2min(p.end) > hm2min(j.inT);
+    var over = p.over;
+    return hop
+      + '<div class="rrow'+(moved?' moved':'')+'" data-i="'+i+'">'
+      +   '<div class="gr" onpointerdown="rodGrab(event,'+i+')">≡</div>'
+      +   '<div class="in"><div class="p">'+esc(j.prop)+'</div>'
+      +     '<div class="t">'+(moved?'<s>'+esc(x.origStart||'--:--')+'〜'+esc(x.origEnd||'--:--')+'</s> → ':'')
+      +       '<b>'+esc(p.start)+'〜'+esc(p.end)+'</b>'
+      +       '　<span style="color:#999">'+Math.floor(x.dur/60)+'時間'+(x.dur%60?(x.dur%60)+'分':'')+'</span></div>'
+      +     (j.staff&&j.staff.length ? '<div class="t" style="color:#8a8f96">'+esc(j.staff.join('・'))+'</div>' : '')
+      +     (multi ? '<div class="w">⚠️ 2名以上の現場です。相手の予定も動きます</div>' : '')
+      +     (late  ? '<div class="w">🔴 次回IN '+esc(j.inT)+' に間に合いません</div>' : '')
+      +     (over  ? '<div class="w">🔴 その日のうちに終わりません。この順番では組めません</div>' : '')
+      +   '</div>'
+      + '</div>';
+  }).join('');
+
+  var nChanged = plan.filter(function(p){
+    return p.start !== p.x.origStart || p.end !== p.x.origEnd; }).length;
+
+  $('rsheet').innerHTML =
+      '<div class="hd"><b>'+esc(ROD.nm)+' さんの回る順番</b>'
+    +   '<small>'+esc(fmtMD(DAY))+'　'+ROD.list.length+'件'
+    +   (ROD.move?'　'+moveIcon(ROD.move)+' '+esc(ROD.move):'　🔴 移動手段が未登録')+'</small></div>'
+    + '<div class="sec"><div class="lb">≡ をつまんで上下に動かしてください</div>'
+    +   rows
+    +   '<div class="pills" style="margin-top:4px">'
+    +     '<button class="pill'+(ROD.tight?' on':'')+'" onclick="rodTight()">すき間を詰める</button>'
+    +   '</div>'
+    +   '<div style="font-size:11px;color:#8a8f96;margin-top:9px">'
+    +     (ROD.tight
+            ? 'いま「詰める」を選んでいます。空き時間をなくして、移動時間ぶんだけ空けて並べます。'
+            : 'もとの開始時刻より早くはしません（わざと空けた間を潰さないため）。'
+              + '空きをなくしたいときは「すき間を詰める」を押してください。')
+    +     '<br>所要時間は各現場のまま変えていません。</div>'
+    + '</div>'
+    + '<div class="bar"><button class="c" onclick="closeReorder()">やめる</button>'
+    +   '<button class="s" id="rod-save"'+(nChanged?'':' disabled')+' onclick="saveReorder()">'
+    +     (nChanged ? 'この順番で保存（'+nChanged+'件）' : '変更はありません')+'</button></div>';
+}
+
+// ---- ドラッグ（指でもマウスでも動くよう pointer で書く）----
+function rodGrab(ev, i){
+  ev.preventDefault();
+  var sheet = $('rsheet');
+  var row = sheet.querySelector('.rrow[data-i="'+i+'"]');
+  if(!row) return;
+  var r = row.getBoundingClientRect();
+  var ghost = row.cloneNode(true);
+  ghost.className = 'rrow rghost';
+  ghost.style.width = r.width+'px';
+  ghost.style.left = r.left+'px';
+  ghost.style.top = r.top+'px';
+  document.body.appendChild(ghost);
+  row.classList.add('drag');
+  ROD.drag = { i: i, dy: ev.clientY - r.top, ghost: ghost, row: row };
+  try { ev.target.setPointerCapture(ev.pointerId); } catch(e){}
+  ev.target.onpointermove = rodMove;
+  ev.target.onpointerup = rodDrop;
+  ev.target.onpointercancel = rodDrop;
+}
+function rodMove(ev){
+  if(!ROD || !ROD.drag) return;
+  ev.preventDefault();
+  var d = ROD.drag;
+  d.ghost.style.top = (ev.clientY - d.dy)+'px';
+  // どの位置に入るか：各行の中心とくらべる
+  var rows = [].slice.call($('rsheet').querySelectorAll('.rrow:not(.rghost)'));
+  var to = d.i;
+  for(var k=0;k<rows.length;k++){
+    var rr = rows[k].getBoundingClientRect();
+    if(ev.clientY < rr.top + rr.height/2){ to = k; break; }
+    to = k;
+  }
+  if(to !== d.i){
+    var it = ROD.list.splice(d.i, 1)[0];
+    ROD.list.splice(to, 0, it);
+    d.i = to;
+    drawReorder();
+    // 描き直したので、掴んでいる行に印を付け直す
+    var nr = $('rsheet').querySelector('.rrow[data-i="'+to+'"]');
+    if(nr){ nr.classList.add('drag'); d.row = nr; }
+  }
+}
+function rodDrop(ev){
+  if(!ROD || !ROD.drag) return;
+  var d = ROD.drag;
+  try { d.ghost.parentNode.removeChild(d.ghost); } catch(e){}
+  try { ev.target.onpointermove = null; ev.target.onpointerup = null; ev.target.onpointercancel = null; } catch(e){}
+  ROD.drag = null;
+  drawReorder();
+}
+
+function saveReorder(){
+  if(!ROD) return;
+  var plan = rodPlan();
+  var items = plan.filter(function(p){
+    return p.start !== p.x.origStart || p.end !== p.x.origEnd;
+  }).map(function(p){
+    return { row: p.x.j.row, jobKey: p.x.j.jobKey,
+             ver: (p.x.j.ver==null?'':String(p.x.j.ver)),
+             start: p.start, end: p.end };
+  });
+  if(!items.length) return;
+  if(plan.some(function(p){ return p.over; })){
+    alertBox('この順番では、その日のうちに終わりません。順番を見直してください。'); return;
+  }
+  try { var sb = $('rod-save'); if(sb){ sb.disabled = true; sb.textContent = '保存しています…'; } } catch(e){}
+
+  jsonp(GAS_URL+'?mode=ab_apply&userId='+encodeURIComponent(me.userId)
+        +'&payload='+encodeURIComponent(JSON.stringify({ items: items })))
+  .then(function(res){
+    if(res && res.ok){
+      closeReorder();
+      $('msg').className='msg';
+      $('msg').textContent = res.message || (items.length+'件の時刻を組み直しました。');
+      reload(); return;
+    }
+    var m = (res && res.message) || '保存できませんでした。';
+    if(res && res.ng && res.ng.length) m += '\n' + res.ng.map(function(x){ return '・'+x.prop+'：'+x.why; }).join('\n');
+    alertBox(m); drawReorder();
+  })
+  .catch(function(err){ alertBox('通信できませんでした。\n('+err.message+')'); drawReorder(); });
+}
+function alertBox(m){
+  $('msg').className='msg ng'; $('msg').textContent=m;
+  setTimeout(function(){ $('msg').textContent=''; $('msg').className='msg'; }, 6000);
 }
 
 function drawEdit(){
