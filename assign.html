@@ -80,8 +80,6 @@
                border-radius:999px; padding:3px 10px; font-weight:700; color:#222; }
   .cand .chip i{ font-style:normal; margin-left:5px; font-size:10px; font-weight:700;
                  color:#a06a00; background:var(--amberbg); border-radius:5px; padding:0 5px; }
-  .cand .chip u{ text-decoration:none; margin-left:5px; font-size:11px; font-weight:400; color:#666; }
-  .cand .chip em{ font-style:normal; margin-left:5px; font-size:11px; color:#00695c; }
   /* ★v7.36 スタッフの提出シフト（日付そのもの） */
   .days{ display:flex; flex-wrap:wrap; gap:4px; margin-top:2px; }
   .days span{ font-size:11px; border:1px solid var(--line); border-radius:6px; padding:1px 6px; color:#333; }
@@ -208,11 +206,10 @@ function candHtml(j){
     if(j.staff && j.staff.length) return '';
     return '<div class="cand none">この日シフトを出している対応可能スタッフはいません</div>';
   }
+  // ★v7.38 移動手段は出さない。区分は【その清掃日】時点のものがサーバーから来る
   const chips = c.map(function(x){
     const tr = (x.kind==='研修') ? '<i>研修</i>' : '';
-    const mv = x.move ? '<u>'+esc(x.move)+'</u>' : '';
-    return '<span class="chip">'+esc(x.disp)+tr+mv
-         + (x.mark && x.mark!=='○' && x.mark!=='◯' ? '<em>'+esc(x.mark)+'</em>' : '')+'</span>';
+    return '<span class="chip">'+esc(x.disp)+tr+'</span>';
   }).join('');
   return '<div class="cand">📣 この日シフト提出 '+c.length+'名<div class="chips">'+chips+'</div></div>';
 }
@@ -353,17 +350,16 @@ const WD = ['日','月','火','水','木','金','土'];
 function shiftHtml(shift, nDays){
   const days = Object.keys(shift||{}).sort();
   if(!days.length) return '<span style="color:#a06a00;font-weight:700">未提出</span>';
-  const ng = /[×✕✖xX✗]|不可|なし|休|NG/;
+  // ★v7.38 サーバー側で ○ / × に正規化済み。生値（true など）は流れてこない
+  const ok = days.filter(function(d){ return shift[d] !== '×'; });
   const chips = days.map(function(d){
-    const mk  = String(shift[d]||'');
     const w   = new Date(d+'T00:00:00').getDay();
     const cls = (w===0) ? ' class="sun"' : (w===6 ? ' class="sat"' : '');
-    const bad = ng.test(mk);
-    const lbl = d.slice(5).replace('-','/')+'('+WD[w]+')'
-              + (mk && mk!=='○' && mk!=='◯' ? ' '+mk : '');
+    const bad = (shift[d] === '×');
+    const lbl = d.slice(5).replace('-','/')+'('+WD[w]+')';
     return '<span'+(bad?' style="color:#aaa;text-decoration:line-through"':cls)+'>'+esc(lbl)+'</span>';
   }).join('');
-  return '<span style="color:#666;font-size:12px">'+days.length+'日 / '+nDays+'日</span>'
+  return '<span style="color:#666;font-size:12px">'+ok.length+'日 / '+nDays+'日</span>'
        + '<div class="days">'+chips+'</div>';
 }
 
