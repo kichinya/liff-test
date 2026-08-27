@@ -202,9 +202,10 @@ function tab(name){
 // ★v7.36 未アサインの行に「その日シフトを出している人」を出す。
 //   誰に連絡すればいいかが、この画面だけで分かるようにするため。
 function candHtml(j){
-  if(j.staff && j.staff.length) return '';
   const c = j.cands || [];
+  if(!c.length && j.staff && j.staff.length) return '';   // 足りている行には出さない
   if(!c.length){
+    if(j.staff && j.staff.length) return '';
     return '<div class="cand none">この日シフトを出している対応可能スタッフはいません</div>';
   }
   const chips = c.map(function(x){
@@ -220,8 +221,35 @@ function jobHtml(j){
   const noStaff = !j.staff || !j.staff.length;
   const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '');
   const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
-  const sd = (j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし')
-             ? '<span class="tag sd">同日IN '+esc(j.inT||'')+'</span>' : '';
+  // ★v7.37 同日INは一番の事故要因（次のゲストが来るまでに終わらせないといけない）
+  const isSameDay = !!(j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし');
+  const sd = isSameDay ? '<span class="tag sd">⚠️ 同日IN '+esc(j.inT||'')+'</span>' : '';
+
+  // ★v7.37 滞在期間 / 宿泊人数 / 次回IN / 次回人数 / 募集人数
+  const md = function(d){ return d ? d.slice(5).replace('-','/') : ''; };
+  const stayTxt = (j.inD && j.outD)
+    ? md(j.inD)+'〜'+md(j.outD)+(j.nights ? ' <b>'+j.nights+'泊</b>' : '')
+    : '<span class="t">—</span>';
+  const guestTxt = j.guests ? '<b>'+esc(j.guests)+'名</b>' : '<span class="t">未入力</span>';
+
+  let nextTxt;
+  if(j.nextIn){
+    nextTxt = (isSameDay ? '⚠️ ' : '') + md(j.nextIn)
+            + (j.inT ? ' '+esc(j.inT) : '')
+            + (j.nextGuests ? ' <b>'+esc(j.nextGuests)+'名</b>' : ' <span class="t">人数未入力</span>');
+  }else{
+    nextTxt = '<span class="t">次の予約なし</span>';
+  }
+
+  // 募集人数：足りていなければ赤。決まっていない件数がひと目で分かるように
+  const nowN  = (j.staff||[]).length;
+  const needN = parseInt(j.need, 10);
+  let needTxt = '<span class="t">—</span>';
+  if(needN > 0){
+    const short = (nowN < needN);
+    needTxt = '<b'+(short?' style="color:#c62828"':'')+'>'+nowN+' / '+needN+'名</b>'
+            + (short ? ' <span style="color:#c62828;font-weight:700">あと'+(needN-nowN)+'名</span>' : '');
+  }
   const chkDay = (j.chkDate && j.chkDate !== j.ymd) ? '（'+esc(j.chkDate.slice(5))+'）' : '';
   // ★v7.35 チェックが要るのは【外注】と【研修中】が入っているジョブだけ。
   //   それ以外は空欄でも「—」と出す（全部に「未定」と出ると本当に見るべき所が埋もれる）
@@ -244,15 +272,23 @@ function jobHtml(j){
     +   '<div class="rows">'
     +     '<span class="k">時間</span><span class="v">'+esc(time)
     +        (j.std ? ' <span class="t">/ 標準'+esc(j.std)+'</span>' : '')+sd+'</span>'
+    +     '<span class="k">滞在</span><span class="v">'+stayTxt+' <span class="t">/</span> '+guestTxt+'</span>'
+    +     '<span class="k">次回IN</span><span class="v'+(isSameDay?' none':'')+'">'+nextTxt+'</span>'
     +     '<span class="k">清掃</span><span class="v'+(noStaff?' none':'')+'">'
     +        (noStaff ? '未アサイン' : esc(j.staff.join('・')))+'</span>'
+    +     '<span class="k">募集人数</span><span class="v">'+needTxt+'</span>'
     +     '<span class="k">チェック</span>'+chkCell
     +     '<span class="k">状態</span><span class="v"><span class="t">'
-    +        esc(j.assign||'—')+(j.guests?' / '+esc(j.guests)+'名':'')+'</span></span>'
+    +        esc(j.assign||'—')+'</span></span>'
     +   '</div>'
     +   (j.memo ? '<div class="memo">'+esc(j.memo)+'</div>' : '')
     +   candHtml(j)
     + '</div>';
+}
+// ★v7.37 募集人数に足りていない＝まだ手配が終わっていない
+function isShort(j){
+  const n = parseInt(j.need, 10);
+  return (n > 0 && (j.staff||[]).length > 0 && (j.staff||[]).length < n);
 }
 function groupHtml(title, cls, jobs){
   if(!jobs.length) return '';
@@ -266,22 +302,24 @@ function drawJobs(){
     if(fp && j.pid !== fp) return false;
     if(onlyBad){
       const ns = !j.staff || !j.staff.length;
-      if(!ns && !j.needChk) return false;          // ★v7.35 チェック不要のジョブは「決まっていない」に含めない
+      if(!ns && !isShort(j) && !j.needChk) return false;   // ★v7.37 人数不足も「決まっていない」に含める
     }
     return true;
   };
 
-  let all=[], noStaff=[], noChk=[];
+  let all=[], noStaff=[], shortJ=[], noChk=[];
   DATA.areas.forEach(function(a){
     a.jobs.filter(pass).forEach(function(j){
       all.push(j);
       if(!j.staff || !j.staff.length) noStaff.push(j);
+      else if(isShort(j)) shortJ.push(j);          // ★v7.37 1/2名など
       else if(j.needChk) noChk.push(j);            // ★v7.35 外注・研修中が入っているものだけ
     });
   });
 
   let h = '<div class="sum">'
     + '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
+    + '<div class="bad"><b>'+shortJ.length+'</b><span>人数 不足</span></div>'
     + '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
     + '<div><b>'+all.length+'</b><span>予定 合計</span></div>'
     + '</div>';
@@ -295,11 +333,14 @@ function drawJobs(){
   DATA.areas.forEach(function(a){
     const js = a.jobs.filter(pass);
     if(!js.length) return;
-    const bad = js.filter(function(j){ return !j.staff || !j.staff.length; });
-    const wrn = js.filter(function(j){ return (j.staff&&j.staff.length)&&j.needChk; });
-    const ok  = js.filter(function(j){ return (j.staff&&j.staff.length)&&!j.needChk; });
+    const has = function(j){ return j.staff && j.staff.length; };
+    const bad = js.filter(function(j){ return !has(j); });
+    const shr = js.filter(function(j){ return has(j) && isShort(j); });
+    const wrn = js.filter(function(j){ return has(j) && !isShort(j) && j.needChk; });
+    const ok  = js.filter(function(j){ return has(j) && !isShort(j) && !j.needChk; });
     h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.length+'件</span></div>';
     h += groupHtml('🔴 清掃が決まっていない','bad',bad);
+    h += groupHtml('🟠 人数が足りない','bad',shr);
     h += groupHtml('🟡 チェックが決まっていない（外注・研修中）','warn',wrn);
     h += groupHtml('✅ 決まっている','ok',ok);
   });
