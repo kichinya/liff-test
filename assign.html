@@ -105,6 +105,68 @@
   .badge.ng{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; }
   .badge.ck{ background:#e3f2fd; color:#1565c0; border:1px solid #90caf9; }  /* ★v7.42 別日のチェック */
 
+  /* ★v7.50 案E スタッフ別ルート */
+  .strip{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 10px; }
+  .strip .dd{ flex:0 0 auto; width:54px; border:1px solid var(--line); border-radius:11px;
+              padding:6px 0 5px; text-align:center; background:#fff; cursor:pointer; }
+  .strip .dd .w{ font-size:10.5px; color:var(--sub); font-weight:700; }
+  .strip .dd .n{ font-size:17px; font-weight:800; line-height:1.25; }
+  .strip .dd .m{ font-size:10px; color:var(--sub); }
+  .strip .dd.sat .n{ color:#1565c0; } .strip .dd.sun .n{ color:var(--red); }
+  .strip .dd.on{ background:var(--green); border-color:var(--green); }
+  .strip .dd.on .n,.strip .dd.on .w,.strip .dd.on .m{ color:#fff; }
+  .strip .pips{ display:flex; justify-content:center; gap:3px; margin-top:3px; height:7px; }
+  .pip{ display:inline-block; width:7px; height:7px; border-radius:50%; }
+  .pip.r{ background:var(--red); } .pip.y{ background:#f9a825; }
+  .dayhd{ font-size:17px; font-weight:800; margin:6px 0 8px; }
+  .dayhd small{ font-size:12px; color:var(--sub); font-weight:600; margin-left:8px; }
+  .dayhd .today{ color:#fff; background:var(--green); border-radius:6px;
+                 font-size:10px; padding:2px 7px; margin-left:7px; vertical-align:middle; }
+  .tray{ background:#fff; border:2px dashed #ef9a9a; border-radius:12px; padding:9px 10px; margin-bottom:10px; }
+  .tray .th{ font-size:12px; font-weight:800; color:var(--red); margin:0 0 7px; }
+  .tray .th.y{ color:var(--amber); margin-top:11px; padding-top:10px; border-top:1px dashed var(--line); }
+  .tcard{ display:flex; align-items:center; gap:9px; background:var(--redbg); border:1px solid #ffcdd2;
+          border-radius:9px; padding:8px 10px; margin-bottom:6px; cursor:pointer; }
+  .tcard.y{ background:var(--amberbg); border-color:#ffe082; }
+  .tcard:last-child{ margin-bottom:0; }
+  .tcard .p{ font-weight:800; font-size:13.5px; flex:1; min-width:0; }
+  .tcard .p small{ display:block; font-weight:400; font-size:11px; color:#8d6e63; }
+  .tcard .n{ font-size:11px; font-weight:800; color:var(--red); white-space:nowrap; text-align:right; }
+  .tcard.y .n{ color:var(--amber); }
+  .tcard .n em{ display:block; font-style:normal; font-size:10px; font-weight:400; color:var(--sub); }
+  .lane{ background:#fff; border:1px solid var(--line); border-radius:13px; overflow:hidden; margin-bottom:9px; }
+  .lane>.hd{ display:flex; align-items:center; gap:7px; padding:9px 11px; background:#f7f8f7;
+             border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .lane>.hd .nm{ font-weight:800; font-size:14.5px; }
+  .lane>.hd .sum{ margin-left:auto; font-size:11.5px; color:var(--sub); font-weight:700; }
+  .lane>.hd .mv{ font-size:11px; color:var(--sub); border:1px solid var(--line); border-radius:6px; padding:0 6px; }
+  .badge.ot{ background:#eef0f2; color:#4b5563; border:1px solid #d3d7dc; }
+  .lane .body{ padding:9px 10px; }
+  .stop{ display:flex; gap:9px; align-items:flex-start; cursor:pointer; }
+  .stop+.stop{ margin-top:6px; }
+  .stop .tm{ width:46px; flex:0 0 auto; text-align:right; font-size:12px; font-weight:800;
+             color:#374151; padding-top:9px; }
+  .stop .tm small{ display:block; font-weight:400; font-size:10.5px; color:var(--sub); }
+  .stop .bx{ flex:1; min-width:0; border:1px solid var(--line); border-radius:10px;
+             padding:8px 10px; background:#fff; }
+  .stop.g .bx{ border-left:4px solid var(--green); }
+  .stop.y .bx{ border-left:4px solid #f9a825; }
+  .stop.b .bx{ border-left:4px solid #1565c0; background:#f8fbff; }
+  .stop .bx .p{ font-weight:800; font-size:13.5px; }
+  .stop .bx .d{ font-size:11.5px; color:var(--sub); margin-top:2px; }
+  .hop{ display:flex; gap:9px; align-items:center; margin:5px 0; }
+  .hop .tm{ width:46px; flex:0 0 auto; }
+  .hop .ln{ flex:1; display:flex; align-items:center; gap:7px; font-size:11px;
+            color:var(--sub); font-weight:700; }
+  .hop .ln:before,.hop .ln:after{ content:''; height:1px; background:var(--line); flex:1; }
+  .sec2{ margin:16px 0 7px; font-size:12px; font-weight:800; color:var(--sub); }
+  .freerow{ display:flex; flex-wrap:wrap; gap:6px; }
+  .fchip{ background:#fff; border:1px solid var(--line); border-radius:999px;
+          padding:5px 12px; font-size:12.5px; font-weight:700; }
+  .fchip i{ font-style:normal; margin-left:5px; font-size:10px; color:var(--amber);
+            background:var(--amberbg); border-radius:5px; padding:0 5px; }
+  .fchip u{ text-decoration:none; margin-left:5px; font-size:11px; font-weight:400; color:var(--sub); }
+
   /* ★v7.45 担当を決めるシート（段2） */
   .ovl{ position:fixed; inset:0; background:rgba(0,0,0,.42); z-index:50;
         display:none; align-items:flex-end; }
@@ -177,7 +239,7 @@
     </div>
     <div class="r">
       <label class="chk"><input type="checkbox" id="f-bad" onchange="draw()">
-        <span>決まっていないものだけ</span></label>
+        <span>決まっていない日だけ</span></label>
     </div>
   </div>
 
@@ -211,7 +273,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.45';
+const APP_VER = 'v7.50';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -371,70 +433,204 @@ function groupHtml(title, cls, jobs){
   return '<div class="grp '+cls+'">'+title+'　'+jobs.length+'件</div>'+jobs.map(jobHtml).join('');
 }
 
-function drawJobs(){
-  const fp = $('f-prop').value;
-  const onlyBad = $('f-bad').checked;
-  const pass = function(j){
-    if(fp && j.pid !== fp) return false;
-    if(onlyBad){
-      if(j.kind==='check'){ return !j.staff || !j.staff.length; }   // ★v7.42 担当未定のチェックだけ残す
-      const ns = !j.staff || !j.staff.length;
-      if(!ns && !isShort(j) && !j.needChk) return false;   // ★v7.37 人数不足も「決まっていない」に含める
-    }
-    return true;
-  };
 
-  let all=[], noStaff=[], shortJ=[], noChk=[];
-  DATA.areas.forEach(function(a){
-    a.jobs.filter(pass).forEach(function(j){
-      if(j.kind==='check') return;                 // ★v7.42 別日チェックは集計に入れない（親で数えている）
-      all.push(j);
-      if(!j.staff || !j.staff.length) noStaff.push(j);
-      else if(isShort(j)) shortJ.push(j);          // ★v7.37 1/2名など
-      else if(j.needChk) noChk.push(j);            // ★v7.35 外注・研修中が入っているものだけ
-    });
+// ============================================================
+// ★v7.50【案E】1日ぶんを「スタッフ別ルート」で見る
+//   軸を物件ではなく人にする。1人＝1レーン。上から順に回る。
+//   現場と現場のあいだに移動時間を出すので、無理な組み方に気づける。
+//   未アサインは上の赤い箱に置き、タップして担当を決める。
+// ============================================================
+function dayList(){
+  const seen = {}, out = [];
+  (DATA.areas||[]).forEach(function(a){
+    a.jobs.forEach(function(j){ if(!seen[j.ymd]){ seen[j.ymd]=1; out.push(j.ymd); } });
   });
-
-  // ★v7.45 オーナー対応は一覧から外している。消えたことが分かるよう件数だけ出す
-  let h = '';
-  if(DATA.ownerCount){
-    h += '<div class="owner">オーナー対応 '+DATA.ownerCount+'件は一覧に出していません'
-       + '（手配の必要がないため）。'
-       + '<a href="javascript:void(0)" onclick="showOwner()" style="color:#2e7d32;font-weight:700">表示</a></div>';
-  }
-  h += '<div class="sum">'
-    + '<div class="bad"><b>'+noStaff.length+'</b><span>清掃 未アサイン</span></div>'
-    + '<div class="bad"><b>'+shortJ.length+'</b><span>人数 不足</span></div>'
-    + '<div class="warn"><b>'+noChk.length+'</b><span>チェック 未定</span></div>'
-    + '<div><b>'+all.length+'</b><span>予定 合計</span></div>'
-    + '</div>';
-
-  if(!all.length){
-    h += '<div class="center">'+(($('f-prop').value||onlyBad)
-        ? 'この条件に合う予定はありません。' : 'この期間の予定はありません。')+'</div>';
-    $('body').innerHTML = h; return;
-  }
-
-  DATA.areas.forEach(function(a){
-    const js = a.jobs.filter(pass);
-    if(!js.length) return;
-    const cl  = function(j){ return j.kind !== 'check'; };
-    const has = function(j){ return j.staff && j.staff.length; };
-    const bad = js.filter(function(j){ return cl(j) && !has(j); });
-    const shr = js.filter(function(j){ return cl(j) && has(j) && isShort(j); });
-    const wrn = js.filter(function(j){ return cl(j) && has(j) && !isShort(j) && j.needChk; });
-    const ok  = js.filter(function(j){ return cl(j) && has(j) && !isShort(j) && !j.needChk; });
-    // ★v7.42 チェック対応日が清掃日と別の日のもの。その日の側にも出す
-    const chk = js.filter(function(j){ return j.kind === 'check'; });
-    h += '<div class="area">【'+esc(a.label)+'】<span class="cnt">'+js.filter(cl).length+'件</span></div>';
-    h += groupHtml('🔴 清掃が決まっていない','bad',bad);
-    h += groupHtml('🟠 人数が足りない','bad',shr);
-    h += groupHtml('🟡 チェックが決まっていない（外注・研修中）','warn',wrn);
-    h += groupHtml('🔵 この日のチェック（清掃は別の日）','ok',chk);
-    h += groupHtml('✅ 決まっている','ok',ok);
-  });
-  $('body').innerHTML = h;
+  return out.sort();
 }
+function jobsOf(ymd){
+  const out = [];
+  (DATA.areas||[]).forEach(function(a){
+    a.jobs.forEach(function(j){ if(j.ymd===ymd) out.push(Object.assign({area:a.id, areaLabel:a.label}, j)); });
+  });
+  return out;
+}
+function staffOf(name){
+  return (DATA.staff||[]).find(function(s){ return s.disp===name || s.name===name; });
+}
+function travelMin(pidA, pidB, move){
+  if(!pidA || !pidB || pidA===pidB) return null;
+  const md = ttMode(move);
+  const v = (DATA.travel||{})[pidA+'>'+pidB+'|'+md];
+  return (v===undefined) ? null : v;
+}
+function ttMode(move){
+  const s = String(move||'');
+  const t = s.replace(/自転車/g,'§').replace(/電車/g,'¶');
+  if(/車|自動車|マイカー|バイク|原付|単車/.test(t)) return 'driving';
+  if(/¶|バス|公共|地下鉄|モノレール/.test(t))       return 'transit';
+  if(/§|チャリ|ロード/.test(t))                     return 'bicycling';
+  if(/徒歩|歩き/.test(s))                           return 'walking';
+  return 'driving';
+}
+function moveIcon(move){
+  const md = ttMode(move);
+  return md==='driving' ? '🚗' : md==='transit' ? '🚃' : md==='bicycling' ? '🚲' : '🚶';
+}
+function shortOf(j){
+  const n = parseInt(j.need,10);
+  return (n>0) ? Math.max(0, n - (j.staff||[]).length) : 0;
+}
+
+function drawJobs(){
+  let days = dayList();
+  // ★v7.50「決まっていない日だけ」＝未アサイン・人数不足・チェック未定がある日に絞る
+  if($('f-bad').checked){
+    const ng = days.filter(function(d){
+      return jobsOf(d).some(function(j){
+        return j.kind!=='check' && (!j.staff.length || shortOf(j)>0 || j.needChk); });
+    });
+    if(ng.length) days = ng;
+  }
+  if(!days.length){ $('body').innerHTML='<div class="center">この期間の予定はありません。</div>'; return; }
+  if(!DAY || days.indexOf(DAY)<0) DAY = (days.indexOf(DATA.today)>=0) ? DATA.today : days[0];
+
+  // ---- 日付ストリップ ----
+  let strip = '<div class="strip">';
+  days.forEach(function(d){
+    const js = jobsOf(d).filter(function(j){ return j.kind!=='check'; });
+    const bad = js.filter(function(j){ return !j.staff.length || shortOf(j)>0; }).length;
+    const wrn = js.filter(function(j){ return j.needChk; }).length;
+    const w = new Date(d+'T00:00:00').getDay();
+    strip += '<div class="dd'+(d===DAY?' on':'')+(w===0?' sun':'')+(w===6?' sat':'')+'"'
+          +  ' onclick="pickDay(\''+d+'\')">'
+          +  '<div class="w">'+WD[w]+'</div><div class="n">'+(+d.split('-')[2])+'</div>'
+          +  '<div class="m">'+(+d.split('-')[1])+'月</div>'
+          +  '<div class="pips">'+(bad?'<i class="pip r"></i>':'')+(wrn?'<i class="pip y"></i>':'')+'</div>'
+          +  '</div>';
+  });
+  strip += '</div>';
+
+  const js = jobsOf(DAY);
+  const clean = js.filter(function(j){ return j.kind!=='check'; });
+  const checks = js.filter(function(j){ return j.kind==='check'; });
+  const fp = $('f-prop').value;
+  const pass = function(j){ return !fp || j.pid===fp; };
+
+  // ---- 未アサインの箱 ----
+  const needStaff = clean.filter(function(j){ return pass(j) && (!j.staff.length || shortOf(j)>0); });
+  const needChk   = clean.filter(function(j){ return pass(j) && j.needChk; });
+  let tray = '';
+  if(needStaff.length || needChk.length){
+    tray = '<div class="tray">';
+    if(needStaff.length){
+      tray += '<div class="th">🔴 未アサイン '+needStaff.length+'件</div>'
+           +  needStaff.map(function(j){
+                const rest = shortOf(j) || (parseInt(j.need,10)>0 ? 0 : 1);
+                return '<div class="tcard" onclick="openEdit(\''+esc(j.jobKey)+'\')">'
+                     + '<span class="p">'+esc(j.prop)
+                     +   '<small>'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
+                     +   (j.std?' ／ 標準'+esc(j.std):'')
+                     +   (j.nextIn===j.ymd?' ／ 次回IN '+esc(j.inT||'')+' ⚠️':'')+'</small></span>'
+                     + '<span class="n">あと'+rest+'名<em>'+(j.staff.length)+'/'+(j.need||'—')+'</em></span></div>';
+              }).join('');
+    }
+    if(needChk.length){
+      tray += '<div class="th y">🟡 チェック未定 '+needChk.length+'件</div>'
+           +  needChk.map(function(j){
+                return '<div class="tcard y" onclick="openEdit(\''+esc(j.jobKey)+'\')">'
+                     + '<span class="p">'+esc(j.prop)
+                     +   '<small>清掃 '+esc(j.staff.join('・'))+'（'+esc(j.chkWhy||'')+'）</small></span>'
+                     + '<span class="n">チェック<em>要 1名</em></span></div>';
+              }).join('');
+    }
+    tray += '</div>';
+  }
+
+  // ---- 人ごとに束ねる ----
+  const lanes = {};   // name → [stop]
+  const push = function(nm, stop){ (lanes[nm] = lanes[nm] || []).push(stop); };
+  clean.filter(pass).forEach(function(j){
+    (j.staff||[]).forEach(function(nm){ push(nm, {j:j, kind:'清掃', t:j.start||'', end:j.end||''}); });
+  });
+  checks.concat(clean.filter(function(j){ return pass(j) && j.chk && j.chk.length && (!j.chkDate || j.chkDate===DAY); }))
+    .forEach(function(j){
+      (j.chk||[]).forEach(function(nm){ push(nm, {j:j, kind:'チェック', t:j.chkTime||'', end:''}); });
+    });
+
+  const OUT = ['外注','オーナー'];
+  const names = Object.keys(lanes).sort(function(a,b){
+    const ao = OUT.indexOf(a)>=0?1:0, bo = OUT.indexOf(b)>=0?1:0;
+    if(ao!==bo) return ao-bo;
+    const sa = (lanes[a][0]||{}).t || '99:99', sb = (lanes[b][0]||{}).t || '99:99';
+    return sa < sb ? -1 : 1;
+  });
+
+  let body = '';
+  names.forEach(function(nm){
+    const s = staffOf(nm);
+    const isOut = OUT.indexOf(nm)>=0;
+    const stops = lanes[nm].sort(function(x,y){ return (x.t||'99:99') < (y.t||'99:99') ? -1 : 1; });
+    const k = s ? kindAt(s, DAY) : '';
+    const kb = isOut ? '<span class="badge ot">重なりOK</span>'
+             : k==='研修' ? '<span class="badge tr">研修中</span>'
+             : k==='独り立ち' ? '<span class="badge so">独り立ち</span>'
+             : k==='稼働前' ? '<span class="badge ng">稼働前</span>' : '';
+    let inner = '';
+    stops.forEach(function(st, i){
+      if(i>0 && !isOut){
+        const prev = stops[i-1];
+        const mn = travelMin(prev.j.pid, st.j.pid, s ? s.move : '');
+        inner += '<div class="hop"><span class="tm"></span><span class="ln">'
+              +  (prev.j.pid===st.j.pid ? '同じ物件' :
+                  (moveIcon(s?s.move:'')+' 移動 '+(mn==null?'？':mn)+'分'))+'</span></div>';
+      }
+      const isChk = st.kind==='チェック';
+      const cls = 'stop'+(isChk?' b':(st.j.needChk?' y':' g'));
+      inner += '<div class="'+cls+'" onclick="openEdit(\''+esc(st.j.jobKey)+'\')">'
+            +   '<span class="tm">'+esc(st.t||'--:--')+(st.end?'<small>〜'+esc(st.end)+'</small>':'')+'</span>'
+            +   '<div class="bx"><div class="p">'+esc(st.j.prop)
+            +     (isChk?' <span class="badge ck">チェック</span>':'')+'</div>'
+            +     '<div class="d">'
+            +       (isChk ? ('清掃 '+esc((st.j.cleanStaff||st.j.staff||[]).join('・')))
+                           : ((st.j.nights?st.j.nights+'泊 ':'')+(st.j.guests?st.j.guests+'名 ':'')
+                              +(st.j.std?'／ 標準'+esc(st.j.std):'')
+                              +(st.j.nextIn?' ／ 次回IN <b>'+esc(fmtMD(st.j.nextIn))+' '+esc(st.j.inT||'')+'</b>'
+                                 +(st.j.nextIn===st.j.ymd?' ⚠️':''):'')))
+            +     '</div></div></div>';
+    });
+    body += '<div class="lane'+(isOut?' out':'')+'">'
+         +  '<div class="hd"><span class="nm">'+esc(nm)+'</span>'+kb
+         +    (s&&s.move?'<span class="mv">'+esc(s.move)+'</span>':'')
+         +    '<span class="sum">'+stops.length+'件</span></div>'
+         +  '<div class="body">'+inner+'</div></div>';
+  });
+
+  // ---- シフトは出ているが、まだ入っていない人 ----
+  const free = (DATA.staff||[]).filter(function(s){
+    if(lanes[s.disp]) return false;
+    const mk = (s.shift||{})[DAY];
+    return mk && mk!=='×';
+  }).sort(function(a,b){ return a.disp<b.disp?-1:1; });
+  let freeHtml = '';
+  if(free.length){
+    freeHtml = '<div class="sec2">シフトは出ているが、まだ入っていない人 '+free.length+'名</div>'
+      + '<div class="freerow">'+free.map(function(s){
+          const k = kindAt(s, DAY);
+          return '<span class="fchip">'+esc(s.disp)
+               + (k==='研修'?'<i>研修</i>':'')
+               + (s.move?'<u>'+esc(s.move)+'</u>':'')+'</span>'; }).join('')+'</div>';
+  }
+
+  const nBad = needStaff.length, nChk = needChk.length;
+  const head = '<div class="dayhd">'+esc(fmtMD(DAY))+'('+esc(WD[new Date(DAY+'T00:00:00').getDay()])+')'
+    + (DAY===DATA.today?'<span class="today">本日</span>':'')
+    + '<small>'+clean.length+'件'
+    + (nBad?'　🔴'+nBad:'')+(nChk?'　🟡'+nChk:'')+'</small></div>';
+
+  $('body').innerHTML = strip + head + tray
+    + (body || '<div class="center">この日はまだ誰も入っていません。</div>') + freeHtml;
+}
+
 
 // ★v7.36 提出シフトは「何日ぶん出したか」ではなく【いつ出しているか】を出す。
 //   件数だけでは、その日に頼めるかどうか分からない。
@@ -565,6 +761,8 @@ function drawStaff(){
 // ============================================================
 const OUTSIDE = ['外注','オーナー'];
 let ED = null;      // 編集中の状態
+let DAY = '';       // ★v7.50 いま見ている日
+function pickDay(d){ DAY = d; draw(); window.scrollTo(0,0); }
 
 function findJob(jobKey){
   let hit = null;
@@ -775,9 +973,9 @@ function render(d){
 
   $('rel').style.display='block';
   $('foot').innerHTML =
-      '予定をタップすると<b>担当・募集人数・チェック担当</b>を変えられます。<br>'
+      '予定や未アサインの箱をタップすると<b>担当・募集人数・チェック担当</b>を変えられます。<br>'
     + '清掃日と時刻はまだ変えられません（スプレッドシートか本部へ）。<br>'
-    + '過去の予定は変更できません。';
+    + '過去の予定は変更できません。移動時間は実測（Googleマップ）です。';
   draw();
 }
 
