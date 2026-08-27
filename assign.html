@@ -107,6 +107,10 @@
   /* ★v7.63 その時刻を誰が決めたか */
   .badge.by{ background:#ede7f6; color:#4527a0; border:1px solid #b39ddb; }
   .badge.def{ background:#f2f3f5; color:#8a8f96; border:1px solid var(--line); }
+  /* ★v7.73 仮アサイン（返事待ち）が確定と同じ見た目だった。社長指摘 2026-08-27 */
+  .badge.wt{ background:#fff8e1; color:#8a6d00; border:1px solid #ffe082; }
+  .badge.ov{ background:var(--redbg); color:var(--red); border:1px solid #ef9a9a; font-weight:800; }
+  .badge.okd{ background:#e8f5e9; color:var(--green); border:1px solid #a5d6a7; }
 
   /* ★v7.50 案E スタッフ別ルート */
   .strip{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 10px; }
@@ -121,6 +125,7 @@
   .strip .pips{ display:flex; justify-content:center; gap:3px; margin-top:3px; height:7px; }
   .pip{ display:inline-block; width:7px; height:7px; border-radius:50%; }
   .pip.r{ background:var(--red); } .pip.y{ background:#f9a825; }
+  .pip.w{ background:#8a6d00; }                 /* ★v7.73 返事待ちがある日 */
   .dayhd{ font-size:17px; font-weight:800; margin:6px 0 8px; }
   .dayhd small{ font-size:12px; color:var(--sub); font-weight:600; margin-left:8px; }
   .dayhd .today{ color:#fff; background:var(--green); border-radius:6px;
@@ -128,6 +133,12 @@
   .tray{ background:#fff; border:2px dashed #ef9a9a; border-radius:12px; padding:9px 10px; margin-bottom:10px; }
   .tray .th{ font-size:12px; font-weight:800; color:var(--red); margin:0 0 7px; }
   .tray .th.y{ color:var(--amber); margin-top:11px; padding-top:10px; border-top:1px dashed var(--line); }
+  /* ★v7.73 返事待ちの箱。未アサインでも確定でもない「宙ぶらりん」を可視化する */
+  .tray .th.w{ color:#8a6d00; margin-top:11px; padding-top:10px; border-top:1px dashed var(--line); }
+  .tcard.w{ background:#fffdf5; border:1px dashed #d8c48a; }
+  .tcard.w .n{ color:#8a6d00; }
+  .tcard.w.ov{ background:var(--redbg); border:1px solid #ef9a9a; }
+  .tcard.w.ov .n{ color:var(--red); }
   .tcard{ display:flex; align-items:center; gap:9px; background:var(--redbg); border:1px solid #ffcdd2;
           border-radius:9px; padding:8px 10px; margin-bottom:6px; cursor:pointer; }
   .tcard.y{ background:var(--amberbg); border-color:#ffe082; }
@@ -190,6 +201,26 @@
   .pill i{ font-style:normal; margin-left:5px; font-size:10.5px; color:var(--amber);
            background:var(--amberbg); border-radius:5px; padding:0 5px; }
   .pill.off{ opacity:.45; }
+  /* ★v7.72 候補はピル＋バッジに戻す（1人1行はスクロールが長くて選びにくい・社長指摘） */
+  .pill.ng{ border-color:#ef9a9a; background:#fffafa; color:#b71c1c; }
+  .pill.on.ng{ background:#fff3f3; border-color:#e53935; color:#b71c1c;
+               box-shadow:inset 0 0 0 1px #e53935; }
+  .pill.ask{ border-style:dashed; color:#8a6d00; }
+  /* ★v7.73 返事待ちは「選択済みの緑」にしない。押されるまでは決まっていない */
+  .pill.on.wait{ background:#fffdf5; border:1px dashed #d8c48a; color:#8a6d00; box-shadow:none; }
+  .pill.on.wait i.b{ color:#8a6d00; background:#fdf6e3; }
+  .pill i.b{ color:#2e6da4; background:#eaf2fa; }      /* 他に予定がある */
+  .pill.ng i.b{ color:#b71c1c; background:#fdeaea; }   /* 回れない */
+  .pill.ask i.b{ color:#8a6d00; background:#fdf6e3; }  /* シフト未提出 */
+  /* ★v7.72 選んだ人だけ、その日の予定と移動時間を下に出す */
+  .cds{ display:flex; flex-direction:column; gap:6px; margin-top:9px; }
+  .cd{ border:1px solid var(--line); border-left:3px solid #90a4ae; border-radius:9px;
+       padding:7px 10px; background:#fbfcfd; font-size:11.5px; color:var(--sub);
+       white-space:pre-wrap; line-height:1.55; }
+  .cd b{ display:block; font-size:12.5px; color:#222; margin-bottom:2px; }
+  .cd.ng{ border-color:#ef9a9a; border-left-color:#e53935; background:#fffafa;
+          color:#b71c1c; font-weight:700; }
+  .cd.ng b{ color:#b71c1c; }
   /* ★v7.64 候補の行（その日の予定と移動時間つき） */
   .srows{ display:flex; flex-direction:column; gap:7px; }
   .srow{ display:block; width:100%; text-align:left; font-family:inherit; cursor:pointer;
@@ -297,7 +328,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.71';
+const APP_VER = 'v7.73';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -442,11 +473,11 @@ function jobHtml(j){
     +     '<span class="k">滞在</span><span class="v">'+stayTxt+' <span class="t">/</span> '+guestTxt+'</span>'
     +     '<span class="k">次回IN</span><span class="v'+(isSameDay?' none':'')+'">'+nextTxt+'</span>'
     +     '<span class="k">清掃</span><span class="v'+(noStaff?' none':'')+'">'
-    +        (noStaff ? '未アサイン' : esc(j.staff.join('・')))+'</span>'
+    +        (noStaff ? '未アサイン' : staffLabel(j))+'</span>'
     +     '<span class="k">募集人数</span><span class="v">'+needTxt+'</span>'
     +     '<span class="k">チェック</span>'+chkCell
     +     '<span class="k">状態</span><span class="v"><span class="t">'
-    +        esc(j.assign||'—')+'</span></span>'
+    +        esc(j.assign||'—')+'</span>'+waitBadge(j)+'</span>'
     +   '</div>'
     +   (j.memo ? '<div class="memo">'+esc(j.memo)+'</div>' : '')
     +   candHtml(j)
@@ -514,6 +545,39 @@ function shortOf(j){
   return (n>0) ? Math.max(0, n - (j.staff||[]).length) : 0;
 }
 
+// ★v7.73【仮アサインを確定と同じ見た目にしない】社長指摘 2026-08-27
+//   「仮アサインの状態なのに確定したような見た目になっている。
+//     返信期限や返答待ちのバッジが付いてた方がいいのでは？
+//     仮アサインで出しているのが複数人になる可能性もあるので、
+//     物件に対して誰を仮アサインしたのかわかるようにしておく」
+//
+//   名前が入っている＝手配が済んだ、ではない。
+//   本人がボタンを押すまでは【指名済＝返事待ち】で、断られたら振り出しに戻る。
+//   返事待ちのまま期限を過ぎたものが、いちばん危ない（誰も気づかないまま当日になる）。
+function offerOf(j, name){
+  const o = j && j.offer; if(!o) return '';
+  if((o.pending||[]).indexOf(name) >= 0) return 'wait';
+  if((o.ok||[]).indexOf(name)      >= 0) return 'ok';
+  if((o.ng||[]).indexOf(name)      >= 0) return 'ng';
+  return '';
+}
+function waitCount(j){ return ((j&&j.offer&&j.offer.pending)||[]).length; }
+function isOver(j){ return !!(j && j.offer && j.offer.over && waitCount(j)); }
+// 担当名の並び。返事待ちには ⏳、承諾済みには ✅ を付ける
+function staffLabel(j){
+  return (j.staff||[]).map(function(n){
+    const st = offerOf(j, n);
+    return esc(n) + (st==='wait' ? ' ⏳' : (st==='ok' ? ' ✅' : ''));
+  }).join('・');
+}
+// 「⏳ 2名の返事待ち（9/1(火) 18:00まで）」／期限切れなら赤
+function waitBadge(j){
+  const n = waitCount(j); if(!n) return '';
+  const o = j.offer, over = isOver(j);
+  return '<span class="badge '+(over?'ov':'wt')+'">⏳ '+n+'名 返事待ち'
+       + (o.due ? (over ? '／期限切れ '+esc(o.due) : '／'+esc(o.due)+'まで') : '')+'</span>';
+}
+
 // ★v7.51 選んだエリアの物件だけを物件セレクトに出す
 function fillProps(){
   const a = $('f-area').value;
@@ -548,12 +612,14 @@ function drawJobs(){
     const js = jobsOf(d).filter(function(j){ return j.kind!=='check'; });
     const bad = js.filter(function(j){ return !j.staff.length || shortOf(j)>0; }).length;
     const wrn = js.filter(function(j){ return j.needChk; }).length;
+    const wat = js.filter(function(j){ return waitCount(j)>0; }).length;   // ★v7.73 返事待ち
     const w = new Date(d+'T00:00:00').getDay();
     strip += '<div class="dd'+(d===DAY?' on':'')+(w===0?' sun':'')+(w===6?' sat':'')+'"'
           +  ' onclick="pickDay(\''+d+'\')">'
           +  '<div class="w">'+WD[w]+'</div><div class="n">'+(+d.split('-')[2])+'</div>'
           +  '<div class="m">'+(+d.split('-')[1])+'月</div>'
-          +  '<div class="pips">'+(bad?'<i class="pip r"></i>':'')+(wrn?'<i class="pip y"></i>':'')+'</div>'
+          +  '<div class="pips">'+(bad?'<i class="pip r"></i>':'')+(wrn?'<i class="pip y"></i>':'')
+          +    (wat?'<i class="pip w"></i>':'')+'</div>'
           +  '</div>';
   });
   strip += '</div>';
@@ -567,8 +633,11 @@ function drawJobs(){
   // ---- 未アサインの箱 ----
   const needStaff = clean.filter(function(j){ return pass(j) && (!j.staff.length || shortOf(j)>0); });
   const needChk   = clean.filter(function(j){ return pass(j) && j.needChk; });
+  // ★v7.73 返事待ち。人数はそろっているので未アサインの箱には出てこない＝いちばん見落とす
+  const waiting   = clean.filter(function(j){ return pass(j) && waitCount(j)>0; })
+                         .sort(function(a,b){ return (isOver(a)?0:1)-(isOver(b)?0:1); });
   let tray = '';
-  if(needStaff.length || needChk.length){
+  if(needStaff.length || needChk.length || waiting.length){
     tray = '<div class="tray">';
     if(needStaff.length){
       tray += '<div class="th">🔴 未アサイン '+needStaff.length+'件</div>'
@@ -589,6 +658,24 @@ function drawJobs(){
                      + '<span class="p">'+esc(j.prop)
                      +   '<small>清掃 '+esc(j.staff.join('・'))+'（'+esc(j.chkWhy||'')+'）</small></span>'
                      + '<span class="n">チェック<em>要 1名</em></span></div>';
+              }).join('');
+    }
+    // ★v7.73 誰に頼んでいて、いつまでに返事が要るのかを物件ごとに出す
+    if(waiting.length){
+      const nOver = waiting.filter(isOver).length;
+      tray += '<div class="th w">⏳ 返事待ち '+waiting.length+'件'
+           +  (nOver?'　<span style="color:#c62828">うち期限切れ '+nOver+'件</span>':'')+'</div>'
+           +  waiting.map(function(j){
+                const o = j.offer||{}, over = isOver(j);
+                const pend = (o.pending||[]).join('・');
+                const okN  = (o.ok||[]).length;
+                return '<div class="tcard w'+(over?' ov':'')+'" onclick="openEdit(\''+esc(j.jobKey)+'\')">'
+                     + '<span class="p">'+esc(j.prop)
+                     +   '<small>'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
+                     +   '　依頼中: '+esc(pend||'—')
+                     +   (okN?'　／ 承諾済 '+okN+'名':'')+'</small></span>'
+                     + '<span class="n">'+(over?'期限切れ':'返事待ち')
+                     +   '<em>'+esc(o.due||'期限なし')+'</em></span></div>';
               }).join('');
     }
     tray += '</div>';
@@ -640,7 +727,16 @@ function drawJobs(){
             +     (isChk?' <span class="badge ck">チェック</span>':'')
             +     (!isChk ? (st.j.timeBy
                   ? ' <span class="badge by">🕒 '+esc(st.j.timeBy)+'</span>'
-                  : ' <span class="badge def">既定のまま</span>') : '')+'</div>'
+                  : ' <span class="badge def">既定のまま</span>') : '')
+            +     // ★v7.73 この人がこの現場の返事をまだしていないなら、そう出す
+                  (function(){
+                    const o = offerOf(st.j, nm);
+                    if(o==='wait') return ' <span class="badge '+(isOver(st.j)?'ov':'wt')+'">⏳ '
+                                        + (isOver(st.j)?'期限切れ':'返事待ち')
+                                        + (st.j.offer&&st.j.offer.due?' '+esc(st.j.offer.due):'')+'</span>';
+                    if(o==='ok')   return ' <span class="badge okd">✅ 承諾</span>';
+                    return '';
+                  })()+'</div>'
             +     '<div class="d">'
             +       (isChk ? ('清掃 '+esc((st.j.cleanStaff||st.j.staff||[]).join('・')))
                            : ((st.j.nights?st.j.nights+'泊 ':'')+(st.j.guests?st.j.guests+'名 ':'')
@@ -984,8 +1080,8 @@ function candStatus(s, j){
     const mk = (s.shift||{})[day];
     // ★v7.71 シフトが出ていない人を「空いています」と言わない
     return (mk && mk !== '×')
-      ? { txt: '✅ シフト提出あり・他の予定なし', ng: false }
-      : { txt: 'シフト未提出。この日入れるかは分かりません', ng: false, ask: true };
+      ? { txt: '✅ シフト提出あり・他の予定なし', ng: false, n: 0 }
+      : { txt: 'シフト未提出。この日入れるかは分かりません', ng: false, ask: true, n: 0 };
   }
 
   mine.sort(function(a,b){ return (a.start||'99:99') < (b.start||'99:99') ? -1 : 1; });
@@ -1014,7 +1110,28 @@ function candStatus(s, j){
       else { why.push('このあと '+x.prop+' へ 移動'+mn+'分 → 空き'+gap+'分 ✅'); }
     }
   });
-  return { txt: list + (why.length ? '\n' + why.join('\n') : ''), ng: ng };
+  return { txt: list + (why.length ? '\n' + why.join('\n') : ''), ng: ng, n: mine.length };
+}
+
+// ★v7.72【ピルに載せる短いバッジ】社長指摘 2026-08-27
+//   「1人1行よりもバッジの方が見やすかった」
+//   1行ずつ出すと、候補が20人いれば20行スクロールしないと選べない。
+//   ピルは一目で全員が見えるが、そのままだと予定の有無が消えてしまう。
+//   → ピルは残し、判断に要る最小限（回れない／他に予定／シフト未提出）だけをバッジで出す。
+//     中身（何時にどこ・移動何分）は、選んだ人の分だけ下に出す。
+function candBadge(s, j){
+  const st = candStatus(s, j);
+  // ★v7.73 すでに依頼を出している人は、返事の状況を最優先で出す。
+  //   「名前が入っている＝決まり」ではないことを、選ぶ画面でも分かるようにする。
+  const of = offerOf(j, s.disp);
+  if(of === 'wait') return { sub: (isOver(j)?'⏳期限切れ':'⏳返事待ち'), ng: false, ask: false, wait: true, st: st };
+  if(of === 'ok')   return { sub: '✅承諾', ng: false, ask: false, st: st };
+  if(of === 'ng')   return { sub: '✕辞退', ng: true,  ask: false, st: st };
+  let sub = '';
+  if(st.ng)        sub = '✕回れない';
+  else if(st.n)    sub = '他' + st.n + '件';
+  else if(st.ask)  sub = '？未提出';
+  return { sub: sub, ng: !!st.ng, ask: !!st.ask, st: st };
 }
 
 function drawEdit(){
@@ -1024,36 +1141,39 @@ function drawEdit(){
   const isTrainee = function(s){ return kindAt(s, j.ymd) === '研修'; };
   const q = function(x){ return "'"+String(x).replace(/'/g,"\\'")+"'"; };
 
-  const staffPills = function(list){
-    return list.map(function(s){
-      const k = kindAt(s, j.ymd);
-      return pillHtml(s.disp, ED.staff.indexOf(s.disp)>=0, 'togStaff('+q(s.disp)+')',
-                      k==='研修' ? '研修' : (k==='稼働前' ? '稼働前' : ''));
-    }).join('');
-  };
-  // ★v7.64 その日すでに予定がある人は、行で出して中身を見せる
-  const staffRows = function(list){
-    // ★v7.64 頼める人を上に。間に合わない人は下へ回す
-    const withSt = list.map(function(s){ return { s: s, st: candStatus(s, j) }; });
+  // ★v7.72 候補はピル＋バッジ。回れない人は後ろへ回す（消さない・自分で判断できるように）
+  const staffCands = function(list){
+    const withSt = list.map(function(s){ return { s: s, b: candBadge(s, j) }; });
     withSt.sort(function(a,b){
-      if(a.st.ng !== b.st.ng) return a.st.ng ? 1 : -1;
-      const af = a.st.txt.indexOf('空いています')===0 ? 0 : 1;
-      const bf = b.st.txt.indexOf('空いています')===0 ? 0 : 1;
-      if(af !== bf) return af - bf;
+      if(a.b.ng !== b.b.ng) return a.b.ng ? 1 : -1;         // 回れない人は下
+      if(a.b.st.n !== b.b.st.n) return a.b.st.n - b.b.st.n; // 予定が少ない人が上
       return a.s.disp < b.s.disp ? -1 : 1;
     });
     return withSt.map(function(w){
-      const s = w.s, st = w.st;
+      const s = w.s, b = w.b;
       const k = kindAt(s, j.ymd);
       const on = ED.staff.indexOf(s.disp) >= 0;
-      return '<button class="srow'+(on?' on':'')+(st.ng?' ng':'')+(st.ask?' ask':'')
-           + '" onclick="togStaff('+q(s.disp)+')">'
-           + '<span class="n">'+esc(s.disp)
+      return '<button class="pill'+(on?' on':'')+(b.ng?' ng':'')+(b.ask?' ask':'')+(b.wait?' wait':'')
+           + '" onclick="togStaff('+q(s.disp)+')">'+esc(s.disp)
            + (k==='研修'?'<i>研修</i>':(k==='稼働前'?'<i>稼働前</i>':''))
-           + (s.move?'<u>'+esc(s.move)+'</u>':'')+'</span>'
-           + '<span class="s">'+esc(st.txt)+'</span></button>';
+           + (b.sub ? '<i class="b">'+esc(b.sub)+'</i>' : '')
+           + '</button>';
     }).join('');
   };
+  // ★v7.72 選んだ人の分だけ、その日の予定と移動時間を出す（全員分を出すと長すぎる）
+  const chosenDetail = (function(){
+    const rows = ED.staff.map(function(n){
+      if(OUTSIDE.indexOf(n) >= 0) return '';
+      const s = staffOf(n);
+      if(!s) return '';
+      const st = candStatus(s, j);
+      if(!st.n) return '';                       // その日ほかに予定が無い人は出さない
+      return '<div class="cd'+(st.ng?' ng':'')+'"><b>'+esc(s.disp)
+           + (s.move?'　<span style="font-weight:400;color:#777">'+esc(s.move)+'</span>':'')
+           + '</b>'+esc(st.txt)+'</div>';
+    }).filter(String);
+    return rows.length ? '<div class="cds">'+rows.join('')+'</div>' : '';
+  })();
   // チェック担当は独り立ちのみ（研修中は見る側になれない）
   // ★v7.71 チェック担当は4分類をまとめて（シフト提出者を先に）
   const chkList = P.shiftFree.concat(P.shiftBusy, P.noShiftBusy, P.noShiftFree)
@@ -1127,7 +1247,13 @@ function drawEdit(){
     +   '<small>'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')　'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
     +   (j.std ? '　標準'+esc(j.std) : '')
     +   '<br>'+(j.timeBy ? '🕒 この時刻は '+esc(j.timeBy)+' が決めました'
-                         : '🕒 既定のまま（まだ誰も時刻を決めていません）')+'</small></div>'
+                         : '🕒 既定のまま（まだ誰も時刻を決めていません）')
+    +   (waitCount(j) ? '<br>'+waitBadge(j)
+          + '<br><span style="font-weight:400;color:'+(isOver(j)?'#c62828':'#8a6d00')+'">'
+          + '依頼中: '+esc(((j.offer||{}).pending||[]).join('・'))
+          + (isOver(j) ? '　期限を過ぎています。別の方に切り替えるか、催促してください。' : '')
+          + '</span>' : '')
+    +   '</small></div>'
 
     + '<div class="sec"><div class="lb">清掃担当　'
     +   '<span style="color:'+((needN>0&&nowN<needN)?'#c62828':'#666')+'">'+nowN+' / '+(needN>0?needN:'—')+'名</span></div>'
@@ -1140,8 +1266,9 @@ function drawEdit(){
           return '<div style="font-size:11px;color:#666;margin:11px 0 6px">'+g[0]
                + '　<span style="color:#999">'+g[1].length+'名</span>'
                + (g[2] ? '<br><span style="color:#a06a00">'+g[2]+'</span>' : '')+'</div>'
-               + '<div class="srows">'+staffRows(g[1])+'</div>';
+               + '<div class="pills">'+staffCands(g[1])+'</div>';
         }).join('')
+    +   chosenDetail
     +   '<div style="font-size:11px;color:#666;margin:9px 0 5px">人以外の枠</div>'
     +   '<div class="pills">'+OUTSIDE.map(function(n){
           return pillHtml(n, ED.staff.indexOf(n)>=0, 'togStaff('+q(n)+')'); }).join('')+'</div>'
