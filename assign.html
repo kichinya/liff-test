@@ -162,6 +162,9 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE
 
 const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
+// ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
+//   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
+const APP_VER = 'v7.43';
 const fmtMD = function(d){ if(!d) return ''; const p=String(d).split('-'); return (+p[1])+'/'+(+p[2]); };
 const esc = function(s){ return String(s==null?'':s)
   .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
@@ -504,7 +507,7 @@ function draw(){
 function render(d){
   DATA = d;
   $('msg').className='msg'; $('msg').textContent='';
-  $('lead').textContent = d.name+' さん　'+d.from.slice(5)+'〜'+d.to.slice(5)+' の予定';
+  $('lead').textContent = d.name+' さん　'+fmtMD(d.from)+'〜'+fmtMD(d.to)+' の予定　'+APP_VER;
   $('tabs').style.display='flex';
   $('filt').style.display = (TAB==='jobs') ? 'block' : 'none';
 
@@ -557,7 +560,12 @@ async function load(){
     return;
   }
   if(!LIFF_ID){
-    showErr('準備中です。\n\nLIFF ID が未設定です。LINE Developers でアプリを作成し、\nassign.html の LIFF_ID に設定してください。');
+    // ★v7.43 ここに来たら、たいてい【古いファイルをキャッシュから読んでいる】。
+    //   LIFF_ID は v7.42 で設定済みなので、未設定＝古い版を見ている、と考えてよい。
+    showErr('古い画面を読み込んでいます（'+APP_VER+' より前）。\n\n'
+          + 'LINEのアプリ内ブラウザがキャッシュを持っています。\n'
+          + 'LINE Developers のエンドポイントURLの末尾 ?v= の数字を上げてください。\n\n'
+          + 'PCの場合は Cmd+Shift+R で読み直してください。');
     return;
   }
   try{
