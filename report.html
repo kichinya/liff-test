@@ -192,8 +192,17 @@
            さらに同じ時間帯だと「時間が重なる」と弾かれてしまう。 -->
       <label class="req">実際に作業した日</label><select id="l-workdate" onchange="lateWorkDateHint()"></select>
       <div class="note" id="l-wdnote" style="display:none;background:#e8f5e9;border-color:#a5d6a7"></div>
-      <label class="req">開始時刻</label><input id="l-start" type="time" step="300">
-      <label class="req">完了時刻</label><input id="l-end" type="time" step="300">
+      <label class="req">開始時刻</label><input id="l-start" type="time" step="300" onchange="lateNextDayHint()">
+      <label class="req">完了時刻</label><input id="l-end" type="time" step="300" onchange="lateNextDayHint()">
+      <!-- ★v7.93 日をまたいだ作業（例 23:15〜00:45）を、そのまま入れられるようにする。
+           これまでは完了が開始より早いと「時間が正しくありません」で弾かれ、
+           入れる手段が無かった（8/04 L'omitel C の 23:15〜24:45 が未解決のまま）。
+           清掃日は動かさない（社長確定 2026-08-29）。完了だけ翌日として記録する。 -->
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:10px 0 0">
+        <input type="checkbox" id="l-nextday" onchange="lateNextDayHint()" style="width:20px;height:20px">
+        <span>完了は翌日（0時をまたぎました）</span>
+      </label>
+      <div class="note" id="l-ndnote" style="display:none;background:#e8f5e9;border-color:#a5d6a7"></div>
       <label class="req">作業区分</label>
       <div class="seg" id="l-seg">
         <label class="on"><input type="radio" name="lk" value="清掃" checked><span>🧹 清掃</span></label>
@@ -202,7 +211,7 @@
       <div class="note" style="background:#fff8e1;border-color:#ffe4a1">
         実際に作業した時刻を入れてください。<br>
         入力すると<b>管理側にも通知されます</b>。業務委託費のもとになる記録です。<br>
-        1回の入力が日をまたぐ場合は、このトークにそのままご返信ください。
+        0時をまたいだ作業は、<b>「完了は翌日」にチェック</b>を入れてそのまま入れてください。
       </div>
     </div>
     <button class="submit" onclick="submitLate()">この内容で記録する</button>
@@ -1205,6 +1214,8 @@ function fillLateJobs(){
     o.dataset.cd=j.cleanDate||d.ymd||'';      // ★v5.04
     sel.appendChild(o); });
   lateDoneHint();
+  if($('l-nextday')) $('l-nextday').checked=false;
+  lateNextDayHint();
   fillLateWorkDates();                        // ★v5.04
 }
 
@@ -1243,6 +1254,20 @@ function lateWorkDateHint(){
   }else{ box.style.display='none'; box.innerHTML=''; }
 }
 
+// ★v7.93 日またぎの案内。完了 <= 開始 なら、自動でチェックを入れて理由を出す。
+//   「エラーで止める」のではなく「こう記録します」と先に見せる。
+function lateNextDayHint(){
+  const box=$('l-ndnote'); const cb=$('l-nextday'); if(!box||!cb) return;
+  const st=$('l-start').value, en=$('l-end').value;
+  if(st && en && en<=st && !cb.checked){ cb.checked=true; }
+  if(cb.checked){
+    box.style.display='block';
+    const wd=$('l-workdate'); const wl=(wd&&wd.options[wd.selectedIndex])?wd.options[wd.selectedIndex].textContent.replace(/\s*(清掃日|本日)/g,''):'';
+    box.innerHTML='🌙 <b>'+esc2(wl)+' '+esc2(st||'--:--')+' 〜 翌 '+esc2(en||'--:--')+'</b> として記録します。<br>'
+      + '清掃日は動かしません。実働時間は0時をまたいで通算します。';
+  }else{ box.style.display='none'; box.innerHTML=''; }
+}
+
 function lateDoneHint(){
   const sel=$('l-job'); const box=$('l-donenote');
   if(!box) return;
@@ -1267,6 +1292,9 @@ async function submitLate(){
   if(!en) return showErr('msg-late','完了時刻を入れてください。');
   const wd=$('l-workdate').value;
   if(!wd) return showErr('msg-late','実際に作業した日を選んでください。');
+  // ★v7.93 日またぎ
+  const nd=($('l-nextday')&&$('l-nextday').checked)?'1':'';
+  if(!nd && en<=st) return showErr('msg-late','完了が開始より前になっています。\n0時をまたいだ作業なら「完了は翌日」にチェックを入れてください。');
   const btn=event.target; btn.disabled=true; btn.textContent='記録しています…';
   try{
     const res=await jsonp(GAS_URL+'?mode=late_submit&userId='+encodeURIComponent(me.userId)
@@ -1279,7 +1307,8 @@ async function submitLate(){
       //   送っていなかったため常に【清掃日】で記録され、しかも同じ時間帯だと
       //   「時間が重なっています」で弾かれ、日を跨いだ作業を入れる手段が無かった。
       //   （v5.16 で startPhotoIntake から消した &workDate= は、本来ここに置くものだった）
-      +'&workDate='+encodeURIComponent(wd));
+      +'&workDate='+encodeURIComponent(wd)
+      +'&nextDay='+encodeURIComponent(nd));
     btn.disabled=false; btn.textContent='この内容で記録する';
     if(!res || !res.ok) return showErr('msg-late',(res&&res.message)||'記録できませんでした。');
     finishDone();
