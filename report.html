@@ -156,6 +156,10 @@
       <div class="mbtn" onclick="go('overtime')"><div class="ico">⏱</div>超過報告</div>
       <div class="mbtn" onclick="go('supply')"><div class="ico">📦</div>備品発注</div>
       <div class="mbtn" onclick="go('handover')"><div class="ico">📝</div>引き継ぎ</div>
+      <!-- ★v7.98 チェック担当が清掃の仕上がりを残すための報告（社長指示 2026-08-29）。
+           これが無いと、点検に行っても品質が誰にも伝わらず「行って終わり」になる。
+           ⚠️ オーナー様には送らない（社内の記録）。GAS側 PR_OWNER_AUTO にも入れないこと。 -->
+      <div class="mbtn" onclick="go('quality')"><div class="ico">✨</div>清掃品質</div>
       <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
@@ -794,6 +798,9 @@ const TEXT_META = {
   //   ・金額を書かないこと（立替と混同して「〇〇円で買いました」と書く人が出る）
   supply:   { title:'📦 備品発注', kind:'備品',   owner:true, auto:true,  note:OWNER_NOTE_SUPPLY, label:'発注が必要な備品', ph:'例）トイレットペーパー 残り1個、補充希望' },
   handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, auto:true,  label:'引き継ぎの内容', ph:'例）エアコンの効きが悪い。次回確認願います' },
+  // ★v7.98 清掃品質。オーナー様へは送らない（owner:false）ので赤いカードは出ない。
+  quality:  { title:'✨ 清掃品質の報告', kind:'品質', owner:false, auto:false, label:'清掃の仕上がり',
+              ph:'例）問題なし ／ 洗面台の髪の毛が残っていた ／ ベッドメイクのシワが目立つ' },
 };
 
 
@@ -803,12 +810,12 @@ function showView(name){
     if (el) el.classList.add('hidden');
   });
   $('loading').classList.add('hidden');
-  const t = (name==='overtime'||name==='supply'||name==='handover') ? 'text' : name;
+  const t = (name==='overtime'||name==='supply'||name==='handover'||name==='quality') ? 'text' : name;
   const el = $('v-'+t); if (el) el.classList.remove('hidden');
 }
 
 function go(name){
-  if (name==='overtime'||name==='supply'||name==='handover'){
+  if (name==='overtime'||name==='supply'||name==='handover'||name==='quality'){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
     $('t-content').placeholder = m.ph;
@@ -1572,7 +1579,7 @@ function jobsFailed(why){
     jobsLoading();
     {
       const t0=new URLSearchParams(location.search).get('type');
-      if(t0 && ['expense','photo','overtime','supply','handover','props','settings','help','late'].indexOf(t0)>=0) go(t0);
+      if(t0 && ['expense','photo','overtime','supply','handover','quality','props','settings','help','late'].indexOf(t0)>=0) go(t0);
       else showView('menu');
       uiShown = true;
     }
