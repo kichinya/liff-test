@@ -693,15 +693,20 @@
       <label style="margin-top:14px">気づいたこと（任意）</label>
       <textarea id="q-note" placeholder="例）洗面台に髪の毛が残っていた／ベッドのシワが目立つ／問題なし"></textarea>
 
-      <!-- ★★v8.00 気になった箇所の写真（社長指示 2026-08-29）
-           ⚠️ この写真はオーナー様には共有しません。管理者だけが見るフォルダに入ります。
-              そう書いておかないと、遠慮して撮らなくなる。 -->
-      <label style="margin-top:14px">気になった箇所の写真（任意・6枚まで）</label>
-      <input id="q-photo" type="file" accept="image/*" multiple>
+      <!-- ★★v8.04 気になった箇所の写真（社長指示 2026-08-29）
+           「トークに送る方式にしたいです。やり方が変わると混乱しそうなので」
+           ⚠️ 清掃前・清掃後とまったく同じ操作にそろえる。
+              画面から直接送る方式は 2026-08-04 に一度やめている
+              （最大6枚・1枚失敗で全部やり直し）。同じ穴を掘り直さない。
+           ⚠️ この写真はオーナー様には共有しない。そう書いておかないと遠慮して撮らなくなる。 -->
+      <label style="margin-top:14px">気になった箇所の写真（任意）</label>
       <div class="note" style="background:#fff8e1;border-color:#ffe082">
         📷 <b>この写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
-        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。
+        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。<br>
+        <b>清掃の写真と同じ送り方です。</b>下のボタンを押して、LINEのトークに送ってください。
       </div>
+      <button type="button" class="submit" style="background:#455a64;margin-top:8px"
+              onclick="startQualityPhoto()">📷 写真をまとめて送る</button>
     </div>
     <button class="submit" onclick="submitQuality()">この内容で送信する</button>
   </div>
@@ -848,7 +853,7 @@ function showView(name){
 }
 
 function go(name){
-  if (name==='quality') { drawQuality(); $('q-note').value=''; if($('q-photo')) $('q-photo').value=''; setMsg2('msg-quality','',''); }
+  if (name==='quality') { drawQuality(); $('q-note').value=''; setMsg2('msg-quality','',''); }
   if (name==='overtime'||name==='supply'||name==='handover'){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
@@ -1440,31 +1445,41 @@ async function submitQuality(){
   if(!jk) return showErr('msg-quality','物件を選んでください。');
   // 1つも点数が無く、書き込みも無いときは送らない（空の記録が積み上がる）
   const any = QUALITY_ITEMS.some(function(it){ return Number(QSCORE[it.k]||0) > 0; });
-  const files = Array.prototype.slice.call(($('q-photo')||{files:[]}).files, 0, 6);
-  if(!any && !note && !files.length) return showErr('msg-quality','点数・気づいたこと・写真のどれかを入れてください。');
+  if(!any && !note) return showErr('msg-quality','点数か、気づいたことのどちらかを入れてください。');
   const btn = event.target; btn.disabled = true; btn.textContent = '送信中…';
   const reset = ()=>{ btn.disabled = false; btn.textContent = 'この内容で送信する'; };
   try{
-    // ★v8.00 1枚読めないだけで全部消えないようにする（写真報告と同じ作法）
-    let photos = [], bad = [];
-    if(files.length){
-      const conv = await toJpegB64All(files);
-      photos = conv.list; bad = conv.bad;
-    }
     const job = jobsMap[jk] || {};
     await postGas({ mode:'quality_submit', userId:me.userId, jobKey:jk,
       pid:job.pid||'', propName:job.name||'', cleanDate:job.cleanDate||'',
-      scores:QSCORE, note:note, photos:photos, mime:'image/jpeg' });
-    if(bad.length){
-      reset();
-      return showErr('msg-quality',
-        '送信しました。ただし '+bad.length+'枚は読み込めず、'+photos.length+'枚だけ送られています。'
-        + '足りない写真は、'+IMG_FAIL_HINT);
-    }
+      scores:QSCORE, note:note });
     finishDone();
   }catch(err){
     reset();
-    showErr('msg-quality','送信に失敗しました（'+((err&&err.message)||'不明')+'）。枚数を減らすか電波の良い場所でお試しください。');
+    showErr('msg-quality','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所でお試しください。');
+  }
+}
+
+// ★★v8.04 品質チェックの写真は、清掃前・清掃後とまったく同じ「トークに送る」方式。
+//   受付を始めて画面を閉じる。あとはトークに写真を送るだけ。
+//   ⚠️ 点数より先に送っても後に送っても、同じ清掃にひも付きます。
+async function startQualityPhoto(){
+  const jk = document.querySelector('#v-quality .jobsel').value;
+  if(!jk) return showErr('msg-quality','先に物件を選んでください。');
+  const btn = event.target; btn.disabled = true; btn.textContent = '受付を開始しています…';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
+      +'&userId='+encodeURIComponent(me.userId)
+      +'&jobKey='+encodeURIComponent(jk)
+      +'&kind=quality');
+    if(!res || !res.ok){
+      btn.disabled=false; btn.textContent='📷 写真をまとめて送る';
+      return showErr('msg-quality',(res&&res.message)||'受付を始められませんでした。');
+    }
+    finishDone();
+  }catch(err){
+    btn.disabled=false; btn.textContent='📷 写真をまとめて送る';
+    showErr('msg-quality','通信に失敗しました。電波の良い場所で再度お試しください。');
   }
 }
 
