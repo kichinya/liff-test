@@ -692,6 +692,16 @@
       <div id="q-items"></div>
       <label style="margin-top:14px">気づいたこと（任意）</label>
       <textarea id="q-note" placeholder="例）洗面台に髪の毛が残っていた／ベッドのシワが目立つ／問題なし"></textarea>
+
+      <!-- ★★v8.00 気になった箇所の写真（社長指示 2026-08-29）
+           ⚠️ この写真はオーナー様には共有しません。管理者だけが見るフォルダに入ります。
+              そう書いておかないと、遠慮して撮らなくなる。 -->
+      <label style="margin-top:14px">気になった箇所の写真（任意・6枚まで）</label>
+      <input id="q-photo" type="file" accept="image/*" multiple>
+      <div class="note" style="background:#fff8e1;border-color:#ffe082">
+        📷 <b>この写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
+        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。
+      </div>
     </div>
     <button class="submit" onclick="submitQuality()">この内容で送信する</button>
   </div>
@@ -838,7 +848,7 @@ function showView(name){
 }
 
 function go(name){
-  if (name==='quality') { drawQuality(); $('q-note').value=''; setMsg2('msg-quality','',''); }
+  if (name==='quality') { drawQuality(); $('q-note').value=''; if($('q-photo')) $('q-photo').value=''; setMsg2('msg-quality','',''); }
   if (name==='overtime'||name==='supply'||name==='handover'){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
@@ -1290,7 +1300,22 @@ function lateWorkDateHint(){
 function lateNextDayHint(){
   const box=$('l-ndnote'); const cb=$('l-nextday'); if(!box||!cb) return;
   const st=$('l-start').value, en=$('l-end').value;
-  if(st && en && en<=st && !cb.checked){ cb.checked=true; }
+  // ★★v8.00【自動ではチェックしない】社長指示 2026-08-29
+  //   「報告の完了は翌日は稀なので、デフォルトチェックではなく任意チェックに」
+  //   旧: 完了 ≦ 開始 を入れた瞬間に勝手にチェックが入っていた。
+  //       ただの打ち間違い（13:00 と 3:00 の押し間違いなど）まで
+  //       「日をまたいだ作業」として通ってしまう。稀なことを既定にしない。
+  //   新: 気づけるように案内だけ出し、入れるかどうかは本人が決める。
+  //   ⚠️ チェックを入れずに 完了 ≦ 開始 のまま送ると submitLate() が止める。
+  if(!cb.checked && st && en && en<=st){
+    box.style.display='block';
+    box.style.background='#fff8e1'; box.style.borderColor='#ffe082';
+    box.innerHTML='⚠️ 完了が開始より前になっています。<br>'
+      + '<b>0時をまたいだ作業なら、下の「完了は翌日」にチェック</b>を入れてください。<br>'
+      + '打ち間違いであれば、時刻を直してください。';
+    return;
+  }
+  box.style.background='#e8f5e9'; box.style.borderColor='#a5d6a7';
   if(cb.checked){
     box.style.display='block';
     const wd=$('l-workdate'); const wl=(wd&&wd.options[wd.selectedIndex])?wd.options[wd.selectedIndex].textContent.replace(/\s*(清掃日|本日)/g,''):'';
@@ -1415,17 +1440,31 @@ async function submitQuality(){
   if(!jk) return showErr('msg-quality','物件を選んでください。');
   // 1つも点数が無く、書き込みも無いときは送らない（空の記録が積み上がる）
   const any = QUALITY_ITEMS.some(function(it){ return Number(QSCORE[it.k]||0) > 0; });
-  if(!any && !note) return showErr('msg-quality','点数か、気づいたことのどちらかを入れてください。');
+  const files = Array.prototype.slice.call(($('q-photo')||{files:[]}).files, 0, 6);
+  if(!any && !note && !files.length) return showErr('msg-quality','点数・気づいたこと・写真のどれかを入れてください。');
   const btn = event.target; btn.disabled = true; btn.textContent = '送信中…';
+  const reset = ()=>{ btn.disabled = false; btn.textContent = 'この内容で送信する'; };
   try{
+    // ★v8.00 1枚読めないだけで全部消えないようにする（写真報告と同じ作法）
+    let photos = [], bad = [];
+    if(files.length){
+      const conv = await toJpegB64All(files);
+      photos = conv.list; bad = conv.bad;
+    }
     const job = jobsMap[jk] || {};
     await postGas({ mode:'quality_submit', userId:me.userId, jobKey:jk,
       pid:job.pid||'', propName:job.name||'', cleanDate:job.cleanDate||'',
-      scores:QSCORE, note:note });
+      scores:QSCORE, note:note, photos:photos, mime:'image/jpeg' });
+    if(bad.length){
+      reset();
+      return showErr('msg-quality',
+        '送信しました。ただし '+bad.length+'枚は読み込めず、'+photos.length+'枚だけ送られています。'
+        + '足りない写真は、'+IMG_FAIL_HINT);
+    }
     finishDone();
   }catch(err){
-    btn.disabled = false; btn.textContent = 'この内容で送信する';
-    showErr('msg-quality','送信に失敗しました。再度お試しください。');
+    reset();
+    showErr('msg-quality','送信に失敗しました（'+((err&&err.message)||'不明')+'）。枚数を減らすか電波の良い場所でお試しください。');
   }
 }
 
