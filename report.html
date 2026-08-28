@@ -156,10 +156,10 @@
       <div class="mbtn" onclick="go('overtime')"><div class="ico">⏱</div>超過報告</div>
       <div class="mbtn" onclick="go('supply')"><div class="ico">📦</div>備品発注</div>
       <div class="mbtn" onclick="go('handover')"><div class="ico">📝</div>引き継ぎ</div>
-      <!-- ★v7.98 チェック担当が清掃の仕上がりを残すための報告（社長指示 2026-08-29）。
-           これが無いと、点検に行っても品質が誰にも伝わらず「行って終わり」になる。
-           ⚠️ オーナー様には送らない（社内の記録）。GAS側 PR_OWNER_AUTO にも入れないこと。 -->
-      <div class="mbtn" onclick="go('quality')"><div class="ico">✨</div>清掃品質</div>
+      <!-- ★★v7.99 「✨ 清掃品質」はメニューに出しません（社長指示 2026-08-29）。
+           「報告は全員が使用するボタンのみにしたい」。
+           入口は type=quality の直リンクだけ。チェック担当の通知にだけ入れます。
+           URL は GAS の QualityLog.gs → qualityLiffUrl() で出せます。 -->
       <div class="mbtn" onclick="go('props')"><div class="ico">🏠</div>対応できる物件</div>
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
@@ -670,6 +670,32 @@
     <button class="submit" onclick="submitText()">この内容で送信する</button>
   </div>
 
+  <!-- ★★v7.99 清掃品質（裏の画面。メニューには出さない）
+       社長指示 2026-08-29
+       ・事実ベースで、名前は伏せた状態で公平に判断してもらう
+       ・自由記述だけでなく【清掃項目の点数 ＋ 自由記述】
+       ⚠️ この画面には清掃担当者名を一切出さない。誰が入ったかを知ると採点が動く。
+       ⚠️ 項目は GAS の QualityLog.gs の QL_ITEMS と必ず揃えること。
+          片方だけ変えると、点数が別の列に入る（エラーは出ない）。 -->
+  <div id="v-quality" class="hidden">
+    <button class="back" onclick="go('menu')">← 戻る</button>
+    <h1>✨ 清掃品質の報告</h1>
+    <div id="msg-quality" class="msg"></div>
+    <div class="note" style="background:#e8f5e9;border-color:#a5d6a7">
+      <b>見たままを、事実で付けてください。</b><br>
+      誰が清掃したかはお伝えしていません。人ではなく<b>仕上がりだけ</b>を見てください。<br>
+      5＝そのままお客様をお迎えできる　3＝軽い手直しが要る　1＝やり直しが要る<br>
+      見ていない項目は <b>―</b>（該当なし）のままで構いません。
+    </div>
+    <div class="card">
+      <label class="req">物件</label><select class="jobsel"></select>
+      <div id="q-items"></div>
+      <label style="margin-top:14px">気づいたこと（任意）</label>
+      <textarea id="q-note" placeholder="例）洗面台に髪の毛が残っていた／ベッドのシワが目立つ／問題なし"></textarea>
+    </div>
+    <button class="submit" onclick="submitQuality()">この内容で送信する</button>
+  </div>
+
   <!-- 報告の取消(★v3.39 LIFFで完結。旧: LINEトークへの案内文のみ) -->
   <!-- 対応できる物件 -->
   <div id="v-props" class="hidden">
@@ -798,24 +824,22 @@ const TEXT_META = {
   //   ・金額を書かないこと（立替と混同して「〇〇円で買いました」と書く人が出る）
   supply:   { title:'📦 備品発注', kind:'備品',   owner:true, auto:true,  note:OWNER_NOTE_SUPPLY, label:'発注が必要な備品', ph:'例）トイレットペーパー 残り1個、補充希望' },
   handover: { title:'📝 引き継ぎ', kind:'引き継ぎ', owner:true, auto:true,  label:'引き継ぎの内容', ph:'例）エアコンの効きが悪い。次回確認願います' },
-  // ★v7.98 清掃品質。オーナー様へは送らない（owner:false）ので赤いカードは出ない。
-  quality:  { title:'✨ 清掃品質の報告', kind:'品質', owner:false, auto:false, label:'清掃の仕上がり',
-              ph:'例）問題なし ／ 洗面台の髪の毛が残っていた ／ ベッドメイクのシワが目立つ' },
 };
 
 
 function showView(name){
-  ['loading','menu','expense','photo','text','props','settings','cancel','done','help','late'].forEach(function(v){
+  ['loading','menu','expense','photo','text','quality','props','settings','cancel','done','help','late'].forEach(function(v){
     const el = $('v-'+v) || (v==='loading'?$('loading'):null);
     if (el) el.classList.add('hidden');
   });
   $('loading').classList.add('hidden');
-  const t = (name==='overtime'||name==='supply'||name==='handover'||name==='quality') ? 'text' : name;
+  const t = (name==='overtime'||name==='supply'||name==='handover') ? 'text' : name;
   const el = $('v-'+t); if (el) el.classList.remove('hidden');
 }
 
 function go(name){
-  if (name==='overtime'||name==='supply'||name==='handover'||name==='quality'){
+  if (name==='quality') { drawQuality(); $('q-note').value=''; setMsg2('msg-quality','',''); }
+  if (name==='overtime'||name==='supply'||name==='handover'){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
     $('t-content').placeholder = m.ph;
@@ -1322,6 +1346,86 @@ async function submitLate(){
   }catch(e){
     btn.disabled=false; btn.textContent='この内容で記録する';
     showErr('msg-late','通信に失敗しました。記録できたかどうかは、画面を開き直してご確認ください。');
+  }
+}
+
+// ============================================================
+// ★v7.99 清掃品質（裏の画面）
+//   ⚠️ QL_ITEMS（GAS: QualityLog.gs）と【キーも並びも】必ず揃えること。
+// ============================================================
+const QUALITY_ITEMS = [
+  { k:'water',   label:'水回り（浴室・洗面・トイレ）' },
+  { k:'kitchen', label:'キッチン' },
+  { k:'floor',   label:'床・ホコリ' },
+  { k:'bed',     label:'ベッドメイク' },
+  { k:'amenity', label:'備品・アメニティの補充' },
+  { k:'smell',   label:'ゴミ・臭い' },
+  { k:'finish',  label:'仕上げ（窓・鏡・指紋）' },
+];
+let QSCORE = {};
+
+function drawQuality(){
+  QSCORE = {};
+  const box = $('q-items'); if(!box) return;
+  box.innerHTML = '';
+  QUALITY_ITEMS.forEach(function(it){
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'margin:14px 0 0';
+    const lb = document.createElement('div');
+    lb.style.cssText = 'font-weight:600;margin-bottom:6px';
+    lb.textContent = it.label;
+    wrap.appendChild(lb);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px';
+    ['―','1','2','3','4','5'].forEach(function(v,i){
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = v;
+      b.dataset.k = it.k; b.dataset.v = String(i===0 ? 0 : i);
+      b.style.cssText = 'flex:1;padding:12px 0;border:2px solid #ddd;border-radius:10px;'
+                      + 'background:#fff;font-size:16px;font-weight:700;color:#666';
+      b.onclick = function(){ pickQuality(it.k, Number(b.dataset.v)); };
+      row.appendChild(b);
+    });
+    wrap.appendChild(row);
+    box.appendChild(wrap);
+  });
+  paintQuality();
+}
+
+function pickQuality(k, v){ QSCORE[k] = v; paintQuality(); }
+
+function paintQuality(){
+  const box = $('q-items'); if(!box) return;
+  box.querySelectorAll('button').forEach(function(b){
+    const on = (Number(QSCORE[b.dataset.k] || 0) === Number(b.dataset.v))
+            && !(QSCORE[b.dataset.k] === undefined && b.dataset.v === '0');
+    // 低い点は赤、高い点は緑。付けた実感が出るようにする。
+    const v = Number(b.dataset.v);
+    const col = (v === 0) ? '#9e9e9e' : (v <= 2 ? '#e53935' : (v === 3 ? '#f9a825' : '#2e7d32'));
+    b.style.background   = on ? col : '#fff';
+    b.style.color        = on ? '#fff' : '#666';
+    b.style.borderColor  = on ? col : '#ddd';
+  });
+}
+
+async function submitQuality(){
+  const jk = document.querySelector('#v-quality .jobsel').value;
+  const note = $('q-note').value.trim();
+  if(!jk) return showErr('msg-quality','物件を選んでください。');
+  // 1つも点数が無く、書き込みも無いときは送らない（空の記録が積み上がる）
+  const any = QUALITY_ITEMS.some(function(it){ return Number(QSCORE[it.k]||0) > 0; });
+  if(!any && !note) return showErr('msg-quality','点数か、気づいたことのどちらかを入れてください。');
+  const btn = event.target; btn.disabled = true; btn.textContent = '送信中…';
+  try{
+    const job = jobsMap[jk] || {};
+    await postGas({ mode:'quality_submit', userId:me.userId, jobKey:jk,
+      pid:job.pid||'', propName:job.name||'', cleanDate:job.cleanDate||'',
+      scores:QSCORE, note:note });
+    finishDone();
+  }catch(err){
+    btn.disabled = false; btn.textContent = 'この内容で送信する';
+    showErr('msg-quality','送信に失敗しました。再度お試しください。');
   }
 }
 
