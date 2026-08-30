@@ -698,7 +698,31 @@
       <label class="req">清掃日</label><select id="q-date" onchange="fillQualityJobs()"></select>
       <div class="note" id="q-range"></div>
       <label class="req">物件</label><select class="jobsel"></select>
+    </div>
 
+    <!-- ★★v8.25【入口で2択にする】あなたの確定 2026-08-30
+         旧: ボタンが2つとも点数を送る作りだった（submitQuality → quality_submit → photo_intake_start）。
+             写真だけ送り直したいときも点数の再送信とセットになり、
+             画面は既存の点数を読み込まないため、前に出した点数と自由記述が空で上書きされた。
+         新: 「点数を入れる」と「写真を送る」を分ける。写真だけなら点数は一切送らない。
+         ⚠️ 通常は打刻に合わせて写真の受付が自動で始まります。この画面は
+            【あとから出す・送り直す】ときだけ使います。 -->
+    <div id="q-pick" style="display:flex;gap:8px;margin:14px 0">
+      <button type="button" onclick="qMode('score')"
+              style="flex:1;padding:16px 0;border:2px solid #2e7d32;border-radius:10px;
+                     background:#fff;color:#2e7d32;font-weight:700;font-size:15px">
+        📝 点数を入れる
+      </button>
+      <button type="button" onclick="qMode('photo')"
+              style="flex:1;padding:16px 0;border:2px solid #455a64;border-radius:10px;
+                     background:#fff;color:#455a64;font-weight:700;font-size:15px">
+        📷 写真を送る
+      </button>
+    </div>
+
+    <!-- ================= 点数 ================= -->
+    <div id="q-score" class="hidden">
+    <div class="card">
       <!-- ★v8.06 ほとんどの回は問題なし。まず全部5にして、気になった項目だけ下げる。
            7項目を1つずつ押させると、押すこと自体が目的になって採点が雑になる。 -->
       <div style="display:flex;gap:8px;margin:14px 0 4px">
@@ -719,35 +743,41 @@
       <label style="margin-top:14px">気づいたこと（任意）</label>
       <textarea id="q-note" placeholder="例）洗面台に髪の毛が残っていた／ベッドのシワが目立つ／問題なし"></textarea>
 
-      <!-- ★★v8.04 気になった箇所の写真（社長指示 2026-08-29）
+    </div>
+    <button class="submit" onclick="submitQuality()">この内容で送信する</button>
+    <div class="hint" style="margin-top:8px">
+      ★ 同じ清掃・同じ方の報告は<b>上書き</b>されます。行は増えません。
+    </div>
+    </div><!-- /q-score -->
+
+    <!-- ================= 写真だけ ================= -->
+    <div id="q-photo" class="hidden">
+    <div class="card">
+      <!-- ★★v8.04 写真はトークに送る方式（社長指示 2026-08-29）
            「トークに送る方式にしたいです。やり方が変わると混乱しそうなので」
-           ⚠️ 清掃前・清掃後とまったく同じ操作にそろえる。
-              画面から直接送る方式は 2026-08-04 に一度やめている
-              （最大6枚・1枚失敗で全部やり直し）。同じ穴を掘り直さない。
-           ⚠️ この写真はオーナー様には共有しない。そう書いておかないと遠慮して撮らなくなる。 -->
-      <div class="note" style="background:#fff8e1;border-color:#ffe082;margin-top:14px">
+           ⚠️ 画面から直接送る方式は 2026-08-04 に一度やめている
+              （最大6枚・1枚失敗で全部やり直し）。同じ穴を掘り直さない。 -->
+      <div class="note" style="background:#fff8e1;border-color:#ffe082">
         📷 <b>写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
         <b>作業前</b>＝手を入れる前にひととおり。<br>
         <b>手直し後</b>＝直した箇所だけ（ここが<b>指摘</b>として残ります）。
       </div>
-      <!-- ★v8.18 あとから送るときは区分を選ぶ。打刻から自動で始まる分は選ばなくてよい。 -->
-      <label style="margin-top:14px">写真の区分（あとから送るとき）</label>
+      <label class="req" style="margin-top:14px">写真の区分</label>
       <div class="seg" id="q-seg">
         <label class="on"><input type="radio" name="qk" value="quality_before" checked><span>📷 作業前</span></label>
         <label><input type="radio" name="qk" value="quality_after"><span>🔧 手直し後</span></label>
       </div>
     </div>
-    <button class="submit" onclick="submitQuality(false)">この内容で送信する</button>
-    <!-- ★★v8.06【写真を先に押すと評価が消える】社長指摘 2026-08-30
-         旧: 送信ボタンの【前】に写真ボタンを置いていた。押すと受付を始めて画面を閉じるため、
-             入力中の点数がまるごと消えていた。
-         新: 送信と同時に写真の受付を始める。点数は必ず先に保存される。 -->
-    <button class="submit" style="background:#455a64;margin-top:10px"
-            onclick="submitQuality(true)">送信して、写真を追加で送る</button>
+    <button class="submit" style="background:#455a64" onclick="startQualityPhotoOnly()">
+      この区分で写真を送る
+    </button>
     <div class="hint" style="margin-top:8px">
-      ★ 写真は<b>チェックの「開始」と「完了」を押したときに、自動で受付が始まります</b>。<br>
-      あとから足したいときだけ、こちらを押してください。点数を保存してから受付を始めます。
+      押すと受付が始まります。<b>そのあと、このトークに写真を送ってください。</b><br>
+      ★ 点数は送りません。前に出した点数はそのまま残ります。<br>
+      ★ 通常は<b>チェックの「開始」「完了」で自動的に受付が始まります</b>。
+      こちらは<b>あとから足す・送り直す</b>ときだけお使いください。
     </div>
+    </div><!-- /q-photo -->
   </div>
 
   <!-- 報告の取消(★v3.39 LIFFで完結。旧: LINEトークへの案内文のみ) -->
@@ -892,7 +922,13 @@ function showView(name){
 }
 
 function go(name){
-  if (name==='quality') { drawQuality(); $('q-note').value=''; setMsg2('msg-quality','',''); }
+  if (name==='quality') {
+    drawQuality(); $('q-note').value=''; setMsg2('msg-quality','','');
+    // ★v8.25 開くたびに2択へ戻す。前回どちらを開いたかが残ると、押し間違える。
+    const _s=$('q-score'), _p=$('q-photo');
+    if(_s) _s.classList.add('hidden');
+    if(_p) _p.classList.add('hidden');
+  }
   if (name==='overtime'||name==='supply'||name==='handover'){
     const m = TEXT_META[name];
     $('t-title').textContent = m.title;
@@ -1520,7 +1556,45 @@ function paintQuality(){
     + (low.length ? '<br><span style="color:#c62828">🔴 ' + low.join('・') + '</span>' : '');
 }
 
-async function submitQuality(withPhoto){
+// ★★v8.25 入口の2択。点数と写真を混ぜない。
+function qMode(m){
+  const s=$('q-score'), p=$('q-photo');
+  if(!s || !p) return;
+  const jk = document.querySelector('#v-quality .jobsel').value;
+  if(!jk) return showErr('msg-quality','先に清掃日と物件を選んでください。');
+  setMsg2('msg-quality','');
+  s.classList.toggle('hidden', m!=='score');
+  p.classList.toggle('hidden', m!=='photo');
+}
+
+// ★★v8.25 写真だけ送る。点数（quality_submit）は【一切送らない】。
+//   旧: 写真を送るには必ず点数も送る作りで、画面は既存の点数を読み込まないため、
+//       前に出した点数と自由記述が空で上書きされていた。
+async function startQualityPhotoOnly(){
+  const jk = document.querySelector('#v-quality .jobsel').value;
+  if(!jk) return showErr('msg-quality','物件を選んでください。');
+  const btn = event.target; const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '受付を始めています…';
+  const reset = ()=>{ btn.disabled=false; btn.textContent=label; };
+  try{
+    const kind = (document.querySelector('input[name=qk]:checked')||{}).value || 'quality_before';
+    const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
+      +'&userId='+encodeURIComponent(me.userId)
+      +'&jobKey='+encodeURIComponent(jk)
+      +'&kind='+encodeURIComponent(kind));
+    if(!res || !res.ok){
+      reset();
+      return showErr('msg-quality','写真の受付を始められませんでした。\n'
+        + ((res&&res.message)||'') + '\nもう一度お試しください。');
+    }
+    finishDone();
+  }catch(e){
+    reset();
+    showErr('msg-quality','写真の受付を始められませんでした。電波の良い場所でお試しください。');
+  }
+}
+
+async function submitQuality(){
   const jk = document.querySelector('#v-quality .jobsel').value;
   const note = $('q-note').value.trim();
   if(!jk) return showErr('msg-quality','物件を選んでください。');
@@ -1538,26 +1612,7 @@ async function submitQuality(withPhoto){
     await postGas({ mode:'quality_submit', userId:me.userId, jobKey:jk,
       pid:job.pid||'', propName:job.name||'', cleanDate:job.cleanDate||'',
       scores:QSCORE, note:note });
-    if(!withPhoto){ finishDone(); return; }
-
-    // 写真の受付を始める。⚠️ ここで失敗しても点数は保存済み。取り消さない。
-    btn.textContent = '写真の受付を始めています…';
-    try{
-      const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
-        +'&userId='+encodeURIComponent(me.userId)
-        +'&jobKey='+encodeURIComponent(jk)
-        +'&kind='+encodeURIComponent(
-            (document.querySelector('input[name=qk]:checked')||{}).value || 'quality_before'));
-      if(!res || !res.ok){
-        reset();
-        return showErr('msg-quality',
-          '点数は保存できました。写真の受付だけ始められませんでした。\n'
-          + ((res&&res.message)||'') + '\nもう一度「送信して、写真も送る」を押してください。');
-      }
-    }catch(e2){
-      reset();
-      return showErr('msg-quality','点数は保存できました。写真の受付だけ始められませんでした。もう一度お試しください。');
-    }
+    // ★v8.25 ここで写真の受付は始めない。写真は「📷 写真を送る」から。
     finishDone();
   }catch(err){
     reset();
