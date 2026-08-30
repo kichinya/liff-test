@@ -1919,7 +1919,58 @@ function jobsFailed(why){
         const o=document.createElement('option'); o.value=String(i);
         o.textContent=d.label+'（'+d.jobs.length+'件）'; psel.appendChild(o); });
       psel.value='0';
+
+      // ★★v8.28【写真報告も ?job= で清掃を選んだ状態で開く】あなたの指示 2026-08-30
+      //   開始・完了の返信に入るURLは ?type=photo&job=<ジョブキー>。
+      //   ⚠️ 見つからないとき（直近7日に無い等）は黙って通常表示に戻す。
+      //      ここで止めると、あとから送る経路まで塞がる。
+      var _wantPhotoJob = '';
+      try { _wantPhotoJob = new URLSearchParams(location.search).get('job') || ''; } catch(e){}
+      if(_wantPhotoJob){
+        for(var _pi=0; _pi<PHOTO_DATES.length; _pi++){
+          if((PHOTO_DATES[_pi].jobs||[]).some(function(j){ return j.jobKey===_wantPhotoJob; })){
+            psel.value=String(_pi); break;
+          }
+        }
+      }
       fillPhotoJobs();
+      if(_wantPhotoJob){
+        var _ps=document.querySelector('#v-photo .jobsel');
+        if(_ps){
+          var _pok=false;
+          for(var _pj=0; _pj<_ps.options.length; _pj++){
+            if(_ps.options[_pj].value===_wantPhotoJob){ _ps.selectedIndex=_pj; _pok=true; break; }
+          }
+          // ⚠️ 区分は打刻の状況から決まる（autoPickPhotoKind）。
+          //    物件を script で入れても change は発火しないので、明示的に呼ぶ。
+          //    呼ばないと「清掃前」のまま固定され、完了後の写真が清掃前に入る。
+          if(_pok){
+            try { autoPickPhotoKind(); } catch(e2){}
+            // ★★v8.28 URLに区分があれば、それを優先する。
+            //   autoPickPhotoKind は清掃ジョブの「完了を報告済みか」を見ているため、
+            //   打刻の反映が間に合わないと完了の返信から開いても「清掃前」が選ばれ、
+            //   【完了写真が清掃前フォルダに入る】。URLの区分は取り違えようがない。
+            var _wk = '';
+            try { _wk = new URLSearchParams(location.search).get('kind') || ''; } catch(e3){}
+            if(_wk === 'before' || _wk === 'after'){
+              var _ke = document.querySelector('#p-seg input[value="'+_wk+'"]');
+              if(_ke){
+                _ke.checked = true;
+                document.querySelectorAll('#p-seg label').forEach(function(l){
+                  l.classList.toggle('on', l.querySelector('input').checked); });
+                var _why=$('p-segwhy');
+                if(_why){
+                  _why.style.display='block';
+                  _why.textContent = (_wk==='after')
+                    ? '完了の報告から開いたため「清掃後」を選びました。違う場合は押し直してください。'
+                    : '開始の報告から開いたため「清掃前」を選びました。違う場合は押し直してください。';
+                }
+              }
+            }
+            setMsg2('msg-photo','この清掃を選びました。「📷 写真を送る」を押してください。','ok');
+          }
+        }
+      }
 
       // ★v8.18 清掃品質も同じ日付リストを使う
       const qsel=$('q-date');
