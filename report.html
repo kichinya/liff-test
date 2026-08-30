@@ -681,12 +681,22 @@
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>✨ 清掃品質の報告</h1>
     <div id="msg-quality" class="msg"></div>
+    <div class="note" style="background:#eceff1;border-color:#cfd8dc">
+      ⚠️ <b>この画面は「報告」メニューからは開けません。</b><br>
+      チェック担当の方だけがお使いになる画面です。
+      <b>このリンクを消さないでください</b>（トークを遡って開き直せます）。
+    </div>
     <div class="note" style="background:#e8f5e9;border-color:#a5d6a7">
       <b>見たままを、事実で付けてください。</b><br>
       <b>5</b>＝そのままお迎えできる　<b>3</b>＝軽い手直しが要る　<b>1</b>＝やり直しが要る<br>
       見ていない項目は <b>―</b> のままで構いません。
     </div>
     <div class="card">
+      <!-- ★★v8.18 清掃の写真報告と同じ「清掃日 → 物件」の2段にする（あなたの確定 2026-08-30）。
+           その場で送れなかったときに、あとから出す手段が無かった。
+           ⚠️ 撮り直しはできない。回復できる経路を必ず残す。 -->
+      <label class="req">清掃日</label><select id="q-date" onchange="fillQualityJobs()"></select>
+      <div class="note" id="q-range"></div>
       <label class="req">物件</label><select class="jobsel"></select>
 
       <!-- ★v8.06 ほとんどの回は問題なし。まず全部5にして、気になった項目だけ下げる。
@@ -717,8 +727,14 @@
            ⚠️ この写真はオーナー様には共有しない。そう書いておかないと遠慮して撮らなくなる。 -->
       <div class="note" style="background:#fff8e1;border-color:#ffe082;margin-top:14px">
         📷 <b>写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
-        <b>開始時</b>＝手を入れる前にひととおり。<br>
-        <b>完了時</b>＝直した箇所だけ（ここが<b>指摘</b>として残ります）。
+        <b>作業前</b>＝手を入れる前にひととおり。<br>
+        <b>手直し後</b>＝直した箇所だけ（ここが<b>指摘</b>として残ります）。
+      </div>
+      <!-- ★v8.18 あとから送るときは区分を選ぶ。打刻から自動で始まる分は選ばなくてよい。 -->
+      <label style="margin-top:14px">写真の区分（あとから送るとき）</label>
+      <div class="seg" id="q-seg">
+        <label class="on"><input type="radio" name="qk" value="quality_before" checked><span>📷 作業前</span></label>
+        <label><input type="radio" name="qk" value="quality_after"><span>🔧 手直し後</span></label>
       </div>
     </div>
     <button class="submit" onclick="submitQuality(false)">この内容で送信する</button>
@@ -1146,6 +1162,10 @@ async function startPhotoIntake(){
   }
 }
 
+(function(){ const _q=$('q-seg'); if(_q) _q.addEventListener('click', ()=>{
+  document.querySelectorAll('#q-seg label').forEach(function(l){
+    l.classList.toggle('on', l.querySelector('input').checked); }); }); })();
+
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
   l.classList.toggle('on', l.querySelector('input').checked); });
   // 手で選び直したら、自動選択の理由は引っ込める（それ以上説明する必要がない）
@@ -1457,6 +1477,22 @@ function qAll(v){
   paintQuality();
 }
 
+/** ★v8.18 清掃日で物件を絞る（写真報告と同じ PHOTO_DATES を使う） */
+function fillQualityJobs(){
+  const sel=document.querySelector('#v-quality .jobsel');
+  if(!sel) return;
+  const i=parseInt($('q-date').value,10);
+  const d=(i>=0 && PHOTO_DATES[i])?PHOTO_DATES[i]:null;
+  sel.innerHTML='';
+  if(!d || !d.jobs.length){
+    const o=document.createElement('option'); o.value=''; o.textContent='この日の清掃物件がありません';
+    sel.appendChild(o); return;
+  }
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください'; sel.appendChild(ph);
+  d.jobs.forEach(function(j){ const o=document.createElement('option');
+    o.value=j.jobKey; o.textContent=(j.label||j.name); sel.appendChild(o); });
+}
+
 function pickQuality(k, v){ QSCORE[k] = v; paintQuality(); }
 
 function paintQuality(){
@@ -1510,7 +1546,8 @@ async function submitQuality(withPhoto){
       const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
         +'&userId='+encodeURIComponent(me.userId)
         +'&jobKey='+encodeURIComponent(jk)
-        +'&kind=quality_after');   // ★v8.07 追加ぶんは「手直し後」に入れる
+        +'&kind='+encodeURIComponent(
+            (document.querySelector('input[name=qk]:checked')||{}).value || 'quality_before'));
       if(!res || !res.ok){
         reset();
         return showErr('msg-quality',
@@ -1825,8 +1862,9 @@ function jobsFailed(why){
     const todayJobs=jobs.filter(function(j){ return !j.cleanDate || j.cleanDate===todayY; });
     const expSel=document.querySelector('#v-expense .jobsel');
     const phSel=document.querySelector('#v-photo .jobsel');   // ★v4.85 写真も日付で埋める
+    const qlSel=document.querySelector('#v-quality .jobsel'); // ★v8.18 品質も日付で埋める
     document.querySelectorAll('.jobsel').forEach(function(sel){
-      if(sel===expSel || sel===phSel) return;
+      if(sel===expSel || sel===phSel || sel===qlSel) return;
       fillSel(sel, todayJobs, false, '本日の清掃物件がありません');
     });
 
@@ -1837,6 +1875,9 @@ function jobsFailed(why){
     if(!PHOTO_DATES.length){
       const o=document.createElement('option'); o.value=''; o.textContent='選べる清掃日がありません';
       psel.appendChild(o);
+      const q0=$('q-date');
+      if(q0){ q0.innerHTML=''; const o2=document.createElement('option');
+        o2.value=''; o2.textContent='選べる清掃日がありません'; q0.appendChild(o2); }
     } else {
       PHOTO_DATES.forEach(function(d,i){ d.jobs.forEach(function(j){
           if(!jobsMap[j.jobKey]) jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:d.ymd}; });
@@ -1844,6 +1885,18 @@ function jobsFailed(why){
         o.textContent=d.label+'（'+d.jobs.length+'件）'; psel.appendChild(o); });
       psel.value='0';
       fillPhotoJobs();
+
+      // ★v8.18 清掃品質も同じ日付リストを使う
+      const qsel=$('q-date');
+      if(qsel){
+        qsel.innerHTML='';
+        PHOTO_DATES.forEach(function(d,i){
+          const o=document.createElement('option'); o.value=String(i);
+          o.textContent=d.label+'（'+d.jobs.length+'件）'; qsel.appendChild(o); });
+        qsel.value='0';
+        if(res.photoRange && $('q-range')) $('q-range').textContent = res.photoRange;
+        fillQualityJobs();
+      }
     }
 
     // ★v4.51 立替は 清掃日 → 物件 の2段。締切を過ぎた月は選択肢に出ない。
