@@ -716,9 +716,8 @@
               （最大6枚・1枚失敗で全部やり直し）。同じ穴を掘り直さない。
            ⚠️ この写真はオーナー様には共有しない。そう書いておかないと遠慮して撮らなくなる。 -->
       <div class="note" style="background:#fff8e1;border-color:#ffe082;margin-top:14px">
-        📷 <b>気になった箇所の写真</b>（任意）<br>
-        この写真は<b>オーナー様には共有しません</b>。管理者だけが確認します。<br>
-        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。
+        📷 <b>写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
+        <b>直す前</b>と<b>手直し後</b>を、同じ向きで撮ってください。
       </div>
     </div>
     <button class="submit" onclick="submitQuality(false)">この内容で送信する</button>
@@ -727,10 +726,10 @@
              入力中の点数がまるごと消えていた。
          新: 送信と同時に写真の受付を始める。点数は必ず先に保存される。 -->
     <button class="submit" style="background:#455a64;margin-top:10px"
-            onclick="submitQuality(true)">送信して、写真も送る</button>
+            onclick="submitQuality(true)">送信して、写真を追加で送る</button>
     <div class="hint" style="margin-top:8px">
-      「送信して、写真も送る」を押すと、点数を保存してから写真の受付を始めます。<br>
-      そのあと <b>このトークに写真を送ってください</b>（清掃の写真と同じ送り方です）。
+      ★ 写真は<b>チェックの「開始」と「完了」を押したときに、自動で受付が始まります</b>。<br>
+      あとから足したいときだけ、こちらを押してください。点数を保存してから受付を始めます。
     </div>
   </div>
 
@@ -1510,7 +1509,7 @@ async function submitQuality(withPhoto){
       const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
         +'&userId='+encodeURIComponent(me.userId)
         +'&jobKey='+encodeURIComponent(jk)
-        +'&kind=quality');
+        +'&kind=quality_after');   // ★v8.07 追加ぶんは「手直し後」に入れる
       if(!res || !res.ok){
         reset();
         return showErr('msg-quality',
