@@ -958,7 +958,12 @@ function shiftHtml(shift, nDays){
 function drawStaff(){
   const st = DATA.staff || [];
   if(!st.length){ $('body').innerHTML='<div class="center">対象のスタッフがいません。</div>'; return; }
-  const propName = {};
+  // ★★v8.29 対応可物件がIDのまま出ていた（あなたの指摘 2026-08-30）。
+  //   DATA.props は【表示期間内に予定がある物件】だけなので、
+  //   予約の無い物件は名前を引けず L1004 のまま出ていた。
+  //   DATA.propNames（AssignBoard v8.29）は、スタッフの対応可物件に出てくるIDの名前。
+  //   ⚠️ 順番はこの通り。props（清掃ジョブの物件名）を後に置いて、実際に使われている表記を優先する。
+  const propName = Object.assign({}, DATA.propNames||{});
   (DATA.props||[]).forEach(function(p){ propName[p.pid]=p.name; });
 
   const nDays = (function(){
@@ -2010,9 +2015,12 @@ function render(d){
   fillProps();
 
   $('rel').style.display='block';
+  // ★★v8.29 古い案内が残っていた（あなたの指摘 2026-08-30）。
+  //   段4（v7.55）で清掃日も時刻もこの画面から変えられるようになっているのに、
+  //   段1のときの「まだ変えられません（スプレッドシートか本部へ）」が残っていた。
+  //   ＝ 使える機能を、案内が塞いでいた。
   $('foot').innerHTML =
-      '予定や未アサインの箱をタップすると<b>担当・募集人数・チェック担当</b>を変えられます。<br>'
-    + '清掃日と時刻はまだ変えられません（スプレッドシートか本部へ）。<br>'
+      '予定や未アサインの箱をタップすると<b>担当・募集人数・清掃日・時刻・チェック担当</b>を変えられます。<br>'
     + '過去の予定は変更できません。移動時間は実測（Googleマップ）です。';
   draw();
 }
