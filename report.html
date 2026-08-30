@@ -683,12 +683,28 @@
     <div id="msg-quality" class="msg"></div>
     <div class="note" style="background:#e8f5e9;border-color:#a5d6a7">
       <b>見たままを、事実で付けてください。</b><br>
-      誰が清掃したかはお伝えしていません。人ではなく<b>仕上がりだけ</b>を見てください。<br>
-      5＝そのままお客様をお迎えできる　3＝軽い手直しが要る　1＝やり直しが要る<br>
-      見ていない項目は <b>―</b>（該当なし）のままで構いません。
+      <b>5</b>＝そのままお迎えできる　<b>3</b>＝軽い手直しが要る　<b>1</b>＝やり直しが要る<br>
+      見ていない項目は <b>―</b> のままで構いません。
     </div>
     <div class="card">
       <label class="req">物件</label><select class="jobsel"></select>
+
+      <!-- ★v8.06 ほとんどの回は問題なし。まず全部5にして、気になった項目だけ下げる。
+           7項目を1つずつ押させると、押すこと自体が目的になって採点が雑になる。 -->
+      <div style="display:flex;gap:8px;margin:14px 0 4px">
+        <button type="button" onclick="qAll(5)"
+                style="flex:1;padding:12px 0;border:2px solid #2e7d32;border-radius:10px;
+                       background:#2e7d32;color:#fff;font-weight:700;font-size:15px">
+          ✅ すべて問題なし
+        </button>
+        <button type="button" onclick="qAll(0)"
+                style="padding:12px 16px;border:2px solid #ddd;border-radius:10px;
+                       background:#fff;color:#666;font-weight:700;font-size:15px">
+          消す
+        </button>
+      </div>
+      <div id="q-avg" class="note" style="display:none;background:#eceff1;border-color:#cfd8dc;
+           margin:0 0 4px;font-weight:700"></div>
       <div id="q-items"></div>
       <label style="margin-top:14px">気づいたこと（任意）</label>
       <textarea id="q-note" placeholder="例）洗面台に髪の毛が残っていた／ベッドのシワが目立つ／問題なし"></textarea>
@@ -699,16 +715,23 @@
               画面から直接送る方式は 2026-08-04 に一度やめている
               （最大6枚・1枚失敗で全部やり直し）。同じ穴を掘り直さない。
            ⚠️ この写真はオーナー様には共有しない。そう書いておかないと遠慮して撮らなくなる。 -->
-      <label style="margin-top:14px">気になった箇所の写真（任意）</label>
-      <div class="note" style="background:#fff8e1;border-color:#ffe082">
-        📷 <b>この写真はオーナー様には共有しません。</b>管理者だけが確認します。<br>
-        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。<br>
-        <b>清掃の写真と同じ送り方です。</b>下のボタンを押して、LINEのトークに送ってください。
+      <div class="note" style="background:#fff8e1;border-color:#ffe082;margin-top:14px">
+        📷 <b>気になった箇所の写真</b>（任意）<br>
+        この写真は<b>オーナー様には共有しません</b>。管理者だけが確認します。<br>
+        直せる箇所は直していただき、<b>直す前</b>の状態を撮っておいてください。
       </div>
-      <button type="button" class="submit" style="background:#455a64;margin-top:8px"
-              onclick="startQualityPhoto()">📷 写真をまとめて送る</button>
     </div>
-    <button class="submit" onclick="submitQuality()">この内容で送信する</button>
+    <button class="submit" onclick="submitQuality(false)">この内容で送信する</button>
+    <!-- ★★v8.06【写真を先に押すと評価が消える】社長指摘 2026-08-30
+         旧: 送信ボタンの【前】に写真ボタンを置いていた。押すと受付を始めて画面を閉じるため、
+             入力中の点数がまるごと消えていた。
+         新: 送信と同時に写真の受付を始める。点数は必ず先に保存される。 -->
+    <button class="submit" style="background:#455a64;margin-top:10px"
+            onclick="submitQuality(true)">送信して、写真も送る</button>
+    <div class="hint" style="margin-top:8px">
+      「送信して、写真も送る」を押すと、点数を保存してから写真の受付を始めます。<br>
+      そのあと <b>このトークに写真を送ってください</b>（清掃の写真と同じ送り方です）。
+    </div>
   </div>
 
   <!-- 報告の取消(★v3.39 LIFFで完結。旧: LINEトークへの案内文のみ) -->
@@ -1399,21 +1422,25 @@ function drawQuality(){
   const box = $('q-items'); if(!box) return;
   box.innerHTML = '';
   QUALITY_ITEMS.forEach(function(it){
+    // ★v8.06 1行にまとめる。見出しを大きく出すと7項目で画面が縦に伸びて、
+    //   下のほうの項目が「押されないまま送信」になる。
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'margin:14px 0 0';
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid #eee';
+
     const lb = document.createElement('div');
-    lb.style.cssText = 'font-weight:600;margin-bottom:6px';
+    lb.style.cssText = 'flex:1;font-size:13px;line-height:1.35;color:#333';
     lb.textContent = it.label;
     wrap.appendChild(lb);
+
     const row = document.createElement('div');
-    row.style.cssText = 'display:flex;gap:6px';
+    row.style.cssText = 'display:flex;gap:4px;flex:0 0 auto';
     ['―','1','2','3','4','5'].forEach(function(v,i){
       const b = document.createElement('button');
       b.type = 'button';
       b.textContent = v;
       b.dataset.k = it.k; b.dataset.v = String(i===0 ? 0 : i);
-      b.style.cssText = 'flex:1;padding:12px 0;border:2px solid #ddd;border-radius:10px;'
-                      + 'background:#fff;font-size:16px;font-weight:700;color:#666';
+      b.style.cssText = 'width:34px;height:38px;padding:0;border:2px solid #ddd;border-radius:8px;'
+                      + 'background:#fff;font-size:15px;font-weight:700;color:#999';
       b.onclick = function(){ pickQuality(it.k, Number(b.dataset.v)); };
       row.appendChild(b);
     });
@@ -1423,63 +1450,81 @@ function drawQuality(){
   paintQuality();
 }
 
+/** ★v8.06 まとめて付ける。0 なら全部消す */
+function qAll(v){
+  QSCORE = {};
+  if(v > 0) QUALITY_ITEMS.forEach(function(it){ QSCORE[it.k] = v; });
+  paintQuality();
+}
+
 function pickQuality(k, v){ QSCORE[k] = v; paintQuality(); }
 
 function paintQuality(){
   const box = $('q-items'); if(!box) return;
   box.querySelectorAll('button').forEach(function(b){
-    const on = (Number(QSCORE[b.dataset.k] || 0) === Number(b.dataset.v))
-            && !(QSCORE[b.dataset.k] === undefined && b.dataset.v === '0');
-    // 低い点は赤、高い点は緑。付けた実感が出るようにする。
+    const cur = QSCORE[b.dataset.k];
+    const on = (cur !== undefined) && (Number(cur) === Number(b.dataset.v));
     const v = Number(b.dataset.v);
     const col = (v === 0) ? '#9e9e9e' : (v <= 2 ? '#e53935' : (v === 3 ? '#f9a825' : '#2e7d32'));
-    b.style.background   = on ? col : '#fff';
-    b.style.color        = on ? '#fff' : '#666';
-    b.style.borderColor  = on ? col : '#ddd';
+    b.style.background  = on ? col : '#fff';
+    b.style.color       = on ? '#fff' : '#bbb';
+    b.style.borderColor = on ? col : '#ddd';
   });
+  // ★v8.06 いま何点なのかを出す。7項目を押し終えたかどうかも分かる。
+  const box2 = $('q-avg'); if(!box2) return;
+  let sum = 0, n = 0, low = [];
+  QUALITY_ITEMS.forEach(function(it){
+    const v = Number(QSCORE[it.k] || 0);
+    if(v > 0){ sum += v; n++; if(v <= 2) low.push(it.label); }
+  });
+  if(!n){ box2.style.display = 'none'; box2.textContent = ''; return; }
+  const avg = Math.round((sum / n) * 10) / 10;
+  box2.style.display = 'block';
+  box2.innerHTML = '平均 ' + avg + ' 点（' + n + '/' + QUALITY_ITEMS.length + '項目）'
+    + (low.length ? '<br><span style="color:#c62828">🔴 ' + low.join('・') + '</span>' : '');
 }
 
-async function submitQuality(){
+async function submitQuality(withPhoto){
   const jk = document.querySelector('#v-quality .jobsel').value;
   const note = $('q-note').value.trim();
   if(!jk) return showErr('msg-quality','物件を選んでください。');
-  // 1つも点数が無く、書き込みも無いときは送らない（空の記録が積み上がる）
   const any = QUALITY_ITEMS.some(function(it){ return Number(QSCORE[it.k]||0) > 0; });
   if(!any && !note) return showErr('msg-quality','点数か、気づいたことのどちらかを入れてください。');
-  const btn = event.target; btn.disabled = true; btn.textContent = '送信中…';
-  const reset = ()=>{ btn.disabled = false; btn.textContent = 'この内容で送信する'; };
+  const btn = event.target; const label = btn.textContent;
+  btn.disabled = true; btn.textContent = '送信中…';
+  const reset = ()=>{ btn.disabled = false; btn.textContent = label; };
   try{
     const job = jobsMap[jk] || {};
+    // ★★v8.06【点数を先に保存する】社長指摘 2026-08-30
+    //   旧: 写真ボタンが送信ボタンの前にあり、押すと画面が閉じて
+    //       入力中の点数がまるごと消えていた。
+    //   新: 必ず点数を送ってから、写真の受付を始める。
     await postGas({ mode:'quality_submit', userId:me.userId, jobKey:jk,
       pid:job.pid||'', propName:job.name||'', cleanDate:job.cleanDate||'',
       scores:QSCORE, note:note });
+    if(!withPhoto){ finishDone(); return; }
+
+    // 写真の受付を始める。⚠️ ここで失敗しても点数は保存済み。取り消さない。
+    btn.textContent = '写真の受付を始めています…';
+    try{
+      const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
+        +'&userId='+encodeURIComponent(me.userId)
+        +'&jobKey='+encodeURIComponent(jk)
+        +'&kind=quality');
+      if(!res || !res.ok){
+        reset();
+        return showErr('msg-quality',
+          '点数は保存できました。写真の受付だけ始められませんでした。\n'
+          + ((res&&res.message)||'') + '\nもう一度「送信して、写真も送る」を押してください。');
+      }
+    }catch(e2){
+      reset();
+      return showErr('msg-quality','点数は保存できました。写真の受付だけ始められませんでした。もう一度お試しください。');
+    }
     finishDone();
   }catch(err){
     reset();
     showErr('msg-quality','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所でお試しください。');
-  }
-}
-
-// ★★v8.04 品質チェックの写真は、清掃前・清掃後とまったく同じ「トークに送る」方式。
-//   受付を始めて画面を閉じる。あとはトークに写真を送るだけ。
-//   ⚠️ 点数より先に送っても後に送っても、同じ清掃にひも付きます。
-async function startQualityPhoto(){
-  const jk = document.querySelector('#v-quality .jobsel').value;
-  if(!jk) return showErr('msg-quality','先に物件を選んでください。');
-  const btn = event.target; btn.disabled = true; btn.textContent = '受付を開始しています…';
-  try{
-    const res = await jsonp(GAS_URL+'?mode=photo_intake_start'
-      +'&userId='+encodeURIComponent(me.userId)
-      +'&jobKey='+encodeURIComponent(jk)
-      +'&kind=quality');
-    if(!res || !res.ok){
-      btn.disabled=false; btn.textContent='📷 写真をまとめて送る';
-      return showErr('msg-quality',(res&&res.message)||'受付を始められませんでした。');
-    }
-    finishDone();
-  }catch(err){
-    btn.disabled=false; btn.textContent='📷 写真をまとめて送る';
-    showErr('msg-quality','通信に失敗しました。電波の良い場所で再度お試しください。');
   }
 }
 
