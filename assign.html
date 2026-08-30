@@ -1154,6 +1154,9 @@ function openEdit(jobKey, fromCheck){
          chk:   (j.chk||[]).slice(),
          need:  String(j.need||''),
          start: j.start||'', end: j.end||'',      // ★v7.55 段3
+         // ★★★v8.42【人別の開始時刻】{ スタッフID: {s,e} }
+         //   空 {} ＝ 全員が start〜end どおり。入力するまで1文字も送りません。
+         times: JSON.parse(JSON.stringify(j.times||{})),
          date:  j.ymd,                            // ★v7.55 段4
          memo:  '',                               // 縮めた理由
          note:  '',                               // ★v7.56 依頼するときの特記事項
@@ -1186,6 +1189,46 @@ function tog(arr, n){ const i = arr.indexOf(n); if(i>=0) arr.splice(i,1); else a
 // ★v7.55 時刻の増減。30分きざみ。既存の値は丸めない（10:21 のような値がある）
 function hm2min(t){ const m=String(t||'').match(/^(\d{1,2}):(\d{1,2})$/); return m ? (+m[1])*60+(+m[2]) : null; }
 function min2hm(n){ n=Math.max(0,Math.min(47*60+59,n)); return Math.floor(n/60)+':'+('0'+(n%60)).slice(-2); }
+// ★★★v8.42【人別の開始時刻】あなたの確定 2026-08-30
+//   「アサイン管理では時間を分けて考えないと回る順を決められない」
+//   ⚠️ 何も触らなければ ED.times は {} のまま。既存の動きは1つも変わりません。
+function sidOf(name){ const s = staffOf(name); return (s && s.sid) ? String(s.sid) : ''; }
+function stSpanNow(){ const a=hm2min(ED.start), b=hm2min(ED.end); return (a==null||b==null)?null:(b-a); }
+// その人の現在の時刻。人別が無ければ全体の時刻
+function stOf(sid){
+  const t = (ED.times||{})[sid];
+  if(t && t.s) return { s:t.s, e:(t.e||ED.end||''), own:true };
+  return { s: ED.start||'', e: ED.end||'', own:false };
+}
+// その人の開始を30分ずつ動かす。所要はそのまま持ち回る
+function bumpOne(sid, d){
+  const cur = stOf(sid);
+  const s0 = hm2min(cur.s); if(s0==null) return;
+  const span = (function(){ const a=hm2min(cur.s), b=hm2min(cur.e); return (a==null||b==null)?stSpanNow():(b-a); })();
+  const ns = min2hm(s0 + d*30);
+  ED.times = ED.times || {};
+  ED.times[sid] = { s: ns, e: (span==null? '' : min2hm(hm2min(ns)+span)) };
+  drawEdit();
+}
+// その人の所要を30分ずつ動かす
+function bumpOneSpan(sid, d){
+  const cur = stOf(sid);
+  const s0 = hm2min(cur.s), e0 = hm2min(cur.e);
+  if(s0==null) return;
+  const span = (e0==null? (stSpanNow()||0) : (e0-s0)) + d*30;
+  if(span < 30) return;
+  ED.times = ED.times || {};
+  ED.times[sid] = { s: cur.s, e: min2hm(s0+span) };
+  drawEdit();
+}
+// その人を「全員そろって」に戻す（人別をやめる）
+function clearOne(sid){
+  if(ED.times) delete ED.times[sid];
+  drawEdit();
+}
+// いま人別の時刻を持っている人が1人でもいるか
+function stAnyOwn(){ return Object.keys(ED.times||{}).length > 0; }
+
 function bumpStart(d){
   const s0 = hm2min(ED.start), e0 = hm2min(ED.end);
   if(s0==null) return;
@@ -1806,6 +1849,42 @@ function drawEdit(){
         + pillHtml('−1時間', spanNow===stdN-60, 'setSpan('+(stdN-60)+')')
         + pillHtml('＋30分', spanNow===stdN+30, 'setSpan('+(stdN+30)+')')
         + '</div>' : '')
+    // ★★★v8.42【人別の開始時刻】2名以上のときだけ出す。
+    //   ⚠️ 触らなければ何も送りません。「全員そろって」のままなら従来どおりです。
+    +   ((ED.staff||[]).length >= 2
+        ? '<div class="lb" style="margin:13px 0 6px">人別の開始時刻'
+          + (stAnyOwn() ? '' : '　<span style="font-weight:400;color:#666">全員そろって '
+              + esc(ED.start||'--:--')+'〜'+esc(ED.end||'--:--')+'</span>')
+          + '</div>'
+          + (ED.staff||[]).map(function(nm){
+              const sid = sidOf(nm);
+              if(!sid) return '<div class="box info" style="margin-bottom:7px">'
+                             + esc(nm)+'　時刻を分けられません（スタッフマスタにIDがありません）</div>';
+              const t = stOf(sid);
+              const sp = (function(){ const a=hm2min(t.s), b=hm2min(t.e); return (a==null||b==null)?null:(b-a); })();
+              return '<div style="margin-bottom:9px">'
+                + '<div class="lb" style="margin-bottom:4px">'+esc(nm)
+                +   (t.own ? '　<span style="color:#1565c0">個別</span>'
+                           : '　<span style="font-weight:400;color:#888">全員そろって</span>')+'</div>'
+                + '<div class="stp"><button onclick="bumpOne('+q(sid)+',-1)">−</button>'
+                +   '<span class="v">'+esc(t.s||'--:--')+'〜'+esc(t.e||'--:--')
+                +     '<small>'+(sp!=null ? Math.floor(sp/60)+'h'+('0'+(sp%60)).slice(-2) : '—')
+                +     '　開始を30分ずつ</small></span>'
+                +   '<button onclick="bumpOne('+q(sid)+',1)">＋</button></div>'
+                + '<div class="pills" style="margin-top:5px">'
+                +   pillHtml('所要 −30分', false, 'bumpOneSpan('+q(sid)+',-1)')
+                +   pillHtml('所要 ＋30分', false, 'bumpOneSpan('+q(sid)+',1)')
+                +   (t.own ? pillHtml('全員そろってに戻す', false, 'clearOne('+q(sid)+')') : '')
+                + '</div></div>';
+            }).join('')
+          + (stAnyOwn()
+              ? '<div class="box info">🕒 人別の時刻を入れました。上の「時間」は'
+                + '<b>いちばん早い人の開始〜いちばん遅い人の終了</b>で保存します'
+                + '（現場が開いている時間帯）。<br>'
+                + '<span style="font-weight:400">本人への通知とカレンダーは、その人自身の時刻で届きます。</span></div>'
+              : '<div class="box info" style="font-weight:400">時間差で入るときは、ここで人ごとに動かしてください。'
+                + '触らなければ全員そろっての扱いのままです。</div>')
+        : '')
     +   (cutN>0 ? '<div class="lb" style="margin:11px 0 6px">短縮した理由（記録に残します）</div>'
         + '<div class="pills">'
         + ['2名で対応','ベテラン','連泊なし','少人数の宿泊','その他'].map(function(m){
@@ -1954,6 +2033,7 @@ function saveEdit(){
   if(ED.date    !== j.ymd)                 it.date    = ED.date;
   if(ED.chkDate !== (j.chkDate||''))       it.chkDate = ED.chkDate;
   if(ED.chkTime !== (j.chkTime||''))       it.chkTime = ED.chkTime;
+  if(!same(ED.times||{}, j.times||{}))     it.times   = ED.times||{};   // ★v8.42 人別の時刻
   if(ED.memo) it.memo = ED.memo;
   if(ED.note) it.note = ED.note;
 
