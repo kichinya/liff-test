@@ -313,7 +313,7 @@
   <div class="filt" id="filt" style="display:none">
     <div class="r">
       <label>期間</label>
-      <select id="f-days" onchange="reload()">
+      <select id="f-days" onchange="load()">
         <option value="7">1週間</option>
         <option value="14" selected>2週間</option>
         <option value="30">1か月</option>
@@ -1548,7 +1548,7 @@ function saveReorder(){
       closeReorder();
       $('msg').className='msg';
       $('msg').textContent = res.message || (items.length+'件の時刻を組み直しました。');
-      reload(); return;
+      load(); return;
     }
     var m = (res && res.message) || '保存できませんでした。';
     if(res && res.ng && res.ng.length) m += '\n' + res.ng.map(function(x){ return '・'+x.prop+'：'+x.why; }).join('\n');
@@ -1969,7 +1969,7 @@ function saveEdit(){
       closeEdit();
       $('msg').className = 'msg';
       $('msg').textContent = res.message || '保存しました。';
-      reload();
+      load();
       return;
     }
     let m = (res && res.message) || '保存できませんでした。';
@@ -2025,13 +2025,17 @@ function render(d){
   draw();
 }
 
-async function reload(){ await load(); }
+// ★★v8.29d「🔄 最新の状態にする」はキャッシュを使わない。
+//   通常の表示はマスタのキャッシュ（5分）で速く出し、
+//   最新が要るときだけ読み直す。押した回もキャッシュは書き直すので、次からまた速い。
+async function reload(){ await load(true); }
 
-async function load(){
+async function load(fresh){
   $('body').innerHTML='<div class="center">読み込み中…</div>';
   try{
     const days = $('f-days').value || '14';
     const res = await jsonp(GAS_URL+'?mode=ab_board&days='+encodeURIComponent(days)
+                 +(fresh ? '&fresh=1' : '')
                  +'&userId='+encodeURIComponent(me.userId));
     if(!res || !res.ok){
       // ★v7.34 なぜ開けないのかまで出す。「権限がありません」だけだと原因に辿り着けない
