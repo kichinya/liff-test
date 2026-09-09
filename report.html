@@ -126,6 +126,11 @@
   .psub button{ flex:1; background:#fff; color:var(--ink); border:1px solid var(--line);
                 border-radius:8px; padding:9px; font-size:13px; cursor:pointer; }
   .pcnt{ font-size:12px; color:var(--sub); text-align:center; margin-top:10px; }
+  /* ★v9.15 勤怠の確認：区切りの見出し */
+  .ksec{ font-weight:700; font-size:14px; margin:18px 2px 8px; padding-bottom:6px;
+         border-bottom:2px solid var(--line); }
+  .ksec.y{ color:#a06a00; border-color:#ffe082; }
+  .kamt{ font-weight:700; white-space:nowrap; margin-left:10px; }
   .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none; }
   .msg.err{ background:#fdecea; color:#b71c1c; display:block; }
   .msg.ok{ background:#e8f5e9; color:var(--green-d); display:block; } /* ★v3.39 取消の成功表示 */
@@ -164,6 +169,7 @@
       <div class="mbtn" onclick="go('settings')"><div class="ico">⚙️</div>移動手段・出発地</div>
       <div class="mbtn" onclick="go('cancel')"><div class="ico">↩️</div>報告の取消</div>
       <div class="mbtn" onclick="go('late')"><div class="ico">⏰</div>打刻の後入れ</div>
+      <div class="mbtn" onclick="go('mykin')"><div class="ico">🕐</div>勤怠の確認</div>
       <div class="mbtn" onclick="go('help')"><div class="ico">❓</div>使い方</div>
     </div>
     <p class="hint" style="margin-top:14px">
@@ -390,7 +396,9 @@
           共有するかどうかは<b>こちらで確認してから</b>決めますので、
           まずは<b>見たままの事実</b>をそのまま書いてください（<b>お名前は出ません</b>）。<br>
           金額のご相談や社内のことは、ここではなく<b>このトークにご返信ください</b>。<br>
-          ※ <b>💰 立替精算はオーナー様には共有しません。</b>安心してお出しください。
+          ※ <b>💰 立替精算</b>… <b>🧻 物件の消耗品・備品</b>と<b>🧺 コインランドリー代</b>の領収書は、オーナー様への請求の証拠として
+          <b>オーナー様にも見えるフォルダ</b>に入ります（<b>お名前は入りません</b>）。<br>
+          　<b>🅿️ パーキング代・🚃 交通費</b>は<b>オーナー様には共有しません。</b>安心してお出しください。
         </div>
       </div>
     </details>
@@ -570,6 +578,17 @@
       <label class="req">清掃日</label><select id="e-date"><option value="">読み込んでいます…</option></select>
       <div class="note" id="e-range"></div>
       <label class="req">物件</label><select class="jobsel"><option value="">読み込んでいます…</option></select>
+      <!-- ★v9.02 種別。保存先がここで変わる。
+           物件の消耗品 … オーナー様と共有するフォルダへ（請求するものなので見えて問題ない）
+           パーキング／交通費 … これまでどおり経理だけのフォルダへ -->
+      <label class="req">種別</label>
+      <div class="seg" id="e-seg" style="flex-wrap:wrap">
+        <label class="on" style="flex:1 1 44%"><input type="radio" name="ek" value="supply" checked><span>🧻 物件の<br>消耗品・備品</span></label>
+        <label style="flex:1 1 44%"><input type="radio" name="ek" value="laundry"><span>🧺 コイン<br>ランドリー代</span></label>
+        <label style="flex:1 1 44%"><input type="radio" name="ek" value="parking"><span>🅿️ パーキング代</span></label>
+        <label style="flex:1 1 44%"><input type="radio" name="ek" value="transit"><span>🚃 交通費<br>（電車・バス）</span></label>
+      </div>
+      <div class="hint" id="e-segwhy">トイレットペーパー・洗剤・電池など、その物件で使うものは「消耗品・備品」です。</div>
       <label class="req">金額</label>
       <div class="amount-wrap"><span class="yen">¥</span><input id="e-amount" type="number" inputmode="numeric" min="1" placeholder="例）1200"></div>
       <label class="req">用途</label><input id="e-purpose" type="text" placeholder="例）トイレットペーパー・洗剤">
@@ -789,6 +808,55 @@
     <button id="p-btn" class="submit" onclick="submitProps()">この内容で保存する</button>
   </div>
 
+  <!-- ★v9.14 勤怠の確認（自分の勤怠ログを見る／修正を依頼する） -->
+  <div id="v-mykin" class="hidden">
+    <button class="back" onclick="go('menu')">← 戻る</button>
+    <h1>🕐 勤怠の確認</h1>
+    <div id="msg-mykin" class="msg"></div>
+    <div class="pnote">
+      記録されている<b>開始・完了の時刻</b>と<b>実働分</b>です。<br>
+      <b>この実働分が、業務委託費のもとになります。</b>違うところがあれば修正を依頼してください。<br>
+      <span style="color:#a06a00">打刻を1つも押していない回は、この一覧には出ません。
+      メニューの「⏰ 打刻の後入れ」からお願いします。</span>
+    </div>
+    <label class="req" style="margin-top:12px">月</label>
+    <select id="k-ym" onchange="loadMyKin()"><option value="">読み込んでいます…</option></select>
+    <div id="k-sum" class="pcnt"></div>
+
+    <!-- ★v9.15 打刻が1つも無い清掃 -->
+    <div id="k-miss"></div>
+
+    <div class="ksec">🕐 打刻の記録</div>
+    <div id="k-list"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+
+    <!-- ★v9.15 立替は立替で分けて出す -->
+    <div id="k-exp"></div>
+  </div>
+
+  <!-- ★v9.14 修正の依頼 -->
+  <div id="v-kfix" class="hidden">
+    <button class="back" onclick="go('mykin')">← 戻る</button>
+    <h1>🛠 修正を依頼する</h1>
+    <div id="msg-kfix" class="msg"></div>
+    <div class="card">
+      <div id="f-head" style="font-weight:700;margin-bottom:10px"></div>
+      <div id="f-now" style="font-size:13px;color:#6b7683;line-height:1.8;margin-bottom:14px"></div>
+      <label>開始時刻（変えないときは空欄のまま）</label>
+      <input id="f-st" type="text" inputmode="numeric" placeholder="例）9:30" maxlength="5">
+      <label>完了時刻（変えないときは空欄のまま）</label>
+      <input id="f-en" type="text" inputmode="numeric" placeholder="例）11:00" maxlength="5">
+      <label>作業区分（変えないときはそのまま）</label>
+      <select id="f-kind"></select>
+      <label class="req">理由</label>
+      <input id="f-why" type="text" placeholder="例）完了を押すのを忘れ、実際は11:00に終わりました" maxlength="300">
+    </div>
+    <div class="pnote">
+      送ると<b>本部に確認の連絡が届きます。</b>承認されると勤怠ログが直り、LINEでお知らせします。<br>
+      <b>この場では変わりません。</b>
+    </div>
+    <button id="f-btn" class="submit" onclick="submitKinFix()">この内容で依頼する</button>
+  </div>
+
   <!-- 移動手段・出発地（★v4.41 明日の予定に付ける地図の経路を正確にするための任意設定） -->
   <div id="v-settings" class="hidden">
     <button class="back" onclick="go('menu')">← 戻る</button>
@@ -943,6 +1011,7 @@ function go(name){
   if (name==='props')  loadProps();        // ★対応できる物件: 開くたびに最新を取り直す
   if (name==='settings') loadSettings();   // ★v4.41 移動手段・出発地
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
+  if (name==='mykin')    loadMyKinFirst(); // ★v9.14 勤怠の確認
 }
 
 
@@ -1076,6 +1145,10 @@ $('e-photo').addEventListener('change', (e)=>{ const p=$('e-prev'); p.innerHTML=
 async function submitExpense(){
   const jk=document.querySelector('#v-expense .jobsel').value;
   const amount=parseInt($('e-amount').value,10); const purpose=$('e-purpose').value.trim();
+  // ★v9.02 種別。選ばれていなければ送らない（サーバ側で勝手に決めない）
+  const _k=document.querySelector('#e-seg input[name="ek"]:checked');
+  const kind=_k?_k.value:'';
+  if(!kind) return showErr('msg-expense','種別を選んでください。');
   if(!$('e-date').value) return showErr('msg-expense','清掃日を選んでください。');
   if(!jk) return showErr('msg-expense','物件を選んでください。');
   if(!(amount>0)) return showErr('msg-expense','金額を正しく入力してください。');
@@ -1095,6 +1168,7 @@ async function submitExpense(){
     const job=jobsMap[jk]||{};
     await postGas({ mode:'exp_submit', userId:me.userId, jobKey:jk, pid:job.pid||'', propName:job.name||'',
       cleanDate:job.cleanDate||'', amount:amount, purpose:purpose,
+      kind:kind,                                            // ★v9.02 保存先の振り分け
       receipts:receipts, receiptMime: receipts.length?'image/jpeg':'' });
     if(conv.bad.length){
       // 送信は成立している。落ちた枚数を隠さない。
@@ -1190,6 +1264,21 @@ async function startPhotoIntake(){
 (function(){ const _q=$('q-seg'); if(_q) _q.addEventListener('click', ()=>{
   document.querySelectorAll('#q-seg label').forEach(function(l){
     l.classList.toggle('on', l.querySelector('input').checked); }); }); })();
+
+// ★v9.02 立替の種別
+$('e-seg').addEventListener('click', ()=>{
+  document.querySelectorAll('#e-seg label').forEach(function(l){ l.classList.toggle('on', l.querySelector('input').checked); });
+  const k=(document.querySelector('#e-seg input[name="ek"]:checked')||{}).value;
+  const w=$('e-segwhy'), pu=$('e-purpose');
+  if(k==='supply'){ w.textContent='トイレットペーパー・洗剤・電池など、その物件で使うものは「消耗品・備品」です。';
+    pu.placeholder='例）トイレットペーパー・洗剤'; }
+  else if(k==='laundry'){ w.textContent='コインランドリーの洗濯・乾燥代です。オーナー様への請求に入ります。';
+    pu.placeholder='例）コインランドリー代（シーツ・タオル）'; }
+  else if(k==='parking'){ w.textContent='コインパーキング・駐車場代です。オーナー様には共有しません。';
+    pu.placeholder='例）パーキング代'; }
+  else { w.textContent='電車・バスなどの運賃です。オーナー様には共有しません。';
+    pu.placeholder='例）電車代（藤沢→鎌倉）'; }
+});
 
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
   l.classList.toggle('on', l.querySelector('input').checked); });
@@ -1599,6 +1688,142 @@ async function submitQuality(){
 }
 
 function setMsg2(id,text,cls){ const m=$(id); if(!m) return; m.textContent=text||''; m.className='msg'+(cls?' '+cls:''); }
+
+// ---- ★v9.14 勤怠の確認 ----
+// 自分の勤怠ログを見る。金額は出さない（単価は個人例外があり、二重の正解を作らないため）。
+let MYKIN = { rows: [], ym: '', closed: false, target: null };
+const KIND_LIST = ['通常清掃','チェック','その他'];
+
+function loadMyKinFirst(){
+  const sel = $('k-ym');
+  if (sel.options.length <= 1 || !sel.value) { sel.innerHTML = '<option value="">読み込んでいます…</option>'; }
+  loadMyKin();
+}
+
+async function loadMyKin(){
+  setMsg2('msg-mykin','','');
+  $('k-list').innerHTML = '<div class="center" style="padding:20px 8px">読み込み中…</div>';
+  $('k-sum').textContent = '';
+  // ★v9.15 前の月の内容を残さない。残ると別の月の数字を自分の月だと思う事故になる
+  $('k-miss').innerHTML = ''; $('k-exp').innerHTML = '';
+  try{
+    const ym = $('k-ym').value || '';
+    const res = await jsonp(GAS_URL+'?mode=my_kintai&userId='+encodeURIComponent(me.userId)
+                            + (ym ? '&ym='+encodeURIComponent(ym) : ''));
+    if(!res || !res.ok){ showErr('msg-mykin', (res&&res.message)||'読み込めませんでした。'); $('k-list').innerHTML=''; return; }
+    MYKIN.rows = res.rows||[]; MYKIN.ym = res.ym; MYKIN.closed = !!res.closed;
+
+    const sel = $('k-ym');
+    if (sel.options.length <= 1 || !sel.value){
+      sel.innerHTML = (res.months||[res.ym]).map(function(m){
+        return '<option value="'+m+'"'+(m===res.ym?' selected':'')+'>'+m.replace('-','年')+'月</option>';
+      }).join('');
+    }
+
+    const t = res.total||{count:0,work:0,open:0};
+    $('k-sum').innerHTML = '<b>'+t.count+'件</b>　実働 <b>'+t.work+'分</b>（'+(t.work/60).toFixed(1)+'時間）'
+      + (t.open ? '<br><span style="color:#c62828">完了時刻が入っていない回が '+t.open+'件あります</span>' : '');
+
+    drawKinMissing(res.missing||[]);
+    drawKinExpense(res.expenses||[]);
+
+    if(!MYKIN.rows.length){
+      $('k-list').innerHTML = '<div class="center" style="padding:20px 8px;color:#6b7683">この月の打刻はありません。</div>';
+      return;
+    }
+    $('k-list').innerHTML = MYKIN.rows.map(function(x,i){
+      return '<div class="pcard"><div class="pbody">'
+        + '<div class="pname">'+esc(x.md)+'　'+esc(x.prop)+'</div>'
+        + '<div class="paddr">'+esc(x.st||'--:--')+'〜'+esc(x.en||'--:--')
+        + '　'+(x.work==null?'<span style="color:#c62828">実働分なし</span>':'<b>'+x.work+'分</b>')
+        + (x.kind?'　'+esc(x.kind):'')+'</div>'
+        + '</div>'
+        + '<button style="padding:8px 12px;font-size:12px;white-space:nowrap" onclick="openKinFix('+i+')">修正を依頼</button>'
+        + '</div>';
+    }).join('');
+  }catch(err){
+    showErr('msg-mykin','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+    $('k-list').innerHTML=''; $('k-miss').innerHTML=''; $('k-exp').innerHTML=''; $('k-sum').textContent='';
+  }
+}
+
+// ★v9.15 打刻が1つも無い清掃。ここからは【後入れ】へ送る（修正依頼ではない）。
+//   空欄を埋めるのは承認なしで即反映できる。承認待ちにすると締めに間に合わない。
+function drawKinMissing(list){
+  const box = $('k-miss');
+  if(!list.length){ box.innerHTML=''; return; }
+  box.innerHTML = '<div class="ksec y">🔴 打刻が入っていない清掃 '+list.length+'件</div>'
+    + '<div class="pnote">この回は<b>実働分が空</b>です。このままでは業務委託費の対象になりません。<br>'
+    + '「⏰ 打刻の後入れ」から入れてください。<b>承認は要りません。すぐ反映されます。</b></div>'
+    + list.map(function(x){
+        return '<div class="pcard" style="margin-top:8px"><div class="pbody">'
+             + '<div class="pname">'+esc(x.md)+'　'+esc(x.prop)+'</div>'
+             + (x.plan?'<div class="paddr">予定 '+esc(x.plan)+'</div>':'')
+             + '</div></div>';
+      }).join('')
+    + '<button class="submit" style="margin-top:10px" onclick="go(\'late\')">⏰ 打刻の後入れを開く</button>';
+}
+
+// ★v9.15 立替。打刻の集計とは混ぜない（件数・実働分に混ざると本人が混乱する）。
+function drawKinExpense(list){
+  const box = $('k-exp');
+  if(!list.length){
+    box.innerHTML = '<div class="ksec">💰 立替</div>'
+      + '<div class="center" style="padding:14px 8px;color:#6b7683">この月の立替はありません。</div>';
+    return;
+  }
+  let sum=0; list.forEach(function(x){ sum+=x.amt; });
+  box.innerHTML = '<div class="ksec">💰 立替 '+list.length+'件　'+sum.toLocaleString()+'円</div>'
+    + list.map(function(x){
+        return '<div class="pcard"><div class="pbody">'
+             + '<div class="pname">'+esc(x.md)+'　'+esc(x.prop)+'</div>'
+             + '<div class="paddr">'+esc(x.use)
+             + (x.url?'':'　<span style="color:#c62828">領収書なし</span>')+'</div>'
+             + '</div><div class="kamt">¥'+x.amt.toLocaleString()+'</div></div>';
+      }).join('')
+    + '<div class="pnote">立替は<b>翌月の支払いに合算</b>されます。'
+    + '内容が違うときは、このトークにご返信ください。</div>';
+}
+
+function openKinFix(i){
+  const x = MYKIN.rows[i]; if(!x) return;
+  MYKIN.target = x;
+  $('f-head').textContent = x.md + '　' + x.prop;
+  $('f-now').innerHTML = 'いまの記録：<b>'+esc(x.st||'--:--')+'〜'+esc(x.en||'--:--')+'</b>'
+    + '　'+(x.work==null?'—':x.work+'分') + (x.kind?'　'+esc(x.kind):'');
+  $('f-st').value=''; $('f-en').value=''; $('f-why').value='';
+  const cur = x.kind || '';
+  const opts = KIND_LIST.slice();
+  if (cur && opts.indexOf(cur)<0) opts.unshift(cur);
+  $('f-kind').innerHTML = opts.map(function(k){
+    return '<option value="'+esc(k)+'"'+(k===cur?' selected':'')+'>'+esc(k)+'</option>';
+  }).join('');
+  setMsg2('msg-kfix','','');
+  showView('kfix');
+}
+
+async function submitKinFix(){
+  const x = MYKIN.target; if(!x) return;
+  const st=$('f-st').value.trim(), en=$('f-en').value.trim();
+  const kind=$('f-kind').value, why=$('f-why').value.trim();
+  const kindChanged = (kind && kind !== (x.kind||''));
+  if(!st && !en && !kindChanged) return showErr('msg-kfix','変更したい内容を1つ以上入れてください。');
+  if(!why) return showErr('msg-kfix','理由を入力してください。');
+  const btn=$('f-btn'); btn.disabled=true; btn.textContent='送信中…';
+  const reset=()=>{ btn.disabled=false; btn.textContent='この内容で依頼する'; };
+  try{
+    const res = await jsonp(GAS_URL+'?mode=fix_submit&userId='+encodeURIComponent(me.userId)
+      + '&row='+encodeURIComponent(x.row)
+      + '&st='+encodeURIComponent(st) + '&en='+encodeURIComponent(en)
+      + '&kind='+encodeURIComponent(kindChanged?kind:'')
+      + '&why='+encodeURIComponent(why));
+    if(!res || !res.ok){ reset(); return showErr('msg-kfix',(res&&res.message)||'送信できませんでした。'); }
+    finishDone();
+  }catch(err){
+    reset();
+    showErr('msg-kfix','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+  }
+}
 
 // ---- 報告の取消(★v3.39 LIFFで完結) ----
 // ★jobsMap は流用しない。母集合が違う。
