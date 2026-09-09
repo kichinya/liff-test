@@ -816,8 +816,7 @@
     <div class="pnote">
       記録されている<b>開始・完了の時刻</b>と<b>実働分</b>です。<br>
       <b>この実働分が、業務委託費のもとになります。</b>違うところがあれば修正を依頼してください。<br>
-      <span style="color:#a06a00">打刻を1つも押していない回は、この一覧には出ません。
-      メニューの「⏰ 打刻の後入れ」からお願いします。</span>
+
     </div>
     <label class="req" style="margin-top:12px">月</label>
     <select id="k-ym" onchange="loadMyKin()"><option value="">読み込んでいます…</option></select>
@@ -1012,6 +1011,15 @@ function go(name){
   if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
   if (name==='props')  loadProps();        // ★対応できる物件: 開くたびに最新を取り直す
   if (name==='settings') loadSettings();   // ★v4.41 移動手段・出発地
+  if (name==='expense') {
+    // ★★v9.23【前回の入力を持ち越さない】2026-09-09
+    //   赤いエラー・金額・用途・選んだ領収書ファイルが残り、
+    //   気づかず次を送ると【前回の領収書が別の申請に添付される】。
+    setMsg2('msg-expense','','');
+    $('e-amount').value=''; $('e-purpose').value='';
+    try { $('e-photo').value=''; } catch(e){}
+    $('e-prev').innerHTML='';
+  }
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
   if (name==='mykin')    loadMyKinFirst(); // ★v9.14 勤怠の確認
 }
@@ -1702,7 +1710,9 @@ function loadMyKinFirst(){
   loadMyKin();
 }
 
+let MYKIN_SEQ = 0;   // ★v9.23 古い応答で新しい表示を上書きしない
 async function loadMyKin(){
+  const seq = ++MYKIN_SEQ;
   setMsg2('msg-mykin','','');
   $('k-list').innerHTML = '<div class="center" style="padding:20px 8px">読み込み中…</div>';
   $('k-sum').textContent = '';
@@ -1712,6 +1722,7 @@ async function loadMyKin(){
     const ym = $('k-ym').value || '';
     const res = await jsonp(GAS_URL+'?mode=my_kintai&userId='+encodeURIComponent(me.userId)
                             + (ym ? '&ym='+encodeURIComponent(ym) : ''));
+    if(seq !== MYKIN_SEQ) return;                       // ★v9.23 古い応答は捨てる
     if(!res || !res.ok){ showErr('msg-mykin', (res&&res.message)||'読み込めませんでした。'); $('k-list').innerHTML=''; return; }
     MYKIN.rows = res.rows||[]; MYKIN.ym = res.ym; MYKIN.closed = !!res.closed;
 
@@ -1726,8 +1737,8 @@ async function loadMyKin(){
     $('k-sum').innerHTML = '<b>'+t.count+'件</b>　実働 <b>'+t.work+'分</b>（'+(t.work/60).toFixed(1)+'時間）'
       + (t.open ? '<br><span style="color:#c62828">完了時刻が入っていない回が '+t.open+'件あります</span>' : '');
 
-    drawKinMissing(res.missing||[]);
-    drawKinExpense(res.expenses||[]);
+    drawKinMissing(res.missing||[], res.missErr||'');
+    drawKinExpense(res.expenses||[], res.expErr||'');
 
     if(!MYKIN.rows.length){
       $('k-list').innerHTML = '<div class="center" style="padding:20px 8px;color:#6b7683">この月の打刻はありません。</div>';
@@ -1744,6 +1755,7 @@ async function loadMyKin(){
         + '</div>';
     }).join('');
   }catch(err){
+    if(seq !== MYKIN_SEQ) return;                       // ★v9.23
     showErr('msg-mykin','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
     $('k-list').innerHTML=''; $('k-miss').innerHTML=''; $('k-exp').innerHTML=''; $('k-sum').textContent='';
   }
@@ -1751,8 +1763,11 @@ async function loadMyKin(){
 
 // ★v9.15 打刻が1つも無い清掃。ここからは【後入れ】へ送る（修正依頼ではない）。
 //   空欄を埋めるのは承認なしで即反映できる。承認待ちにすると締めに間に合わない。
-function drawKinMissing(list){
+function drawKinMissing(list, err){
   const box = $('k-miss');
+  // ★v9.23 読めなかったときに「0件」と同じ見た目にしない
+  if(err){ box.innerHTML = '<div class="ksec y">⚠️ 打刻の抜けを確認できませんでした</div>'
+    + '<div class="pnote">通信か記録の読み取りに失敗しました。時間をおいて開き直してください。</div>'; return; }
   if(!list.length){ box.innerHTML=''; return; }
   box.innerHTML = '<div class="ksec y">🔴 打刻が入っていない清掃 '+list.length+'件</div>'
     + '<div class="pnote">この回は<b>実働分が空</b>です。このままでは業務委託費の対象になりません。<br>'
@@ -1767,24 +1782,29 @@ function drawKinMissing(list){
 }
 
 // ★v9.15 立替。打刻の集計とは混ぜない（件数・実働分に混ざると本人が混乱する）。
-function drawKinExpense(list){
+function drawKinExpense(list, err){
   const box = $('k-exp');
+  if(err){ box.innerHTML = '<div class="ksec">💰 立替</div>'
+    + '<div class="pnote">⚠️ 立替を確認できませんでした。時間をおいて開き直してください。</div>'; return; }
   if(!list.length){
     box.innerHTML = '<div class="ksec">💰 立替</div>'
       + '<div class="center" style="padding:14px 8px;color:#6b7683">この月の立替はありません。</div>';
     return;
   }
   // ★v9.18 承認待ち・却下は合計に入れない。入れると支払われると誤解する。
+  // ★v9.23 支払われるかは GAS の exaPayable_ が決めた x.pay を使う。
+  //   画面で文字列を比べると、想定外の値が静かに「支払われる」側へ落ちる。
   let sum=0, hold=0;
-  list.forEach(function(x){ if(x.exa==='承認待ち'||x.exa==='却下') hold+=x.amt; else sum+=x.amt; });
+  list.forEach(function(x){ if(x.pay===false) hold+=x.amt; else sum+=x.amt; });
   box.innerHTML = '<div class="ksec">💰 立替 '+list.length+'件　お支払い予定 '+sum.toLocaleString()+'円</div>'
-    + (hold?'<div class="pnote" style="margin-bottom:8px">このうち <b>'+hold.toLocaleString()
-        +'円</b> は<b>お支払いの対象に入っていません</b>（承認待ち・対象外）。</div>':'')
+    + (hold?'<div class="pnote" style="margin-bottom:8px">上の金額とは<b>別に</b>、'
+        +'<b>'+hold.toLocaleString()+'円</b> が<b>お支払いの対象に入っていません</b>（承認待ち・対象外）。</div>':'')
     + list.map(function(x){
         // ★v9.18 承認待ち・却下は「支払われる」と誤解させない
-        const badge = x.exa==='承認待ち' ? '　<span style="color:#a06a00">🟡 本部の承認待ち（未払い）</span>'
-                    : x.exa==='却下'     ? '　<span style="color:#c62828">❌ 支払対象外</span>'
-                    : x.exa==='承認'     ? '　<span style="color:#2e7d32">✅ 承認済み</span>' : '';
+        // 表示の文言は状態名から作るが、支払うかどうかの判定には使わない
+        const badge = x.pay===false
+          ? '　<span style="color:#c62828">🟡 '+esc(x.exa||'保留')+'（お支払いの対象に入っていません）</span>'
+          : (x.exa==='承認' ? '　<span style="color:#2e7d32">✅ 承認済み</span>' : '');
         return '<div class="pcard"><div class="pbody">'
              + '<div class="pname">'+esc(x.md)+'　'+esc(x.prop)+'</div>'
              + '<div class="paddr">'+esc(x.use)+badge
