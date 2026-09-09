@@ -971,10 +971,12 @@ const TEXT_META = {
 
 
 function showView(name){
-  ['loading','menu','expense','photo','text','quality','props','settings','cancel','done','help','late'].forEach(function(v){
-    const el = $('v-'+v) || (v==='loading'?$('loading'):null);
-    if (el) el.classList.add('hidden');
-  });
+  // ★v9.18【画面を足すたびに配列へ足す形をやめた】2026-09-09
+  //   旧: 画面名の配列を手で並べていた。v9.14 で「勤怠の確認」を足したとき
+  //       この配列に入れ忘れ、戻るを押しても画面の下に残り続けた。
+  //   新: id が "v-" で始まる要素を全部隠す。以後、画面を足しても壊れない。
+  //   ⚠️ "v-" で始まる id は画面だけに使うこと。
+  document.querySelectorAll('[id^="v-"]').forEach(function(el){ el.classList.add('hidden'); });
   $('loading').classList.add('hidden');
   const t = (name==='overtime'||name==='supply'||name==='handover') ? 'text' : name;
   const el = $('v-'+t); if (el) el.classList.remove('hidden');
@@ -1274,9 +1276,9 @@ $('e-seg').addEventListener('click', ()=>{
     pu.placeholder='例）トイレットペーパー・洗剤'; }
   else if(k==='laundry'){ w.textContent='コインランドリーの洗濯・乾燥代です。オーナー様への請求に入ります。';
     pu.placeholder='例）コインランドリー代（シーツ・タオル）'; }
-  else if(k==='parking'){ w.textContent='コインパーキング・駐車場代です。オーナー様には共有しません。';
+  else if(k==='parking'){ w.innerHTML='コインパーキング・駐車場代です。<br><b>本部の承認後にお支払いします。</b>交通費が報酬に含まれる契約の方は、原則お支払いの対象外です。';
     pu.placeholder='例）パーキング代'; }
-  else { w.textContent='電車・バスなどの運賃です。オーナー様には共有しません。';
+  else { w.innerHTML='電車・バスなどの運賃です。<br><b>本部の承認後にお支払いします。</b>交通費が報酬に含まれる契約の方は、原則お支払いの対象外です。';
     pu.placeholder='例）電車代（藤沢→鎌倉）'; }
 });
 
@@ -1772,12 +1774,20 @@ function drawKinExpense(list){
       + '<div class="center" style="padding:14px 8px;color:#6b7683">この月の立替はありません。</div>';
     return;
   }
-  let sum=0; list.forEach(function(x){ sum+=x.amt; });
-  box.innerHTML = '<div class="ksec">💰 立替 '+list.length+'件　'+sum.toLocaleString()+'円</div>'
+  // ★v9.18 承認待ち・却下は合計に入れない。入れると支払われると誤解する。
+  let sum=0, hold=0;
+  list.forEach(function(x){ if(x.exa==='承認待ち'||x.exa==='却下') hold+=x.amt; else sum+=x.amt; });
+  box.innerHTML = '<div class="ksec">💰 立替 '+list.length+'件　お支払い予定 '+sum.toLocaleString()+'円</div>'
+    + (hold?'<div class="pnote" style="margin-bottom:8px">このうち <b>'+hold.toLocaleString()
+        +'円</b> は<b>お支払いの対象に入っていません</b>（承認待ち・対象外）。</div>':'')
     + list.map(function(x){
+        // ★v9.18 承認待ち・却下は「支払われる」と誤解させない
+        const badge = x.exa==='承認待ち' ? '　<span style="color:#a06a00">🟡 本部の承認待ち（未払い）</span>'
+                    : x.exa==='却下'     ? '　<span style="color:#c62828">❌ 支払対象外</span>'
+                    : x.exa==='承認'     ? '　<span style="color:#2e7d32">✅ 承認済み</span>' : '';
         return '<div class="pcard"><div class="pbody">'
              + '<div class="pname">'+esc(x.md)+'　'+esc(x.prop)+'</div>'
-             + '<div class="paddr">'+esc(x.use)
+             + '<div class="paddr">'+esc(x.use)+badge
              + (x.url?'':'　<span style="color:#c62828">領収書なし</span>')+'</div>'
              + '</div><div class="kamt">¥'+x.amt.toLocaleString()+'</div></div>';
       }).join('')
