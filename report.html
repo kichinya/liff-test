@@ -586,7 +586,7 @@
         <label class="on" style="flex:1 1 44%"><input type="radio" name="ek" value="supply" checked><span>🧻 物件の<br>消耗品・備品</span></label>
         <label style="flex:1 1 44%"><input type="radio" name="ek" value="laundry"><span>🧺 コイン<br>ランドリー代</span></label>
         <label style="flex:1 1 44%"><input type="radio" name="ek" value="parking"><span>🅿️ パーキング代</span></label>
-        <label style="flex:1 1 44%"><input type="radio" name="ek" value="transit"><span>🚃 交通費<br>（電車・バス）</span></label>
+        <label style="flex:1 1 44%"><input type="radio" name="ek" value="transit"><span>🚃 交通費<br>（電車・バス・高速）</span></label>
       </div>
       <div class="hint" id="e-segwhy">トイレットペーパー・洗剤・電池など、その物件で使うものは「消耗品・備品」です。</div>
       <label class="req">金額</label>
@@ -1284,10 +1284,10 @@ $('e-seg').addEventListener('click', ()=>{
     pu.placeholder='例）トイレットペーパー・洗剤'; }
   else if(k==='laundry'){ w.textContent='コインランドリーの洗濯・乾燥代です。オーナー様への請求に入ります。';
     pu.placeholder='例）コインランドリー代（シーツ・タオル）'; }
-  else if(k==='parking'){ w.innerHTML='コインパーキング・駐車場代です。<b>実費をお支払いします。</b><br>領収書を必ず添付してください。';
+  else if(k==='parking'){ w.innerHTML='コインパーキング・駐車場代です。<b>実費をお支払いします（承認は要りません）。</b><br>領収書を必ず添付してください。<br><span style="color:#a06a00">高速代・ガソリン代は「🚃 交通費」を選んでください。</span>';
     pu.placeholder='例）パーキング代'; }
-  else { w.innerHTML='電車・バスなどの運賃です。<br><b>本部の承認後にお支払いします。</b>交通費が報酬に含まれる契約の方は、原則お支払いの対象外です。';
-    pu.placeholder='例）電車代（藤沢→鎌倉）'; }
+  else { w.innerHTML='電車・バスの運賃、高速代・ETC・ガソリン代です。<br><b>本部の承認後にお支払いします。</b>交通費が報酬に含まれる契約の方は、原則お支払いの対象外です。';
+    pu.placeholder='例）電車代（藤沢→鎌倉）／高速代'; }
 });
 
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
