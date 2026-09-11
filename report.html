@@ -140,7 +140,11 @@
          border-bottom:1px solid var(--line); font-size:14px; }
   .krow span:first-child{ color:var(--sub); flex:0 0 34%; }
   .krow span:last-child{ font-weight:700; text-align:right; word-break:break-all; }
-  .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none; }
+  /* ★v9.33 white-space:pre-line。setMsg2/showErr は textContent なので、
+     これが無いと \n が空白1個に潰れる。口座の正規化結果（0123456 / ｷﾁﾝﾔ ﾀﾛｳ）や
+     「※本部への通知が送れませんでした」が1行に連なって読めなくなっていた */
+  .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none;
+        white-space:pre-line; }
   .msg.err{ background:#fdecea; color:#b71c1c; display:block; }
   .msg.ok{ background:#e8f5e9; color:var(--green-d); display:block; } /* ★v3.39 取消の成功表示 */
   .center{ text-align:center; padding:40px 16px; color:var(--sub); }
@@ -152,7 +156,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.32</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.35</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -878,6 +882,11 @@
           <label class="req">受取人名（カナ）</label>
           <input id="b-kana" type="text" placeholder="例）キチンヤ タロウ" maxlength="30">
           <div class="hint">ひらがな・全角カタカナで入れても、こちらで銀行の形に直します。</div>
+          <!-- ★★v9.34 明細の送付先メール。毎月の報酬明細PDFをここへ送ります -->
+          <label class="req">メールアドレス</label>
+          <input id="b-mail" type="email" inputmode="email" autocomplete="email"
+                 placeholder="例）kichinya@gmail.com" maxlength="120">
+          <div class="hint" id="b-mailhint">毎月の【報酬明細】をお送りします。ご自身で受け取れるアドレスをご入力ください。</div>
         </div>
         <div class="pnote">
           送ると<b>本部に確認の連絡が届きます。</b>承認されるとLINEでお知らせします。<br>
@@ -1791,6 +1800,7 @@ async function loadMyBank(){
       $('b-cur').innerHTML=''; return;
     }
     MYBANK.loaded = true; MYBANK.cur = res.cur||{}; MYBANK.kinds = res.kinds||['普通'];
+    MYBANK.mailFrom = (res.cur && res.cur.mailFrom) || '';   // ★v9.35 'own' か 'gmail' か
     // ★v9.30 読み直したら必ず「入力前」の見た目に戻す。
     //   戻さないと、申請成功のあとボタンが消えたままになる（実際に踏んだ）
     $('b-form').classList.add('hidden');
@@ -1808,7 +1818,13 @@ async function loadMyBank(){
         + '<div class="krow"><span>種目</span><span>'+esc(c.kind||'')+'</span></div>'
         + '<div class="krow"><span>口座番号</span><span>'+esc(c.acct||'')+'</span></div>'
         + '<div class="krow"><span>受取人名</span><span>'+esc(c.kana||'')+'</span></div>'
+        + (c.mail ? '<div class="krow"><span>明細の送付先</span><span>'+esc(c.mail)+'</span></div>' : '')
         + (c.checked ? '<div class="pcnt">最終更新 '+esc(c.checked)+'</div>' : '');
+      if(res.mailError){
+        $('b-cur').innerHTML += '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb;margin-top:12px">'
+          + '<b>メールアドレスの登録に不備があります。</b><br>' + esc(res.mailError)
+          + '<br>下のボタンから入れ直してください。</div>';
+      }
       if(res.issues && res.issues.length){
         $('b-cur').innerHTML += '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb;margin-top:12px">'
           + '<b>このままでは振込ができません。</b><br>' + res.issues.map(esc).join('<br>') + '</div>';
@@ -1823,6 +1839,9 @@ async function loadMyBank(){
   }catch(err){
     showErr('msg-bank','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
     $('b-cur').innerHTML='';
+    // ★v9.33 見た目を戻す。戻さないとボタンが消えたままになる
+    $('b-form').classList.add('hidden');
+    $('b-open').classList.remove('hidden');
   }
 }
 
@@ -1834,6 +1853,13 @@ function openBankEdit(){
   $('b-bank').value = c.bank||''; $('b-bankname').value = c.bankName||'';
   $('b-branch').value = c.branch||''; $('b-branchname').value = c.branchName||'';
   $('b-acct').value = c.acct||''; $('b-kana').value = c.kana||'';
+  // ★★v9.35 会社が持っているGmailを初期値に出すときは、そうと分かるように言う。
+  //   黙って入れると、本人が見ずに送って「本人が希望したアドレス」として保存される。
+  //   以後そちらが優先されるので、会社側がGmail列を直しても明細は古い写しへ飛ぶ。
+  $('b-mail').value = c.mail||'';
+  $('b-mailhint').textContent = (MYBANK.mailFrom === 'gmail' && c.mail)
+    ? '会社にお知らせいただいているアドレスです。違う場合は書き換えてください。毎月の【報酬明細】をお送りします。'
+    : '毎月の【報酬明細】をお送りします。ご自身で受け取れるアドレスをご入力ください。';
   $('b-form').classList.remove('hidden');
   $('b-open').classList.add('hidden');
   $('b-form').scrollIntoView({behavior:'smooth', block:'start'});
@@ -1848,10 +1874,11 @@ async function submitBank(){
     branchName: $('b-branchname').value.trim(),
     kind:       $('b-kind').value,
     acct:       $('b-acct').value.trim(),
-    kana:       $('b-kana').value.trim()
+    kana:       $('b-kana').value.trim(),
+    mail:       $('b-mail').value.trim()
   };
-  if(!q.bank || !q.branch || !q.acct || !q.kana){
-    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名は必ず入れてください。');
+  if(!q.bank || !q.branch || !q.acct || !q.kana || !q.mail){
+    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名・メールアドレスは\nすべて入れてください。');
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
   const btn = $('b-btn'); btn.disabled = true; btn.textContent = '送信中…';
@@ -2290,8 +2317,11 @@ function jobsFailed(why){
     jobsLoading();
     {
       const t0=new URLSearchParams(location.search).get('type');
-      // ★★v9.32 type=bank は「勤怠の確認」を開いてから口座タブに切り替える
-      if(t0==='bank'){ go('mykin'); kinTab('bank'); }
+      // ★★v9.33 type=bank は口座タブだけを読む。
+      //   旧: go('mykin') が loadMyKinFirst() を呼ぶため、口座しか見ない人にも
+      //       my_kintai（勤怠ログ＋清掃ジョブ＋立替の走査）が飛んでいた。
+      //       22名が通知直後に一斉に開くと、要らない実行が22本増える。
+      if(t0==='bank'){ showView('mykin'); MYBANK.loaded=false; kinTab('bank'); }
       else if(t0 && ['expense','photo','overtime','supply','handover','quality','props','settings','help','late','mykin'].indexOf(t0)>=0) go(t0);
       else showView('menu');
       uiShown = true;
