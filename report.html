@@ -156,7 +156,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.35</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.36</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -1092,7 +1092,7 @@ function go(name){
     $('e-purpose').placeholder='例）トイレットペーパー・洗剤';
   }
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
-  if (name==='mykin')    { kinTab('kintai'); MYBANK.loaded=false; loadMyKinFirst(); } // ★v9.14 勤怠の確認／★v9.30 口座はタブを開いたとき
+  if (name==='mykin')    { KIN_LOADED=true; kinTab('kintai'); MYBANK.loaded=false; loadMyKinFirst(); } // ★v9.14 勤怠の確認／★v9.36 二重に読まない
 }
 
 
@@ -1780,6 +1780,7 @@ function setMsg2(id,text,cls){ const m=$(id); if(!m) return; m.textContent=text|
 //    2か所で持つと必ずずれる。画面は入力をそのまま送り、直した結果は承認通知で返る。
 let MYBANK = { loaded:false, cur:null, kinds:[] };
 
+let KIN_LOADED = false;   // ★v9.36 勤怠タブを読み込んだか
 function kinTab(name){
   const isB = (name === 'bank');
   $('kt-kintai').classList.toggle('hidden', isB);
@@ -1787,6 +1788,11 @@ function kinTab(name){
   $('ktb-kintai').classList.toggle('on', !isB);
   $('ktb-bank').classList.toggle('on', isB);
   if (isB && !MYBANK.loaded) loadMyBank();
+  // ★★v9.36 勤怠タブも、まだ読んでいなければここで読む。
+  //   🔴 旧: type=bank から入ると go('mykin') を通らないので loadMyKinFirst() が走らず、
+  //      🕐勤怠タブを押しても「読み込み中…」のまま永久に固まっていた。
+  //      エラーも出ない。22名全員がこの入口から入る。
+  if (!isB && !KIN_LOADED) { KIN_LOADED = true; loadMyKinFirst(); }
 }
 
 async function loadMyBank(){
@@ -1877,9 +1883,19 @@ async function submitBank(){
     kana:       $('b-kana').value.trim(),
     mail:       $('b-mail').value.trim()
   };
-  if(!q.bank || !q.branch || !q.acct || !q.kana || !q.mail){
-    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名・メールアドレスは\nすべて入れてください。');
+  if(!q.bank || !q.branch || !q.acct || !q.kana){
+    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名は\nすべて入れてください。');
     window.scrollTo({top:0,behavior:'smooth'}); return;
+  }
+  // ★★v9.36 メールは【空でも申請できる】ようにする。
+  //   🔴 旧: 画面で必須にしていたため、形式チェックに1度でも引っかかると
+  //      その人は口座そのものを登録できないまま振込日を迎える。
+  //      口座（振込に必要）と メール（明細の送付に必要）を切り離す。
+  //      未登録は previewStaffBank() の「📧 明細をメールでお送りできない」で拾える。
+  if(!q.mail){
+    if(!confirm('メールアドレスが空です。\n\n毎月の【報酬明細】をお送りできません。\nこのまま口座だけ登録しますか？')) {
+      $('b-mail').focus(); return;
+    }
   }
   const btn = $('b-btn'); btn.disabled = true; btn.textContent = '送信中…';
   try{
@@ -2321,7 +2337,7 @@ function jobsFailed(why){
       //   旧: go('mykin') が loadMyKinFirst() を呼ぶため、口座しか見ない人にも
       //       my_kintai（勤怠ログ＋清掃ジョブ＋立替の走査）が飛んでいた。
       //       22名が通知直後に一斉に開くと、要らない実行が22本増える。
-      if(t0==='bank'){ showView('mykin'); MYBANK.loaded=false; kinTab('bank'); }
+      if(t0==='bank'){ showView('mykin'); MYBANK.loaded=false; KIN_LOADED=false; kinTab('bank'); }
       else if(t0 && ['expense','photo','overtime','supply','handover','quality','props','settings','help','late','mykin'].indexOf(t0)>=0) go(t0);
       else showView('menu');
       uiShown = true;
