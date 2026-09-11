@@ -131,6 +131,15 @@
          border-bottom:2px solid var(--line); }
   .ksec.y{ color:#a06a00; border-color:#ffe082; }
   .kamt{ font-weight:700; white-space:nowrap; margin-left:10px; }
+  /* ★v9.30 勤怠の確認：上部タブ */
+  .ktab{ display:flex; gap:8px; margin:4px 0 14px; }
+  .ktab button{ flex:1; background:#fff; color:var(--sub); border:1px solid var(--line);
+                border-radius:10px; padding:11px 8px; font-size:14px; font-weight:700; cursor:pointer; }
+  .ktab button.on{ background:#f1f8f2; border-color:var(--green); color:var(--green-d); }
+  .krow{ display:flex; justify-content:space-between; gap:12px; padding:9px 0;
+         border-bottom:1px solid var(--line); font-size:14px; }
+  .krow span:first-child{ color:var(--sub); flex:0 0 34%; }
+  .krow span:last-child{ font-weight:700; text-align:right; word-break:break-all; }
   .msg{ padding:12px; border-radius:10px; font-size:14px; margin-bottom:12px; display:none; }
   .msg.err{ background:#fdecea; color:#b71c1c; display:block; }
   .msg.ok{ background:#e8f5e9; color:var(--green-d); display:block; } /* ★v3.39 取消の成功表示 */
@@ -143,7 +152,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v5.72</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.31</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -812,24 +821,71 @@
   <div id="v-mykin" class="hidden">
     <button class="back" onclick="go('menu')">← 戻る</button>
     <h1>🕐 勤怠の確認</h1>
-    <div id="msg-mykin" class="msg"></div>
-    <div class="pnote">
-      記録されている<b>開始・完了の時刻</b>と<b>実働分</b>です。<br>
-      <b>この実働分が、業務委託費のもとになります。</b>違うところがあれば修正を依頼してください。<br>
-
+    <!-- ★v9.30 タブ -->
+    <div class="ktab">
+      <button id="ktb-kintai" class="on" onclick="kinTab('kintai')">🕐 勤怠</button>
+      <button id="ktb-bank" onclick="kinTab('bank')">🏦 口座</button>
     </div>
-    <label class="req" style="margin-top:12px">月</label>
-    <select id="k-ym" onchange="loadMyKin()"><option value="">読み込んでいます…</option></select>
-    <div id="k-sum" class="pcnt"></div>
 
-    <!-- ★v9.15 打刻が1つも無い清掃 -->
-    <div id="k-miss"></div>
+    <!-- ▼ 勤怠 -->
+    <div id="kt-kintai">
+      <div id="msg-mykin" class="msg"></div>
+      <div class="pnote">
+        記録されている<b>開始・完了の時刻</b>と<b>実働分</b>です。<br>
+        <b>この実働分が、業務委託費のもとになります。</b>違うところがあれば修正を依頼してください。
+      </div>
+      <label class="req" style="margin-top:12px">月</label>
+      <select id="k-ym" onchange="loadMyKin()"><option value="">読み込んでいます…</option></select>
+      <div id="k-sum" class="pcnt"></div>
 
-    <div class="ksec">🕐 打刻の記録</div>
-    <div id="k-list"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+      <!-- ★v9.15 打刻が1つも無い清掃 -->
+      <div id="k-miss"></div>
 
-    <!-- ★v9.15 立替は立替で分けて出す -->
-    <div id="k-exp"></div>
+      <div class="ksec">🕐 打刻の記録</div>
+      <div id="k-list"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+
+      <!-- ★v9.15 立替は立替で分けて出す -->
+      <div id="k-exp"></div>
+    </div>
+
+    <!-- ▼ ★v9.30 口座 -->
+    <div id="kt-bank" class="hidden">
+      <div id="msg-bank" class="msg"></div>
+      <div class="ksec">🏦 いま登録されている口座</div>
+      <div id="b-cur"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+      <div id="b-pend"></div>
+      <button id="b-open" class="submit" style="margin-top:14px" onclick="openBankEdit()">登録・変更する</button>
+
+      <div id="b-form" class="hidden">
+        <div class="pnote">
+          <b>通帳・キャッシュカードのとおりに</b>入れてください。<br>
+          受取人名は<b>銀行に登録されているカナ</b>です。旧姓・屋号にご注意ください。<br>
+          1字でも違うと振込ができません。
+        </div>
+        <div class="card">
+          <label class="req">銀行コード（4桁）</label>
+          <input id="b-bank" type="text" inputmode="numeric" placeholder="例）0038" maxlength="4">
+          <label>銀行名</label>
+          <input id="b-bankname" type="text" placeholder="例）ヨコハマ" maxlength="40">
+          <label class="req">支店コード（3桁）</label>
+          <input id="b-branch" type="text" inputmode="numeric" placeholder="例）106" maxlength="3">
+          <label>支店名</label>
+          <input id="b-branchname" type="text" placeholder="例）フジサワ" maxlength="40">
+          <label class="req">預金種目</label>
+          <select id="b-kind"></select>
+          <label class="req">口座番号（7桁）</label>
+          <input id="b-acct" type="text" inputmode="numeric" placeholder="例）1234567" maxlength="7">
+          <label class="req">受取人名（カナ）</label>
+          <input id="b-kana" type="text" placeholder="例）キチンヤ タロウ" maxlength="30">
+          <div class="hint">ひらがな・全角カタカナで入れても、こちらで銀行の形に直します。</div>
+        </div>
+        <div class="pnote">
+          送ると<b>本部に確認の連絡が届きます。</b>承認されるとLINEでお知らせします。<br>
+          <b>この場では変わりません。</b>
+        </div>
+        <button id="b-btn" class="submit" onclick="submitBank()">この内容で申請する</button>
+      </div>
+    </div>
   </div>
 
   <!-- ★v9.14 修正の依頼 -->
@@ -1027,7 +1083,7 @@ function go(name){
     $('e-purpose').placeholder='例）トイレットペーパー・洗剤';
   }
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
-  if (name==='mykin')    loadMyKinFirst(); // ★v9.14 勤怠の確認
+  if (name==='mykin')    { kinTab('kintai'); MYBANK.loaded=false; loadMyKinFirst(); } // ★v9.14 勤怠の確認／★v9.30 口座はタブを開いたとき
 }
 
 
@@ -1709,6 +1765,120 @@ async function submitQuality(){
 }
 
 function setMsg2(id,text,cls){ const m=$(id); if(!m) return; m.textContent=text||''; m.className='msg'+(cls?' '+cls:''); }
+
+// ---- ★★v9.30 口座（勤怠の確認のタブ） ----
+// ⚠️ カナの変換はここでやらない。GAS側の _sbkToHankakuKana_ が唯一の変換。
+//    2か所で持つと必ずずれる。画面は入力をそのまま送り、直した結果は承認通知で返る。
+let MYBANK = { loaded:false, cur:null, kinds:[] };
+
+function kinTab(name){
+  const isB = (name === 'bank');
+  $('kt-kintai').classList.toggle('hidden', isB);
+  $('kt-bank').classList.toggle('hidden', !isB);
+  $('ktb-kintai').classList.toggle('on', !isB);
+  $('ktb-bank').classList.toggle('on', isB);
+  if (isB && !MYBANK.loaded) loadMyBank();
+}
+
+async function loadMyBank(){
+  setMsg2('msg-bank','','');
+  $('b-cur').innerHTML = '<div class="center" style="padding:20px 8px">読み込み中…</div>';
+  $('b-pend').innerHTML = '';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=bank_get&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){
+      showErr('msg-bank',(res&&res.message)||'読み込めませんでした。');
+      $('b-cur').innerHTML=''; return;
+    }
+    MYBANK.loaded = true; MYBANK.cur = res.cur||{}; MYBANK.kinds = res.kinds||['普通'];
+    // ★v9.30 読み直したら必ず「入力前」の見た目に戻す。
+    //   戻さないと、申請成功のあとボタンが消えたままになる（実際に踏んだ）
+    $('b-form').classList.add('hidden');
+    $('b-open').classList.remove('hidden');
+
+    if(!res.has){
+      $('b-cur').innerHTML = '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb">'
+        + '<b>まだ登録されていません。</b><br>下のボタンから登録してください。'
+        + '<br>登録がないと報酬をお振込みできません。</div>';
+    }else{
+      const c = res.cur;
+      $('b-cur').innerHTML =
+          '<div class="krow"><span>銀行</span><span>'+esc((c.bankName||'')+' ('+c.bank+')')+'</span></div>'
+        + '<div class="krow"><span>支店</span><span>'+esc((c.branchName||'')+' ('+c.branch+')')+'</span></div>'
+        + '<div class="krow"><span>種目</span><span>'+esc(c.kind||'')+'</span></div>'
+        + '<div class="krow"><span>口座番号</span><span>'+esc(c.acct||'')+'</span></div>'
+        + '<div class="krow"><span>受取人名</span><span>'+esc(c.kana||'')+'</span></div>'
+        + (c.checked ? '<div class="pcnt">最終更新 '+esc(c.checked)+'</div>' : '');
+      if(res.issues && res.issues.length){
+        $('b-cur').innerHTML += '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb;margin-top:12px">'
+          + '<b>このままでは振込ができません。</b><br>' + res.issues.map(esc).join('<br>') + '</div>';
+      }
+    }
+    if(res.pending){
+      $('b-pend').innerHTML = '<div class="pnote" style="margin-top:12px">'
+        + '<b>申請を確認中です。</b><br>' + esc(res.pending.text)
+        + '<br>本部の承認後に反映されます。</div>';
+    }
+    $('b-open').textContent = res.has ? '変更を申請する' : '口座を登録する';
+  }catch(err){
+    showErr('msg-bank','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+    $('b-cur').innerHTML='';
+  }
+}
+
+function openBankEdit(){
+  const c = MYBANK.cur || {};
+  $('b-kind').innerHTML = (MYBANK.kinds||['普通']).map(function(k){
+    return '<option value="'+esc(k)+'"'+((c.kind||'普通')===k?' selected':'')+'>'+esc(k)+'</option>';
+  }).join('');
+  $('b-bank').value = c.bank||''; $('b-bankname').value = c.bankName||'';
+  $('b-branch').value = c.branch||''; $('b-branchname').value = c.branchName||'';
+  $('b-acct').value = c.acct||''; $('b-kana').value = c.kana||'';
+  $('b-form').classList.remove('hidden');
+  $('b-open').classList.add('hidden');
+  $('b-form').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+async function submitBank(){
+  setMsg2('msg-bank','','');
+  const q = {
+    bank:       $('b-bank').value.trim(),
+    bankName:   $('b-bankname').value.trim(),
+    branch:     $('b-branch').value.trim(),
+    branchName: $('b-branchname').value.trim(),
+    kind:       $('b-kind').value,
+    acct:       $('b-acct').value.trim(),
+    kana:       $('b-kana').value.trim()
+  };
+  if(!q.bank || !q.branch || !q.acct || !q.kana){
+    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名は必ず入れてください。');
+    window.scrollTo({top:0,behavior:'smooth'}); return;
+  }
+  const btn = $('b-btn'); btn.disabled = true; btn.textContent = '送信中…';
+  try{
+    let url = GAS_URL+'?mode=bank_submit&userId='+encodeURIComponent(me.userId);
+    Object.keys(q).forEach(function(k){ url += '&'+k+'='+encodeURIComponent(q[k]); });
+    const res = await jsonp(url);
+    if(!res || !res.ok){
+      showErr('msg-bank',(res&&res.message)||'送信できませんでした。');
+      window.scrollTo({top:0,behavior:'smooth'});
+      return;
+    }
+    // ★★v9.31 先に読み直してから案内を出す。
+    //   旧: 引数が (id,'ok',本文) で逆。しかも直後の loadMyBank が msg-bank を消していた。
+    //       「本部への通知が送れませんでした」の1行が、誰にも見えない状態だった。
+    MYBANK.loaded = false;
+    await loadMyBank();
+    setMsg2('msg-bank', (res.message || '申請を受け付けました。')
+            + (res.norm ? '\n\n申請した内容\n' + res.norm : ''), 'ok');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(err){
+    showErr('msg-bank','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+  }finally{
+    btn.disabled = false; btn.textContent = 'この内容で申請する';
+  }
+}
+
 
 // ---- ★v9.14 勤怠の確認 ----
 // 自分の勤怠ログを見る。金額は出さない（単価は個人例外があり、二重の正解を作らないため）。
