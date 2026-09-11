@@ -152,7 +152,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.31</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.32</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -2290,7 +2290,9 @@ function jobsFailed(why){
     jobsLoading();
     {
       const t0=new URLSearchParams(location.search).get('type');
-      if(t0 && ['expense','photo','overtime','supply','handover','quality','props','settings','help','late'].indexOf(t0)>=0) go(t0);
+      // ★★v9.32 type=bank は「勤怠の確認」を開いてから口座タブに切り替える
+      if(t0==='bank'){ go('mykin'); kinTab('bank'); }
+      else if(t0 && ['expense','photo','overtime','supply','handover','quality','props','settings','help','late','mykin'].indexOf(t0)>=0) go(t0);
       else showView('menu');
       uiShown = true;
     }
