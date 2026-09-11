@@ -591,7 +591,7 @@
       <div class="hint" id="e-segwhy">トイレットペーパー・洗剤・電池など、その物件で使うものは「消耗品・備品」です。</div>
       <label class="req">金額</label>
       <div class="amount-wrap"><span class="yen">¥</span><input id="e-amount" type="number" inputmode="numeric" min="1" placeholder="例）1200"></div>
-      <label class="req">用途</label><input id="e-purpose" type="text" placeholder="例）トイレットペーパー・洗剤">
+      <label class="req" id="e-purlabel">用途</label><input id="e-purpose" type="text" placeholder="例）トイレットペーパー・洗剤">
       <label>領収書の写真（複数可・最大4枚）</label>
       <!-- ★v4.50 capture="environment" を外した。これが付いているとカメラが直接起動し、
            すでに撮ってある写真をライブラリから選べない。領収書は後から出すことが多い。 -->
@@ -1019,6 +1019,12 @@ function go(name){
     $('e-amount').value=''; $('e-purpose').value='';
     try { $('e-photo').value=''; } catch(e){}
     $('e-prev').innerHTML='';
+    // ★v9.27 種別は既定（🧻消耗品）に戻す。ラベルもそれに合わせる
+    const _sup=document.querySelector('#e-seg input[value="supply"]');
+    if(_sup){ _sup.checked=true;
+      document.querySelectorAll('#e-seg label').forEach(function(l){ l.classList.toggle('on', l.querySelector('input').checked); }); }
+    const _lab=$('e-purlabel'); if(_lab){ _lab.className='req'; _lab.textContent='用途'; }
+    $('e-purpose').placeholder='例）トイレットペーパー・洗剤';
   }
   if (name==='late')     loadLate();       // ★v4.55 打刻の後入れ
   if (name==='mykin')    loadMyKinFirst(); // ★v9.14 勤怠の確認
@@ -1162,7 +1168,9 @@ async function submitExpense(){
   if(!$('e-date').value) return showErr('msg-expense','清掃日を選んでください。');
   if(!jk) return showErr('msg-expense','物件を選んでください。');
   if(!(amount>0)) return showErr('msg-expense','金額を正しく入力してください。');
-  if(!purpose) return showErr('msg-expense','用途を入力してください。');
+  // ★v9.27 用途が必須なのは🧻消耗品だけ。種別を選べば他は自明なので求めない。
+  //   消耗品は「何を買ったか」がオーナー請求の明細になるので必須のまま。
+  if(kind==='supply' && !purpose) return showErr('msg-expense','何を購入したかを入れてください。');
   const btn=event.target; btn.disabled=true; btn.textContent='送信中…';
   const reset=()=>{ btn.disabled=false; btn.textContent='この内容で送信する'; };
   try{
@@ -1280,14 +1288,17 @@ $('e-seg').addEventListener('click', ()=>{
   document.querySelectorAll('#e-seg label').forEach(function(l){ l.classList.toggle('on', l.querySelector('input').checked); });
   const k=(document.querySelector('#e-seg input[name="ek"]:checked')||{}).value;
   const w=$('e-segwhy'), pu=$('e-purpose');
+  // ★v9.27 消耗品だけ必須。他は任意にして、入力の手間を減らす
+  const lab=$('e-purlabel');
+  if(lab){ lab.className = (k==='supply') ? 'req' : ''; lab.textContent = (k==='supply') ? '用途' : '用途（任意）'; }
   if(k==='supply'){ w.textContent='トイレットペーパー・洗剤・電池など、その物件で使うものは「消耗品・備品」です。';
     pu.placeholder='例）トイレットペーパー・洗剤'; }
   else if(k==='laundry'){ w.textContent='コインランドリーの洗濯・乾燥代です。オーナー様への請求に入ります。';
-    pu.placeholder='例）コインランドリー代（シーツ・タオル）'; }
+    pu.placeholder='空欄でも送れます（例）シーツ・タオル'; }
   else if(k==='parking'){ w.innerHTML='コインパーキング・駐車場代です。<b>実費をお支払いします（承認は要りません）。</b><br>領収書を必ず添付してください。<br><span style="color:#a06a00">高速代・ガソリン代は「🚃 交通費」を選んでください。</span>';
-    pu.placeholder='例）パーキング代'; }
+    pu.placeholder='空欄でも送れます（例）藤沢駅前 2時間'; }
   else { w.innerHTML='電車・バスの運賃、高速代・ETC・ガソリン代です。<br><b>本部の承認後にお支払いします。</b>交通費が報酬に含まれる契約の方は、原則お支払いの対象外です。';
-    pu.placeholder='例）電車代（藤沢→鎌倉）／高速代'; }
+    pu.placeholder='空欄でも送れます（例）藤沢→鎌倉'; }
 });
 
 $('p-seg').addEventListener('click', ()=>{ document.querySelectorAll('#p-seg label').forEach(function(l){
