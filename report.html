@@ -156,7 +156,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.37</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.38</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -867,14 +867,18 @@
           1字でも違うと振込ができません。
         </div>
         <div class="card">
+          <div class="hint" style="margin-bottom:8px">
+            銀行コード・支店コードは、<b>通帳の1ページ目</b>か、<b>銀行アプリの口座情報</b>に
+            載っています。分からないときは、このトークにご返信ください。
+          </div>
           <label class="req">銀行コード（4桁）</label>
           <input id="b-bank" type="text" inputmode="numeric" placeholder="例）0038" maxlength="4">
           <label>銀行名</label>
-          <input id="b-bankname" type="text" placeholder="例）ヨコハマ" maxlength="40">
+          <input id="b-bankname" type="text" placeholder="例）横浜銀行" maxlength="40">
           <label class="req">支店コード（3桁）</label>
           <input id="b-branch" type="text" inputmode="numeric" placeholder="例）106" maxlength="3">
           <label>支店名</label>
-          <input id="b-branchname" type="text" placeholder="例）フジサワ" maxlength="40">
+          <input id="b-branchname" type="text" placeholder="例）藤沢支店" maxlength="40">
           <label class="req">預金種目</label>
           <select id="b-kind"></select>
           <label class="req">口座番号（7桁）</label>
