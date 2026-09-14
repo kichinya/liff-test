@@ -156,7 +156,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.36</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.37</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -1779,6 +1779,7 @@ function setMsg2(id,text,cls){ const m=$(id); if(!m) return; m.textContent=text|
 // ⚠️ カナの変換はここでやらない。GAS側の _sbkToHankakuKana_ が唯一の変換。
 //    2か所で持つと必ずずれる。画面は入力をそのまま送り、直した結果は承認通知で返る。
 let MYBANK = { loaded:false, cur:null, kinds:[] };
+let MAILSKIP = false;   // ★v9.37 メール空のまま進むことを1度確認したか
 
 let KIN_LOADED = false;   // ★v9.36 勤怠タブを読み込んだか
 function kinTab(name){
@@ -1866,6 +1867,7 @@ function openBankEdit(){
   $('b-mailhint').textContent = (MYBANK.mailFrom === 'gmail' && c.mail)
     ? '会社にお知らせいただいているアドレスです。違う場合は書き換えてください。毎月の【報酬明細】をお送りします。'
     : '毎月の【報酬明細】をお送りします。ご自身で受け取れるアドレスをご入力ください。';
+  MAILSKIP = false; $('b-btn').textContent = 'この内容で申請する';   // ★v9.37
   $('b-form').classList.remove('hidden');
   $('b-open').classList.add('hidden');
   $('b-form').scrollIntoView({behavior:'smooth', block:'start'});
@@ -1887,15 +1889,24 @@ async function submitBank(){
     showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名は\nすべて入れてください。');
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
-  // ★★v9.36 メールは【空でも申請できる】ようにする。
-  //   🔴 旧: 画面で必須にしていたため、形式チェックに1度でも引っかかると
-  //      その人は口座そのものを登録できないまま振込日を迎える。
-  //      口座（振込に必要）と メール（明細の送付に必要）を切り離す。
-  //      未登録は previewStaffBank() の「📧 明細をメールでお送りできない」で拾える。
+  // ★★★v9.37 メールが空のときは【2回タップ】で確認する。
+  //   🔴 v9.36 で confirm() を使ったのは誤り。index.html:944（v4.64）に
+  //      「alert() は LINE のアプリ内ブラウザで出ないことがある」と記録があり、
+  //      このリポジトリは16個の .bak を含めて alert/confirm を1つも使っていない。
+  //      出ない端末では confirm() が false を返し、ボタンも押せたまま、
+  //      メッセージも出ない＝【完全に無反応】になる。
+  //      しかもそれに当たるのは、メールを出せない方＝いちばん助けたい人。
+  //   ⭕ 画面に必ず出す形にする。失敗のしかたを画面に出すのが、このリポジトリの方針。
   if(!q.mail){
-    if(!confirm('メールアドレスが空です。\n\n毎月の【報酬明細】をお送りできません。\nこのまま口座だけ登録しますか？')) {
-      $('b-mail').focus(); return;
+    if(!MAILSKIP){
+      MAILSKIP = true;
+      showErr('msg-bank','メールアドレスが空欄です。\nこのままだと毎月の【報酬明細】をお送りできません。\n\n入力せずに進む場合は、下のボタンをもう一度押してください。');
+      $('b-btn').textContent = 'メールなしで申請する';
+      window.scrollTo({top:0,behavior:'smooth'});
+      return;
     }
+  } else if(MAILSKIP){
+    MAILSKIP = false; $('b-btn').textContent = 'この内容で申請する';
   }
   const btn = $('b-btn'); btn.disabled = true; btn.textContent = '送信中…';
   try{
