@@ -131,6 +131,21 @@
          border-bottom:2px solid var(--line); }
   .ksec.y{ color:#a06a00; border-color:#ffe082; }
   .kamt{ font-weight:700; white-space:nowrap; margin-left:10px; }
+  /* ★★v9.48 銀行・支店の検索 */
+  .pick{position:relative}
+  .picklist{border:1px solid #ddd;border-radius:8px;margin-top:4px;max-height:min(210px,34vh);overflow-y:auto;background:#fff}
+  .picklist:empty{display:none;border:0}
+  .pickrow{padding:13px 10px;border-bottom:1px solid #f0f0f0;font-size:14px;cursor:pointer}
+  .pickrow:last-child{border-bottom:0}
+  .pickrow:active{background:#eef4ff}
+  .pickrow .pc{display:inline-block;min-width:46px;color:#888;font-size:12px}
+  .picknote{padding:9px 10px;font-size:12px;color:#888;white-space:pre-line}
+  .pickclose{padding:12px 10px;font-size:13px;color:#1f5fbf;text-align:center;
+             border-bottom:1px solid #f0f0f0;text-decoration:underline;cursor:pointer;
+             position:sticky;top:0;background:#fff}
+  .chosen{background:#eef4ff;border:1px solid #c7d8f5;border-radius:8px;padding:9px 10px;font-size:14px;
+          display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .chosen .again{flex:0 0 auto;font-size:12px;color:#1f5fbf;text-decoration:underline;cursor:pointer}
   /* ★v9.30 勤怠の確認：上部タブ */
   .ktab{ display:flex; gap:8px; margin:4px 0 14px; }
   .ktab button{ flex:1; background:#fff; color:var(--sub); border:1px solid var(--line);
@@ -156,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.38</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.79</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -867,18 +882,28 @@
           1字でも違うと振込ができません。
         </div>
         <div class="card">
-          <div class="hint" style="margin-bottom:8px">
-            銀行コード・支店コードは、<b>通帳の1ページ目</b>か、<b>銀行アプリの口座情報</b>に
-            載っています。分からないときは、このトークにご返信ください。
+          <!-- ★★★v9.48 銀行・支店は【選ぶ】。手で打たない。
+               2026-09-14、コードを手入力にしていたため前ゼロが消え、
+               銀行名も「ゆうちょ」「ゆうちょ銀行」と揺れた。選ぶ形なら両方とも起きない。 -->
+          <label class="req">銀行</label>
+          <div id="b-bankpick" class="pick">
+            <input id="b-banksearch" type="text" maxlength="30" autocomplete="off"
+                   placeholder="銀行名を入れてください（例）よこはま" oninput="bkFilterBanks()">
+            <div id="b-banklist" class="picklist"></div>
           </div>
-          <label class="req">銀行コード（4桁）</label>
-          <input id="b-bank" type="text" inputmode="numeric" placeholder="例）0038" maxlength="4">
-          <label>銀行名</label>
-          <input id="b-bankname" type="text" placeholder="例）横浜銀行" maxlength="40">
-          <label class="req">支店コード（3桁）</label>
-          <input id="b-branch" type="text" inputmode="numeric" placeholder="例）106" maxlength="3">
-          <label>支店名</label>
-          <input id="b-branchname" type="text" placeholder="例）藤沢支店" maxlength="40">
+          <div id="b-bankchosen" class="chosen hidden"></div>
+
+          <label class="req">支店</label>
+          <div id="b-branchpick" class="pick">
+            <input id="b-branchsearch" type="text" maxlength="30" autocomplete="off"
+                   placeholder="支店名か、店番3桁（例）ふじさわ／106" oninput="bkFilterBranches()">
+            <div id="b-branchlist" class="picklist"></div>
+          </div>
+          <div id="b-branchchosen" class="chosen hidden"></div>
+
+          <!-- 選んだ結果はここに入る。画面には出さない（打ち替えさせない） -->
+          <input id="b-bank" type="hidden"><input id="b-bankname" type="hidden">
+          <input id="b-branch" type="hidden"><input id="b-branchname" type="hidden">
           <label class="req">預金種目</label>
           <select id="b-kind"></select>
           <label class="req">口座番号（7桁）</label>
@@ -887,7 +912,9 @@
           <input id="b-kana" type="text" placeholder="例）キチンヤ タロウ" maxlength="30">
           <div class="hint">ひらがな・全角カタカナで入れても、こちらで銀行の形に直します。</div>
           <!-- ★★v9.34 明細の送付先メール。毎月の報酬明細PDFをここへ送ります -->
-          <label class="req">メールアドレス</label>
+          <!-- ★v9.54 「必須」を外す。画面は必須・挙動は任意・通知文は任意前提で
+               三重にずれていた。空欄でも2回タップで送れる作りに合わせる。 -->
+          <label>メールアドレス</label>
           <input id="b-mail" type="email" inputmode="email" autocomplete="email"
                  placeholder="例）kichinya@gmail.com" maxlength="120">
           <div class="hint" id="b-mailhint">毎月の【報酬明細】をお送りします。ご自身で受け取れるアドレスをご入力ください。</div>
@@ -1808,7 +1835,7 @@ async function loadMyBank(){
     const res = await jsonp(GAS_URL+'?mode=bank_get&userId='+encodeURIComponent(me.userId));
     if(!res || !res.ok){
       showErr('msg-bank',(res&&res.message)||'読み込めませんでした。');
-      $('b-cur').innerHTML=''; return;
+      $('b-cur').innerHTML=''; return false;   // ★v9.60 成否を返す
     }
     MYBANK.loaded = true; MYBANK.cur = res.cur||{}; MYBANK.kinds = res.kinds||['普通'];
     MYBANK.mailFrom = (res.cur && res.cur.mailFrom) || '';   // ★v9.35 'own' か 'gmail' か
@@ -1817,9 +1844,23 @@ async function loadMyBank(){
     $('b-form').classList.add('hidden');
     $('b-open').classList.remove('hidden');
 
-    if(!res.has){
+    // ★★v9.59 受付を止めているときは、押せないボタンを案内しない。
+    //   🔴 v9.58 は b-open を隠したのに、b-cur は「下のボタンから登録してください」
+    //      と言い続けていた。無いボタンを探させる形。mailError・issues も同じ。
+    const _stop = !!res.notice;
+    // ★★★v9.79 受付停止（異常）と「登録不要」（正常）を分ける。
+    //   🔴 v9.78 は振込先を付け替えられている人にも赤枠で
+    //      「登録がないと報酬をお振込みできません」を出していた。
+    //      その人はまさに「自分の口座を登録していない人」なので、これが標準の見え方になる。
+    //      すぐ下に「ご自身の口座のご登録は不要です」が並び、押すボタンも無い＝同じ画面が逆のことを言う。
+    const _nopay = (res.noticeKind === 'nopay');
+    if(_nopay){
+      // 未登録の赤枠そのものを出さない。notice 側が事実を伝える
+      $('b-cur').innerHTML = '';
+    }else if(!res.has){
       $('b-cur').innerHTML = '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb">'
-        + '<b>まだ登録されていません。</b><br>下のボタンから登録してください。'
+        + '<b>まだ登録されていません。</b>'
+        + (_stop ? '' : '<br>下のボタンから登録してください。')
         + '<br>登録がないと報酬をお振込みできません。</div>';
     }else{
       const c = res.cur;
@@ -1834,26 +1875,378 @@ async function loadMyBank(){
       if(res.mailError){
         $('b-cur').innerHTML += '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb;margin-top:12px">'
           + '<b>メールアドレスの登録に不備があります。</b><br>' + esc(res.mailError)
-          + '<br>下のボタンから入れ直してください。</div>';
+          + (_stop ? '' : '<br>下のボタンから入れ直してください。') + '</div>';
       }
       if(res.issues && res.issues.length){
         $('b-cur').innerHTML += '<div class="pnote" style="background:#fdecea;border-color:#f5c6cb;margin-top:12px">'
           + '<b>このままでは振込ができません。</b><br>' + res.issues.map(esc).join('<br>') + '</div>';
       }
     }
-    if(res.pending){
+    // ★★v9.57 受付を止めているときの案内。申請の札（下）とは別枠。
+    //   ここを pending に相乗りさせると、申請していない人にも
+    //   「申請を確認中です」が出る（v9.56 で実際に出ていた）。
+    if(res.notice){
+      // ★v9.79 'nopay' は異常ではない。⚠️ を付けない
+      $('b-pend').innerHTML = '<div class="pnote" style="margin-top:12px'
+        + (_nopay ? ';background:#eef4ff;border-color:#c7d8f5' : '') + '">'
+        + '<b>' + (_nopay ? '💴 ' : '⚠️ ') + esc(res.notice).replace(/\n/g, '<br>') + '</b></div>';
+    } else if(res.pending){
       $('b-pend').innerHTML = '<div class="pnote" style="margin-top:12px">'
-        + '<b>申請を確認中です。</b><br>' + esc(res.pending.text)
+        // ★v9.56 pending.text は 📧 の前に改行が入る。esc() は改行を <br> にしないので
+        //   ここで変える。.pnote は他の画面でも使うので CSS(white-space) は触らない
+        + '<b>申請を確認中です。</b><br>' + esc(res.pending.text).replace(/\n/g, '<br>')
         + '<br>本部の承認後に反映されます。</div>';
     }
-    $('b-open').textContent = res.has ? '変更を申請する' : '口座を登録する';
+    // ★★v9.58 受付を止めているときは入口も閉じる。
+    //   開けたままだと「受付を停止しています」の下に登録ボタンが出て、
+    //   押して入力して送ると「受付に失敗しました」。同じ画面が逆のことを言う。
+    if(res.notice){
+      $('b-open').classList.add('hidden');
+      $('b-form').classList.add('hidden');
+    }else{
+      $('b-open').classList.remove('hidden');
+      $('b-open').textContent = res.has ? '変更を申請する' : '口座を登録する';
+    }
+    return true;                              // ★v9.60 読めた
   }catch(err){
     showErr('msg-bank','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
     $('b-cur').innerHTML='';
     // ★v9.33 見た目を戻す。戻さないとボタンが消えたままになる
     $('b-form').classList.add('hidden');
     $('b-open').classList.remove('hidden');
+    return false;                             // ★v9.60 読めなかった
   }
+}
+
+// ============================================================
+// ★★★v9.49 銀行・支店を【選ぶ】
+//   2026-09-14 の事故：コードを手入力にしていたため
+//     ・"0005" がシートで 5 になり、承認者が目視照合できなかった
+//     ・銀行名が「ゆうちょ」「ゆうちょ銀行」、支店名が「〇二八」「ゼロキュウハチ」と揺れた
+//   選ぶ形にすれば、コードも名前もAPIの正式な形で入る。両方とも起きない。
+//
+//   ⚠️ APIの銀行名は【略称】で、0138 は「横浜銀行」ではなく「横浜」。
+//      「信用金庫」で検索すると 0件。揺れの吸収は bkNorm ここ1か所でやる。
+//
+//   ★v9.49 で直したもの（v9.48 のレビューで見つかった穴）
+//     🔴 読み込み中に2文字打つと BK.banks が null のまま forEach して落ち、
+//        「読み込み中…」で固まる。oninput は戻り値を捨てるので画面に何も出ない。
+//        → 走っている1本を共有する（BK.bankP / st.p）
+//     🔴 1度失敗すると二度と読み直さない。電波が戻っても「取れませんでした」のまま。
+//        支店は失敗結果をキャッシュしていたので、LIFFを閉じるまで永久に選べなかった。
+//        → 失敗はキャッシュしない。打ち直しで必ず読み直す
+//     🔴 送信直前に桁を見ていない。→ 4桁・3桁と、画面の選択と一致するかを確かめる
+// ============================================================
+// ★★v9.51 seq は銀行と支店で【分ける】。
+//   旧は1つを共有していた。銀行の一覧を待っている最中に支店欄に触ると
+//   seq が進み、戻ってきた銀行の応答が捨てられて「読み込み中…」のまま固まった。
+//   b-branchpick は最初から表示されているので、この操作はふつうに起きる。
+var BK = { banks:null, branches:{}, bankCode:'', err:'', silent:false,
+           bankP:null, seqBank:0, seqBranch:0 };
+
+/** ★v9.49 入力とデータの両方に当てる。ここだけで揺れを吸収する（2か所に書かない） */
+function bkNorm(v){
+  var s = String(v==null?'':v);
+  // 全角英数 → 半角
+  s = s.replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); });
+  // ★v9.49 半角カナの濁点・半濁点を先に結合する。
+  //   Android の一部IMEは半角カナ候補を先頭に出す。結合しないと
+  //   ﾌｼﾞｻﾜ が「フシ゛サワ」になり、全角の「フジサワ」に当たらない。
+  var _d='ｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾊﾋﾌﾍﾎ', _dz='ガギグゲゴザジズゼゾダヂヅデドバビブベボ';
+  s = s.replace(/([ｶ-ﾄﾊ-ﾎ])ﾞ/g, function(m,c){ var i=_d.indexOf(c); return i<0?m:_dz.charAt(i); });
+  s = s.replace(/([ﾊ-ﾎ])ﾟ/g,    function(m,c){ return 'パピプペポ'.charAt('ﾊﾋﾌﾍﾎ'.indexOf(c)); });
+  // ひらがな → カタカナ（スマホは既定がひらがな入力）
+  s = s.replace(/[ぁ-ゖ]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)+0x60); });
+  // ★★★v9.51 半角カナ → 全角カナ
+  //   🔴 旧: /[ｱ-ﾝ]/ しか見ていなかった。半角の小書き ｧｨｩｪｫｬｭｮｯ(U+FF67-FF6F) と
+  //      長音 ｰ(U+FF70) は ｱ(U+FF71) より【手前】にあり、この範囲に入らない。
+  //      その結果 ｼｮｳﾅﾝ は「シｮウナン」になり、bkChunks が ["シ","ｮ","ウナン"] と割る。
+  //      bkHit は全チャンクの一致を求めるので、データに絶対に無い "ｮ" で必ず0件。
+  //      半角カナで打つ人は【一件も出ない】。Androidの一部IMEは半角カナを先頭に出す。
+  s = s.replace(/ｳﾞ/g, 'ヴ');
+  s = s.replace(/[ｦ-ﾟ]/g, function(c){
+    var t='ｦｧｨｩｪｫｬｭｮｯｰｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ';
+    var z='ヲァィゥェォャュョッーアイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン';
+    var i=t.indexOf(c); return i<0?c:z.charAt(i);
+  });
+  // 小書き → 大書き（「ゼロキユウハチ」と「ゼロキュウハチ」を揃える）
+  s = s.replace(/[ァィゥェォッャュョヮヵヶ]/g, function(c){
+    return 'アイウエオツヤユヨワカケ'.charAt('ァィゥェォッャュョヮヵヶ'.indexOf(c));
+  });
+  s = s.toUpperCase();
+  s = s.replace(/[\s　・､、,\.．－ー―‐\-（）\(\)「」]/g,'');
+  // 正式名 → APIの略称
+  s = s.replace(/信用金庫/g,'信金').replace(/信用組合/g,'信組')
+       .replace(/労働金庫/g,'労金')
+       .replace(/農業協同組合/g,'農協').replace(/漁業協同組合/g,'漁協')
+       .replace(/株式会社/g,'');
+  s = s.replace(/シンヨウキンコ/g,'シンキン').replace(/シンヨウクミアイ/g,'シンクミ')
+       .replace(/ロウドウキンコ/g,'ロウキン');
+  // 「銀行」は落とす（APIは 0138 を「横浜」で持っている）
+  s = s.replace(/銀行/g,'').replace(/ギンコウ/g,'');
+  // JA○○ は API では「○○農協」。頭のJAだけ落とす（語中のJAは触らない）
+  s = s.replace(/^JA/,'');
+  // 支店側
+  s = s.replace(/支店|出張所|営業部|支所/g,'').replace(/シテン|シユツチヨウジヨ|エイギヨウブ/g,'');
+  return s;
+}
+
+/**
+ * ★v9.49 受け取った1件を、こちらで使う形に固める。
+ *   ・コードは必ず文字列にする（数値で来たら前ゼロが落ちている。埋め直さない＝下で弾く）
+ *   ・正規化はここで1回だけ。打鍵のたびに1146件×2回まわすと、実機でもたつく
+ *   ⚠️ ゼロ埋めをここでやらない。「正しい値」を2か所で決めないため。
+ *      桁が足りないものは bkPickBank / submitBank で弾いて、気づける側へ倒す。
+ */
+function bkPrep_(x){
+  var c = String((x && x.c) == null ? '' : x.c);
+  var n = String((x && x.n) == null ? '' : x.n);
+  var k = String((x && x.k) == null ? '' : x.k);
+  return { c:c, n:n, k:k, _n:bkNorm(n), _k:bkNorm(k) };
+}
+
+/**
+ * ★v9.49 カナと漢字が混ざった入力を、かたまりに割る。
+ *   「ショウナン信金」は IME の途中でふつうに起きる形。
+ *   APIは name「湘南信金」／ kana「ショウナンシンキン」と別々に持つので、
+ *   どちらか片方に丸ごと当てにいくと 0件 になる。
+ *   ⚠️ 1種類だけの入力（ふつうの入力）では、かたまりが1つなので今までと同じ動き。
+ */
+function bkChunks(q){
+  var out=[], cur='', kana=null;
+  for(var i=0;i<q.length;i++){
+    var c = q.charAt(i), isK = /[ア-ンヴ]/.test(c);
+    if(kana===null || isK===kana){ cur += c; }
+    else { if(cur) out.push(cur); cur = c; }
+    kana = isK;
+  }
+  if(cur) out.push(cur);
+  return out;
+}
+
+/** 1件ぶんの当たり判定。名前・カナ・コードのどれかに当たればよい */
+function bkHit(x, q, qDigits, digitLen){
+  if(qDigits){
+    // ★v9.48 前ゼロを省いて打つ人がいる。「28」で 028 に当てられないと
+    //    ゆうちょの方が詰む（実データの店番は 028 / 098）。
+    //    ⚠️ 同時に「28」で 280〜289 も出す。どちらかに倒すと片方が探せない。
+    if(x.c===qDigits) return 2;
+    if(qDigits.length<digitLen && x.c===('000'+qDigits).slice(-digitLen)) return 2;
+    if(x.c.indexOf(qDigits)===0) return 1;
+  }
+  if(!q) return 0;
+  if(x._n.indexOf(q)>=0 || x._k.indexOf(q)>=0) return 1;
+  var cs = bkChunks(q);
+  if(cs.length<2) return 0;
+  for(var i=0;i<cs.length;i++){
+    if(x._n.indexOf(cs[i])<0 && x._k.indexOf(cs[i])<0) return 0;
+  }
+  return 1;
+}
+
+function bkRows(el, list, onpick, note){
+  // ★v9.49 黙って空にしない。何をすれば出るのかを必ず出す
+  if(note){ el.innerHTML = '<div class="picknote">'+esc(note)+'</div>'; return; }
+  if(!list.length){ el.innerHTML = '<div class="picknote">見つかりませんでした。別の言い方でお試しください。</div>'; return; }
+  var more = list.length>30 ? list.length-30 : 0;
+  // ★v9.51 「閉じる」は先頭に置く。末尾だと30件スクロールしないと押せない
+  el.innerHTML = '<div class="pickclose">閉じる</div>'
+  + list.slice(0,30).map(function(x,i){
+    return '<div class="pickrow" data-i="'+i+'"><span class="pc">'+esc(x.c)+'</span>'+esc(x.n)+'</div>';
+  }).join('')
+  + (more ? '<div class="picknote">ほか'+more+'件。もう少し入れてください。</div>' : '');
+  Array.prototype.forEach.call(el.querySelectorAll('.pickrow'), function(r){
+    r.onclick = function(){ onpick(list[Number(r.getAttribute('data-i'))]); };
+  });
+  // ★v9.49 外をタップしても閉じない作りなので、閉じる手段を必ず置く
+  var cl = el.querySelector('.pickclose');
+  if(cl) cl.onclick = function(){ el.innerHTML=''; };
+  // ★v9.51 候補が出たときだけ寄せる。案内文だけの描画で画面を動かさない
+  try{ el.scrollIntoView({block:'nearest'}); }catch(e){}
+}
+
+// ── 銀行 ──────────────────────────────
+/**
+ * ★★v9.49 走っている1本を共有する。
+ *   🔴 旧: BK.loading が立っていると「待たずに」抜けていた。
+ *      呼び側は await したつもりで BK.banks が null のまま forEach し、
+ *      TypeError。oninput は戻り値を捨てるので画面には何も出ず、
+ *      「読み込み中…」のまま固まった。画面を開いてすぐ打つ＝一番ふつうの操作で踏む。
+ *   ⚠️ 失敗はキャッシュしない。打ち直しで必ず読み直す。
+ */
+function bkLoadBanks(){
+  if(BK.banks) return Promise.resolve();
+  if(BK.bankP && BK.bankP.p) return BK.bankP.p;
+  // ★★v9.52 支店側と同じ形に揃える。
+  //   旧は IIFE を先に走らせてから BK.bankP に代入していた。
+  //   本体が最初の await に届く前に同期 throw すると、finally の
+  //   「BK.bankP = null」が代入より先に走り、そのあと解決済みの Promise が
+  //   残って【二度と読み直さない】状態になる。コメントは直っているのに実装が逆だった。
+  var slot = {};
+  BK.bankP = slot;
+  slot.p = (async function(){
+    BK.err = '';
+    try{
+      var res = await jsonp(GAS_URL+'?mode=bank_list');
+      if(!res || !res.ok) BK.err = (res&&res.message) || '銀行の一覧を取れませんでした。';
+      else BK.banks = (res.banks||[]).map(bkPrep_);
+    }catch(err){
+      BK.err = '銀行の一覧を取れませんでした。電波の良い場所で、もう一度入力してください。';
+    }finally{ if(BK.bankP === slot) BK.bankP = null; }
+  })();
+  return slot.p;
+}
+
+async function bkFilterBanks(){
+  var el = $('b-banklist'), seq = ++BK.seqBank;
+  if(!BK.banks){
+    bkRows(el,[],null,'読み込み中…');
+    await bkLoadBanks();
+    if(seq !== BK.seqBank) return;             // 古い応答は描かない
+  }
+  if(!BK.banks){
+    bkRows(el,[],null,(BK.err||'銀行の一覧を取れませんでした。')+'\nもう一度入力すると読み直します。');
+    return;
+  }
+  var raw = $('b-banksearch').value;           // 待っている間に打ち足されている。読み直す
+  // ★★★v9.61【全角数字だと0件になっていた】
+  //   🔴 旧: d を【正規化前の raw】から取っていた。bkNorm は全角→半角に寄せるが、
+  //      raw の「１０６」は [^0-9] で全部落ちて d='' になる。すると数字の分岐を飛ばし、
+  //      名前・カナに当てに行く。支店名は「〇二八」なので絶対に当たらない。
+  //      スマホの数字パッドは既定が全角。しかも q.length が3あるのでゲートは通り、
+  //      「見つかりませんでした」とだけ出る。名前で探せないゆうちょが直撃する。
+  //   ⭕ d は【正規化後の q】から取る。bkNorm は数字を消さない。
+  var q = bkNorm(raw), d = q.replace(/[^0-9]/g,'');
+  if(q.length<2 && d.length<3){
+    bkRows(el,[],null,'銀行名を2文字以上、または銀行コードの数字を3桁以上入れてください。');
+    return;
+  }
+  // 「JA湘南」は 湘南農協 を先に出す。頭のJAを落とすと 湘南信金 も当たり、先に並ぶ。
+  // どちらも出るので詰まりはしないが、1行目を反射でタップする人がいる。お金なので順を正す。
+  var head = String(raw).replace(/[Ａ-Ｚａ-ｚ]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); })
+                        .replace(/[\s　]/g,'').toUpperCase();
+  var ja = head.indexOf('JA')===0;
+  var hit = [];
+  BK.banks.forEach(function(x){
+    var h = bkHit(x,q,d,4);
+    if(!h) return;
+    if(ja && /農協|漁協/.test(x.n)) h += 0.5;
+    hit.push({x:x,h:h});
+  });
+  hit.sort(function(a,b){ return b.h-a.h; });
+  bkRows(el, hit.map(function(o){return o.x;}), bkPickBank);
+}
+
+function bkPickBank(x){
+  var c = String(x && x.c || '');
+  // ★v9.49 4桁でないものを選ばせない。埋め直さず弾く（正しい値を2か所で決めない）
+  if(!/^[0-9]{4}$/.test(c)){
+    showErr('msg-bank','この銀行の番号が正しく読み取れませんでした（'+c+'）。\nお手数ですが、このトークにそのままご返信ください。');
+    return false;   // ★v9.51 呼び側が支店の復元をやめられるように返す
+  }
+  $('b-bank').value = c; $('b-bankname').value = String(x.n||'');
+  // ⚠️ 銀行を選び直したら支店は必ず捨てる。別の銀行の店番が残ると静かに間違った先へ振り込む
+  $('b-branch').value = ''; $('b-branchname').value = '';
+  BK.bankCode = c;
+  $('b-banksearch').value = ''; $('b-banklist').innerHTML = '';
+  $('b-bankpick').classList.add('hidden');
+  $('b-bankchosen').classList.remove('hidden');
+  $('b-bankchosen').innerHTML = '<span>'+esc(c)+'　'+esc(String(x.n||''))+'</span>'
+    + '<span class="again" onclick="bkResetBank()">選び直す</span>';
+  bkResetBranchUi();
+  if(!BK.silent) $('b-branchsearch').focus();
+  return true;
+}
+
+function bkResetBank(){
+  $('b-bank').value=''; $('b-bankname').value=''; BK.bankCode='';
+  $('b-bankchosen').classList.add('hidden'); $('b-bankchosen').innerHTML='';
+  $('b-bankpick').classList.remove('hidden');
+  $('b-banksearch').value=''; $('b-banklist').innerHTML='';
+  bkResetBranchUi();
+  if(!BK.silent) $('b-banksearch').focus();
+}
+
+// ── 支店 ──────────────────────────────
+function bkResetBranchUi(){
+  $('b-branch').value=''; $('b-branchname').value='';
+  $('b-branchchosen').classList.add('hidden'); $('b-branchchosen').innerHTML='';
+  $('b-branchpick').classList.remove('hidden');
+  $('b-branchsearch').value=''; $('b-branchlist').innerHTML='';
+}
+
+/**
+ * ★★v9.49 成功したものだけキャッシュする。
+ *   🔴 旧: 失敗も BK.branches[code] に残していた。以後 return で即抜けるので、
+ *      電波が戻っても、銀行を選び直しても、同じ文言が出続けた。
+ *      LIFFを閉じて開き直すまで、その銀行の支店は永久に選べなかった。
+ */
+function bkLoadBranches(code){
+  var st = BK.branches[code];
+  if(st && st.list) return Promise.resolve();
+  if(st && st.p)    return st.p;
+  // ★v9.51 「取得中」の印を先に置いてから走らせる。
+  //   逆にすると、jsonp が同期で throw した瞬間に p が入らないまま
+  //   解決済みの印だけが残り、二度と再取得しない状態になる。
+  var slot = {};
+  BK.branches[code] = slot;
+  slot.p = (async function(){
+    try{
+      var res = await jsonp(GAS_URL+'?mode=bank_branch&code='+encodeURIComponent(code));
+      if(!res || !res.ok) BK.branches[code] = { err:(res&&res.message)||'支店の一覧を取れませんでした。' };
+      else BK.branches[code] = { list:(res.branches||[]).map(bkPrep_) };
+    }catch(err){
+      BK.branches[code] = { err:'支店の一覧を取れませんでした。電波の良い場所で、もう一度入力してください。' };
+    }
+  })();
+  return slot.p;
+}
+
+async function bkFilterBranches(){
+  var el = $('b-branchlist'), seq = ++BK.seqBranch;
+  var code = BK.bankCode;                      // ★ 開始時の銀行を握る
+  if(!code){ bkRows(el,[],null,'先に銀行をお選びください。'); return; }
+  var st = BK.branches[code];
+  if(!st || (!st.list && !st.err)){
+    bkRows(el,[],null,'読み込み中…');
+    await bkLoadBranches(code);
+    // ★ await の後に確かめる。ここを消すと、古い応答が新しい銀行の欄に描かれる
+    if(seq !== BK.seqBranch || code !== BK.bankCode) return;
+    st = BK.branches[code] || {};
+  }
+  if(!st.list){
+    bkRows(el,[],null,(st.err||'支店の一覧を取れませんでした。')+'\nもう一度入力すると読み直します。');
+    BK.branches[code] = null;                  // 失敗を残さない。次の打鍵で読み直す
+    return;
+  }
+  var raw = $('b-branchsearch').value;
+  // ★★★v9.61 全角数字。理由は bkFilterBanks のコメントを参照
+  var q = bkNorm(raw), d = q.replace(/[^0-9]/g,'');
+  // ★ ゆうちょの支店名は「〇二八」。名前では探せないので、店番は1桁から効かせる。
+  //   名前は2文字から（三菱UFJは717件あり、1文字では選べる数にならない）
+  if(q.length<2 && d.length<1){
+    bkRows(el,[],null,'支店名を2文字以上、または店番を入れてください。');
+    return;
+  }
+  var hit = [];
+  st.list.forEach(function(x){ var h=bkHit(x,q,d,3); if(h) hit.push({x:x,h:h}); });
+  hit.sort(function(a,b){ return b.h-a.h; });
+  bkRows(el, hit.map(function(o){return o.x;}), bkPickBranch);
+}
+
+function bkPickBranch(x){
+  var c = String(x && x.c || '');
+  if(!/^[0-9]{3}$/.test(c)){
+    showErr('msg-bank','この支店の番号が正しく読み取れませんでした（'+c+'）。\nお手数ですが、このトークにそのままご返信ください。');
+    return false;
+  }
+  $('b-branch').value = c; $('b-branchname').value = String(x.n||'');
+  $('b-branchsearch').value=''; $('b-branchlist').innerHTML='';
+  $('b-branchpick').classList.add('hidden');
+  $('b-branchchosen').classList.remove('hidden');
+  $('b-branchchosen').innerHTML = '<span>'+esc(c)+'　'+esc(String(x.n||''))+'</span>'
+    + '<span class="again" onclick="bkResetBranchUi()">選び直す</span>';
+  return true;   // ★v9.52 bkPickBank と形を揃える。将来 if() で受けても偽にならない
 }
 
 function openBankEdit(){
@@ -1861,8 +2254,21 @@ function openBankEdit(){
   $('b-kind').innerHTML = (MYBANK.kinds||['普通']).map(function(k){
     return '<option value="'+esc(k)+'"'+((c.kind||'普通')===k?' selected':'')+'>'+esc(k)+'</option>';
   }).join('');
-  $('b-bank').value = c.bank||''; $('b-bankname').value = c.bankName||'';
-  $('b-branch').value = c.branch||''; $('b-branchname').value = c.branchName||'';
+  // ★v9.48 いまの登録を「選択済み」として出す。打ち替えさせない
+  // ★★v9.49 例外が出ても必ず戻す。true のまま居座ると、以後ずっと
+  //   銀行を選んでも支店欄にカーソルが移らない＝無言で劣化する
+  BK.silent = true;
+  try{
+    bkResetBank(); bkResetBranchUi();
+    if(c.bank){
+      // ★v9.51 銀行が入らなければ支店も復元しない。
+      //   銀行が空欄なのに支店だけ「選択済み」に見える状態を作らない。
+      if(bkPickBank({ c:String(c.bank), n:String(c.bankName||c.bank) }) && c.branch){
+        bkPickBranch({ c:String(c.branch), n:String(c.branchName||c.branch) });
+      }
+    }
+  }finally{ BK.silent = false; }
+  bkLoadBanks();                      // 先に読んでおく。打ち始めで待たせない
   $('b-acct').value = c.acct||''; $('b-kana').value = c.kana||'';
   // ★★v9.35 会社が持っているGmailを初期値に出すときは、そうと分かるように言う。
   //   黙って入れると、本人が見ずに送って「本人が希望したアドレス」として保存される。
@@ -1889,8 +2295,28 @@ async function submitBank(){
     kana:       $('b-kana').value.trim(),
     mail:       $('b-mail').value.trim()
   };
+  // ★v9.48 銀行・支店は選ぶ形になったので、何が足りないかを名指しする
+  // ★★v9.51 空欄の案内を【先に】出す。
+  //   🔴 旧: 桁の検査を先に置いたため、銀行だけ選んで支店をまだ選んでいない人
+  //      （支店名を打ったが行をタップしていない＝スマホで最も起きる形）に
+  //      「銀行・支店の番号を確認できませんでした」という身に覚えのない文が出て、
+  //      さらに bkResetBank() で【選び終わっていた銀行まで消して】いた。
   if(!q.bank || !q.branch || !q.acct || !q.kana){
-    showErr('msg-bank','銀行コード・支店コード・口座番号・受取人名は\nすべて入れてください。');
+    var lack = [];
+    if(!q.bank)   lack.push('銀行をお選びください');
+    if(!q.branch) lack.push('支店をお選びください（候補から選ぶと入ります）');
+    if(!q.acct)   lack.push('口座番号を入れてください');
+    if(!q.kana)   lack.push('受取人名（カナ）を入れてください');
+    showErr('msg-bank', lack.join('\n'));
+    window.scrollTo({top:0,behavior:'smooth'}); return;
+  }
+  // ★★★v9.49【送る直前に、番号の形そのものを確かめる】
+  //   ここが最後の砦。'5' や '138' が通ると【別の実在する銀行】へ振り込まれる。
+  //   2026-09-14 に2回、前ゼロが落ちた値がそのままシートに入った。
+  //   ⚠️ ここで埋め直さない。埋めると「正しい値」が2か所で決まる。弾いて気づかせる。
+  if(!/^[0-9]{4}$/.test(q.bank) || !/^[0-9]{3}$/.test(q.branch) || q.bank !== BK.bankCode){
+    showErr('msg-bank','銀行・支店の番号を確認できませんでした。\nお手数ですが、銀行からもう一度お選びください。');
+    bkResetBank();
     window.scrollTo({top:0,behavior:'smooth'}); return;
   }
   // ★★★v9.37 メールが空のときは【2回タップ】で確認する。
@@ -1926,14 +2352,19 @@ async function submitBank(){
     //   旧: 引数が (id,'ok',本文) で逆。しかも直後の loadMyBank が msg-bank を消していた。
     //       「本部への通知が送れませんでした」の1行が、誰にも見えない状態だった。
     MYBANK.loaded = false;
-    await loadMyBank();
+    // ★★v9.60 読み直しに失敗しても、下の成功文がそれを上書きしていた。
+    //   申請自体は成立しているが「読めていない」事実が消える。1行だけ添える。
+    const _reloaded = await loadMyBank();
     setMsg2('msg-bank', (res.message || '申請を受け付けました。')
-            + (res.norm ? '\n\n申請した内容\n' + res.norm : ''), 'ok');
+            + (res.norm ? '\n\n申請した内容\n' + res.norm : '')
+            + (_reloaded ? '' : '\n\n※いまの登録内容を読み直せませんでした。申請は受け付けています。'), 'ok');
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(err){
     showErr('msg-bank','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
   }finally{
-    btn.disabled = false; btn.textContent = 'この内容で申請する';
+    // ★v9.49 MAILSKIP が立ったままなのに文言だけ戻ると、ボタンの表示が嘘になる
+    btn.disabled = false;
+    btn.textContent = MAILSKIP ? 'メールなしで申請する' : 'この内容で申請する';
   }
 }
 
