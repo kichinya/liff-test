@@ -1412,7 +1412,7 @@ function startReorder(nm){
   drawReorder();
   $('rovl').classList.add('on');
 }
-function closeReorder(){ $('rovl').classList.remove('on'); ROD = null; }
+function closeReorder(){ rodEnd(); $('rovl').classList.remove('on'); ROD = null; }
 function rodTight(){ if(ROD){ ROD.tight = !ROD.tight; drawReorder(); } }
 
 /**
@@ -1517,8 +1517,26 @@ function drawReorder(){
 }
 
 // ---- ドラッグ（指でもマウスでも動くよう pointer で書く）----
+// ★v15.04【カードが移動しきらず残像が残る】あなたの指摘 2026-09-22
+//   🔴 旧: pointermove / pointerup を【掴んだ ≡ の要素】に付けていた。
+//      入れ替わるたびに drawReorder() が行を描き直すので、その要素ごと消える。
+//      → 以降の move も up も届かず、ghost（掴んでいるカードの写し）が画面に残り、
+//        カードは1段しか動かない。
+//   ⭕ window に付ける。描き直しても外れない。
+//      離したとき・やめたときは rodEnd() で ghost と待ち受けを必ず片付ける。
+function rodEnd(){
+  var d = ROD && ROD.drag;
+  if(d && d.ghost && d.ghost.parentNode){ try { d.ghost.parentNode.removeChild(d.ghost); } catch(e){} }
+  // 念のため、取り残された写しも全部消す
+  [].slice.call(document.querySelectorAll('.rghost')).forEach(function(g){ try { g.parentNode.removeChild(g); } catch(e){} });
+  window.removeEventListener('pointermove', rodMove);
+  window.removeEventListener('pointerup', rodDrop);
+  window.removeEventListener('pointercancel', rodDrop);
+  if(ROD) ROD.drag = null;
+}
 function rodGrab(ev, i){
   ev.preventDefault();
+  rodEnd();                                   // 前の掴みが残っていれば片付ける
   var sheet = $('rsheet');
   var row = sheet.querySelector('.rrow[data-i="'+i+'"]');
   if(!row) return;
@@ -1531,10 +1549,9 @@ function rodGrab(ev, i){
   document.body.appendChild(ghost);
   row.classList.add('drag');
   ROD.drag = { i: i, dy: ev.clientY - r.top, ghost: ghost, row: row };
-  try { ev.target.setPointerCapture(ev.pointerId); } catch(e){}
-  ev.target.onpointermove = rodMove;
-  ev.target.onpointerup = rodDrop;
-  ev.target.onpointercancel = rodDrop;
+  window.addEventListener('pointermove', rodMove, { passive: false });
+  window.addEventListener('pointerup', rodDrop);
+  window.addEventListener('pointercancel', rodDrop);
 }
 function rodMove(ev){
   if(!ROD || !ROD.drag) return;
@@ -1560,11 +1577,8 @@ function rodMove(ev){
   }
 }
 function rodDrop(ev){
-  if(!ROD || !ROD.drag) return;
-  var d = ROD.drag;
-  try { d.ghost.parentNode.removeChild(d.ghost); } catch(e){}
-  try { ev.target.onpointermove = null; ev.target.onpointerup = null; ev.target.onpointercancel = null; } catch(e){}
-  ROD.drag = null;
+  if(!ROD || !ROD.drag){ rodEnd(); return; }
+  rodEnd();
   drawReorder();
 }
 
