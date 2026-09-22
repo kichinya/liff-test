@@ -271,6 +271,9 @@
   .rrow .in .w{ font-size:11px; color:var(--red); font-weight:700; margin-top:3px; }
   .rhop{ font-size:11px; color:var(--sub); margin:-3px 0 7px 44px; }
   .rhop.ng{ color:var(--red); font-weight:700; }
+  /* ★v15.05 iPhone で長押しすると文字選択（校正・書き直し）が出て、指を離した合図が届かなくなる */
+  #rsheet, .rrow, .rghost{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+  .rodv{ float:right; font-size:10px; color:#c0c4c9; font-weight:400; }
   .rghost{ position:fixed; z-index:99; pointer-events:none; opacity:.92;
            box-shadow:0 6px 18px rgba(0,0,0,.22); }
   .stp{ display:flex; align-items:center; gap:10px; }
@@ -1478,7 +1481,7 @@ function drawReorder(){
     var over = p.over;
     return hop
       + '<div class="rrow'+(moved?' moved':'')+'" data-i="'+i+'">'
-      +   '<div class="gr" onpointerdown="rodGrab(event,'+i+')">≡</div>'
+      +   '<div class="gr" onpointerdown="rodGrab(event,'+i+')" oncontextmenu="return false">≡</div>'
       +   '<div class="in"><div class="p">'+esc(j.prop)+'</div>'
       +     '<div class="t">'+(moved?'<s>'+esc(x.origStart||'--:--')+'〜'+esc(x.origEnd||'--:--')+'</s> → ':'')
       +       '<b>'+esc(p.start)+'〜'+esc(p.end)+'</b>'
@@ -1495,7 +1498,7 @@ function drawReorder(){
     return p.start !== p.x.origStart || p.end !== p.x.origEnd; }).length;
 
   $('rsheet').innerHTML =
-      '<div class="hd"><b>'+esc(ROD.nm)+' さんの回る順番</b>'
+      '<div class="hd"><span class="rodv">v15.05</span><b>'+esc(ROD.nm)+' さんの回る順番</b>'
     +   '<small><span'+(isRedDay(DAY)?' style="color:var(--red);font-weight:700"':'')+'>'
     +   esc(fmtMD(DAY))+(holName(DAY)?' '+esc(holName(DAY)):'')+'</span>　'+ROD.list.length+'件'
     +   (ROD.move?'　'+moveIcon(ROD.move)+' '+esc(ROD.move):'　🔴 移動手段が未登録')+'</small></div>'
@@ -1532,6 +1535,9 @@ function rodEnd(){
   window.removeEventListener('pointermove', rodMove);
   window.removeEventListener('pointerup', rodDrop);
   window.removeEventListener('pointercancel', rodDrop);
+  window.removeEventListener('touchend', rodDrop);
+  window.removeEventListener('touchcancel', rodDrop);
+  window.removeEventListener('blur', rodDrop);
   if(ROD) ROD.drag = null;
 }
 function rodGrab(ev, i){
@@ -1552,6 +1558,10 @@ function rodGrab(ev, i){
   window.addEventListener('pointermove', rodMove, { passive: false });
   window.addEventListener('pointerup', rodDrop);
   window.addEventListener('pointercancel', rodDrop);
+  // ★v15.05 iPhone では pointerup が来ないことがある。指が離れた合図を二重に受ける
+  window.addEventListener('touchend', rodDrop);
+  window.addEventListener('touchcancel', rodDrop);
+  window.addEventListener('blur', rodDrop);
 }
 function rodMove(ev){
   if(!ROD || !ROD.drag) return;
