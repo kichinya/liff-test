@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.79</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.80</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -705,6 +705,8 @@
     </div>
     <div class="card">
       <label class="req">物件</label><select class="jobsel"><option value="">読み込んでいます…</option></select>
+      <!-- ★v9.80 超過のときだけ、いつまで出せるかを出す（GASが返す期限） -->
+      <div class="note" id="t-note"></div>
       <label class="req" id="t-label">内容</label>
       <textarea id="t-content" placeholder=""></textarea>
     </div>
@@ -1010,6 +1012,16 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE
 const $ = (id) => document.getElementById(id);
 let me = null;                 // {userId, name}
 let jobsMap = {};              // jobKey -> {pid,name,cleanDate}
+
+// ★★★v9.80【超過報告の物件を【本日】から外す】2026-09-26
+//   旧: 超過報告・備品・引き継ぎはどれも【本日の清掃】しか選べなかった。
+//       催促のLINEは「日付と物件を選んで」と書くのに、その日付が画面に無い。
+//       ＝ 催促を受け取っても出せない。だから未報告が積み上がる。
+//   新: 超過は GAS の ?mode=over_jobs が返す【未報告の超過】だけを出す。
+//   ⚠️ 備品・引き継ぎは今までどおり【本日】。その日の作業についての報告だから。
+let TODAY_JOBS = [];           // 本日の清掃（exp_jobs から）
+let JOBS_LOADED = false;       // exp_jobs が帰ってきたか
+let OVER = { state:'none', jobs:[], months:[], msg:'' };   // none|loading|ok|fail
 // ★v4.71 owner:true = オーナーグループへ転送される種別。
 //   ⚠️ サーバ側 Attendancereport.gs の ATT_OWNER_FWD と対になっている。
 //      片方だけ変えると「知らされずに転送される」「出ない告知が出る」のどちらかになる。
@@ -1102,6 +1114,9 @@ function go(name){
     $('t-owner-foot').style.display = (SHOW_FOOT_NOTE && m.auto) ? 'block' : 'none';
     $('t-content').value = '';                                  // 前回の入力を持ち越さない
     $('msg-text').className = 'msg'; $('msg-text').textContent = '';
+    // ★v9.80 物件の中身は種別で違う。開くたびに入れ直す。
+    if (name === 'overtime') loadOverJobs();
+    else fillTextJobs();
   }
   showView(name);
   if (name==='cancel') loadCancelList();   // ★v3.39 開くたびに取消候補を取り直す
@@ -1441,6 +1456,66 @@ async function submitPhoto(){
   }catch(err){
     reset();
     showErr('msg-photo','送信に失敗しました（'+((err&&err.message)||'不明')+'）。枚数を減らすか電波の良い場所でお試しください。');
+  }
+}
+
+// ---- ★★★v9.80 テキスト報告の物件プルダウン ----
+//   ⚠️ 物件の中身を決めるのはこの関数1つだけ。2か所に置かない。
+function textSel(){ return document.querySelector('#v-text .jobsel'); }
+
+function setTextOpts(list, emptyMsg){
+  const sel = textSel(); if(!sel) return;
+  sel.innerHTML = '';
+  if(!list.length){
+    const o=document.createElement('option'); o.value=''; o.textContent=emptyMsg;
+    sel.appendChild(o); return;
+  }
+  const ph=document.createElement('option'); ph.value=''; ph.textContent='選択してください';
+  sel.appendChild(ph);
+  list.forEach(function(j){
+    const o=document.createElement('option');
+    o.value=j.jobKey; o.textContent=(j.label||j.name);
+    sel.appendChild(o);
+  });
+}
+
+/** 備品・引き継ぎ（と、読み込み前の表示） */
+function fillTextJobs(){
+  const nt=$('t-note'); if(nt) nt.textContent='';
+  if(!JOBS_LOADED){ setTextOpts([], '物件を読み込んでいます…'); return; }
+  setTextOpts(TODAY_JOBS, '本日の清掃物件がありません');
+}
+
+/** 超過報告：未報告の超過だけを GAS から取る */
+async function loadOverJobs(){
+  if(!me){ setTextOpts([], '読み込んでいます…'); return; }   // ★v9.80 本人確認前には呼ばない
+  const nt=$('t-note');
+  setTextOpts([], '読み込んでいます…');
+  if(nt) nt.textContent='';
+  OVER.state='loading';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=over_jobs&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){
+      OVER.state='fail'; OVER.msg=(res&&res.message)||'読み込めませんでした';
+      setTextOpts([], '読み込めませんでした');
+      showErr('msg-text', OVER.msg);
+      return;
+    }
+    OVER.state='ok'; OVER.jobs=res.jobs||[]; OVER.months=res.months||[];
+    OVER.jobs.forEach(function(j){
+      jobsMap[j.jobKey]={pid:j.pid,name:j.name,cleanDate:j.cleanDate};
+    });
+    setTextOpts(OVER.jobs, 'ご報告が必要な超過はありません');
+    if(nt && OVER.months.length){
+      nt.textContent = OVER.months.map(function(m){
+        const p=String(m.ym).split('-'), d=String(m.deadline||'').split('-');
+        return Number(p[1])+'月分のご報告は '+Number(d[1])+'/'+Number(d[2])+' まで';
+      }).join('／');
+    }
+  }catch(e){
+    OVER.state='fail';
+    setTextOpts([], '読み込めませんでした');
+    showErr('msg-text','時間内に読み込めませんでした。電波の良い場所で、この画面を開き直してください。');
   }
 }
 
@@ -2828,10 +2903,16 @@ function jobsFailed(why){
     const expSel=document.querySelector('#v-expense .jobsel');
     const phSel=document.querySelector('#v-photo .jobsel');   // ★v4.85 写真も日付で埋める
     const qlSel=document.querySelector('#v-quality .jobsel'); // ★v8.18 品質も日付で埋める
-    document.querySelectorAll('.jobsel').forEach(function(sel){
-      if(sel===expSel || sel===phSel || sel===qlSel) return;
-      fillSel(sel, todayJobs, false, '本日の清掃物件がありません');
-    });
+    // ★★★v9.80 残る .jobsel は【テキスト報告の1つだけ】。
+    //   旧: ここで一括して本日の物件を入れていたので、
+    //       超過報告も本日しか選べなかった。
+    //   新: 種別ごとに fillTextJobs() / loadOverJobs() で入れる。
+    TODAY_JOBS = todayJobs;
+    JOBS_LOADED = true;
+    if($('v-text') && !$('v-text').classList.contains('hidden')){
+      if($('v-text').dataset.type === 'overtime') { if(OVER.state==='none') loadOverJobs(); }
+      else fillTextJobs();
+    }
 
     // ★v4.85 写真報告も 清掃日 → 物件 の2段（直近7日）。
     PHOTO_DATES = res.photoDates || [];
