@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.81</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.82</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -864,6 +864,9 @@
 
       <div class="ksec">🕐 打刻の記録</div>
       <div id="k-list"><div class="center" style="padding:20px 8px">読み込み中…</div></div>
+
+      <!-- ★★★v9.82 超過報告が漏れている回 2026-09-28 -->
+      <div id="k-over"></div>
 
       <!-- ★v9.15 立替は立替で分けて出す -->
       <div id="k-exp"></div>
@@ -2454,7 +2457,8 @@ async function submitBank(){
 
 // ---- ★v9.14 勤怠の確認 ----
 // 自分の勤怠ログを見る。金額は出さない（単価は個人例外があり、二重の正解を作らないため）。
-let MYKIN = { rows: [], ym: '', closed: false, target: null };
+let MYKIN = { rows: [], ym: '', closed: false, target: null,
+              gate: { can:true, blockable:false, over:[], missing:0, why:'' } };   // ★v9.82
 const KIND_LIST = ['通常清掃','チェック','その他'];
 
 function loadMyKinFirst(){
@@ -2472,6 +2476,7 @@ async function loadMyKin(){
   // ★v9.15 前の月の内容を残さない。残ると別の月の数字を自分の月だと思う事故になる
   $('k-miss').innerHTML = ''; $('k-exp').innerHTML = '';
   { const _kc=$('k-close'); if(_kc) _kc.innerHTML = ''; }   // ★v9.81 前の月の確認状態を残さない
+  { const _ko=$('k-over'); if(_ko) _ko.innerHTML = ''; }   // ★v9.82 前の月の超過も残さない
   try{
     const ym = $('k-ym').value || '';
     const res = await jsonp(GAS_URL+'?mode=my_kintai&userId='+encodeURIComponent(me.userId)
@@ -2479,6 +2484,7 @@ async function loadMyKin(){
     if(seq !== MYKIN_SEQ) return;                       // ★v9.23 古い応答は捨てる
     if(!res || !res.ok){ showErr('msg-mykin', (res&&res.message)||'読み込めませんでした。'); $('k-list').innerHTML=''; return; }
     MYKIN.rows = res.rows||[]; MYKIN.ym = res.ym; MYKIN.closed = !!res.closed;
+    MYKIN.gate = res.gate || { can:true, blockable:false, over:[], missing:0, why:'' };   // ★v9.82
 
     const sel = $('k-ym');
     if (sel.options.length <= 1 || !sel.value){
@@ -2494,6 +2500,7 @@ async function loadMyKin(){
     drawKinMissing(res.missing||[], res.missErr||'');
     drawKinExpense(res.expenses||[], res.expErr||'');
 
+    drawKinOver();                                      // ★v9.82 超過報告の漏れ
     drawKinClose();                                     // ★v9.81 確認ボタン
 
     if(!MYKIN.rows.length){
@@ -2522,12 +2529,67 @@ async function loadMyKin(){
 //      勤怠ログには1セルも書きません。金額も変わりません。
 //   ⚠️ 確認は支払の条件ではありません（確定 2026-09-28）。
 //      押さなくても支払われます。そう書かないと、押し忘れを不安に思わせます。
+// ★★★v9.82 超過報告が漏れている回
+//   ⚠️ 一覧は GAS の over_jobs と同じもの（回単位）。
+//      2名で入った回は、どちらか1人が出せば消えます。
+function drawKinOver(){
+  const box = $('k-over'); if(!box) return;
+  const g = MYKIN.gate || {};
+  const list = g.over || [];
+  if(g.why){
+    box.innerHTML = '<div class="ksec">⏱ 超過報告</div>'
+      + '<div class="pnote" style="background:#fff8e1;border-color:#ffe082">'
+      + '🟡 いま確かめられませんでした（'+esc(g.why)+'）。<br>'
+      + '確認はこのまま進められます。</div>';
+    return;
+  }
+  if(!g.blockable){ box.innerHTML = ''; return; }      // 期限を過ぎた月は出さない
+  if(!list.length){
+    box.innerHTML = '<div class="ksec">⏱ 超過報告</div>'
+      + '<div class="pnote" style="background:#e8f5e9;border-color:#a5d6a7">'
+      + '✅ ご報告が必要な超過はありません。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="ksec">⏱ 超過報告が漏れています</div>'
+    + '<div class="pnote" style="background:#ffebee;border-color:#ef9a9a">'
+    + '下の回は、予定を大きく超えているのにご報告が届いていません。<br>'
+    + '<b>オーナー様へのご請求の根拠になります。</b></div>'
+    + list.map(function(x){
+        const p=String(x.ymd||'').split('-');
+        return '<div class="pcard"><div class="pbody">'
+          + '<div class="pname">'+esc(Number(p[1])+'/'+Number(p[2]))+'　'+esc(x.prop||'')+'</div>'
+          + '<div class="paddr">'+esc(hm(x.over))+' 超過</div></div></div>';
+      }).join('')
+    + '<button class="submit" style="margin-top:10px;background:#c62828" onclick="go(\'overtime\')">'
+    + '⏱ 超過報告を出す</button>';
+}
+
+function hm(min){
+  const m = Math.round(Number(min)||0), h = Math.floor(m/60), r = m%60;
+  return (h?h+'時間':'') + (r?r+'分':(h?'':'0分'));
+}
+
 function drawKinClose(){
   const box = $('k-close'); if(!box) return;
   if(MYKIN.closed){
     box.innerHTML = '<div class="pnote" style="background:#e8f5e9;border-color:#a5d6a7">'
       + '✅ <b>この月は確認済みです。</b>ありがとうございます。<br>'
       + 'あとから違いに気づいたときは、上の［修正を依頼］からお知らせください。</div>';
+    return;
+  }
+  // ★★★v9.82 先に出していただくものが残っているときは押せない
+  //   ⚠️ 期限を過ぎた月は止めません（直せないのに止めると詰みます）。
+  //   ⚠️ 判定したのは GAS 側です。画面では数え直していません。
+  const g = MYKIN.gate || {};
+  if(g.blockable && g.can === false){
+    const why = [];
+    if(g.missing) why.push('打刻が入っていない清掃 '+g.missing+'件');
+    if((g.over||[]).length) why.push('ご報告の無い超過 '+g.over.length+'件');
+    box.innerHTML = '<div class="pnote" style="background:#ffebee;border-color:#ef9a9a">'
+      + '🔴 <b>まだ確認できません。</b><br>'
+      + esc(why.join(' / ')) + '<br>'
+      + '先に上の分を出してから、もう一度この画面を開いてください。</div>'
+      + '<button class="submit" style="margin-top:10px;opacity:.45" disabled>この月の勤怠を確認しました</button>';
     return;
   }
   box.innerHTML = '<div class="pnote">上の内容で合っていれば、下を押してください。<br>'
