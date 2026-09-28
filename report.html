@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.80</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.81</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -867,6 +867,14 @@
 
       <!-- ★v9.15 立替は立替で分けて出す -->
       <div id="k-exp"></div>
+
+      <!-- ★★★v9.81【確認しました】2026-09-28
+           旧：GASは closed を返していたが、画面には何も出していなかった。
+                 （そもそも GAS 側の AKC_SHEET が未定義で、常に false だった）
+           新：本人が押すと「勤怠確認」シートに1行残る。
+           ⚠️ 勤怠ログには1セルも書きません。 -->
+      <div class="ksec">✅ この月の確認</div>
+      <div id="k-close"></div>
     </div>
 
     <!-- ▼ ★v9.30 口座 -->
@@ -2463,6 +2471,7 @@ async function loadMyKin(){
   $('k-sum').textContent = '';
   // ★v9.15 前の月の内容を残さない。残ると別の月の数字を自分の月だと思う事故になる
   $('k-miss').innerHTML = ''; $('k-exp').innerHTML = '';
+  { const _kc=$('k-close'); if(_kc) _kc.innerHTML = ''; }   // ★v9.81 前の月の確認状態を残さない
   try{
     const ym = $('k-ym').value || '';
     const res = await jsonp(GAS_URL+'?mode=my_kintai&userId='+encodeURIComponent(me.userId)
@@ -2485,6 +2494,8 @@ async function loadMyKin(){
     drawKinMissing(res.missing||[], res.missErr||'');
     drawKinExpense(res.expenses||[], res.expErr||'');
 
+    drawKinClose();                                     // ★v9.81 確認ボタン
+
     if(!MYKIN.rows.length){
       $('k-list').innerHTML = '<div class="center" style="padding:20px 8px;color:#6b7683">この月の打刻はありません。</div>';
       return;
@@ -2503,6 +2514,44 @@ async function loadMyKin(){
     if(seq !== MYKIN_SEQ) return;                       // ★v9.23
     showErr('msg-mykin','読み込みに失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
     $('k-list').innerHTML=''; $('k-miss').innerHTML=''; $('k-exp').innerHTML=''; $('k-sum').textContent='';
+  }
+}
+
+// ---- ★★★v9.81 「確認しました」 ----
+//   ⚠️ 押すと GAS の ?mode=kin_close が「勤怠確認」シートに1行追記します。
+//      勤怠ログには1セルも書きません。金額も変わりません。
+//   ⚠️ 確認は支払の条件ではありません（確定 2026-09-28）。
+//      押さなくても支払われます。そう書かないと、押し忘れを不安に思わせます。
+function drawKinClose(){
+  const box = $('k-close'); if(!box) return;
+  if(MYKIN.closed){
+    box.innerHTML = '<div class="pnote" style="background:#e8f5e9;border-color:#a5d6a7">'
+      + '✅ <b>この月は確認済みです。</b>ありがとうございます。<br>'
+      + 'あとから違いに気づいたときは、上の［修正を依頼］からお知らせください。</div>';
+    return;
+  }
+  box.innerHTML = '<div class="pnote">上の内容で合っていれば、下を押してください。<br>'
+    + '違うところがあれば、先に［修正を依頼］をお願いします。</div>'
+    + '<button id="k-close-btn" class="submit" style="margin-top:10px" onclick="submitKinClose()">この月の勤怠を確認しました</button>';
+}
+
+async function submitKinClose(){
+  const btn = $('k-close-btn'); if(!btn) return;
+  btn.disabled = true; btn.textContent = '送信中…';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=kin_close&userId='+encodeURIComponent(me.userId)
+                            +'&ym='+encodeURIComponent(MYKIN.ym||''));
+    if(res && res.ok){
+      MYKIN.closed = true;
+      drawKinClose();
+      setMsg2('msg-mykin', res.message||'ご確認ありがとうございました。', 'ok');
+      return;
+    }
+    showErr('msg-mykin', (res&&res.message)||'保存できませんでした。');
+    btn.disabled = false; btn.textContent = 'この月の勤怠を確認しました';
+  }catch(err){
+    showErr('msg-mykin','送信に失敗しました。電波の良い場所で再度お試しください。');
+    btn.disabled = false; btn.textContent = 'この月の勤怠を確認しました';
   }
 }
 
