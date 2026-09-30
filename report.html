@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.87</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.89</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -1154,13 +1154,70 @@ function go(name){
 
 
 // JSONP GET
-function jsonp(url){
+/* ★★★v9.88【時間切れは1回だけ自動で入れ直す】2026-09-30 スタッフからの指摘
+   「WiFiを切っても繋いでもエラーが多発する／読み込みがすごく遅い」
+   🔴 原因は電波ではない。GASが25秒で返らないと timeout になり、
+      そこで出す文言が「電波の良い場所で」だったので、原因を取り違えていた。
+   ⭕ ①時間切れのときだけ、2秒おいて1回だけ自動で入れ直す。
+        スプレッドシートを読む処理は、2回目のほうが速く返ることが多い。
+     ②文言から「電波」を外す（netMsg）。切り分けは error の種類でする。
+   ⚠️ 自動で入れ直すのは【読むだけ】のとき。送信では使わない。
+     kin_close / unlock_submit / settings_set / props_set / late_submit /
+     fix_submit / bank_submit / att_cancel / photo_intake_start は対象外。
+     二重に受け付けられると事故になる。
+  ⚠️ mode 名は実物と突き合わせること。v9.88 の初稿は ovr_list / exp_list /
+     att_my_calendar と書いていて、実際の over_jobs / exp_jobs / mycal と違った。
+     そのままなら1件も入れ直されないのに、入れたつもりになるところだった。 */
+async function jsonp(url, retried){
+  try {
+    return await jsonpOnce(url);
+  } catch (e) {
+    if (!retried && e && e.message === 'timeout' && /[?&]mode=(my_kintai|late_jobs|over_jobs|exp_jobs|mycal|props_get|settings_get|bank_get|bank_list|bank_branch|att_cancel_list)\b/.test(url)) {
+      await new Promise(function(r){ setTimeout(r, 2000); });
+      return await jsonp(url, true);
+    }
+    throw e;
+  }
+}
+
+/* ★★★v9.89【送信の時間切れは「届いているかもしれない」と伝える】2026-09-30
+   🔴 菊地さんの実機: 画面は「送信に失敗しました」、実際は保存され通知も届いた。
+      サーバは成功していて、返事が25秒に間に合わなかっただけ。
+      ここで「失敗しました」と言い切ると、本人はもう一度押す。
+      今朝の「押したのに押せていないと見える」と同じ形を、こちらから作ることになる。
+   ⭕ 送信の時間切れは【断定しない】。LINEに確認のメッセージが届いたかで判断してもらう。
+   ⚠️ 読み込みの時間切れ（netMsg）とは分ける。読み込みは何度やり直しても害がない。 */
+function sendTimeoutMsg(err, what){
+  if (err && err.message === 'timeout') {
+    return (what || 'ご報告') + 'の返事が、時間内に返りませんでした。\n\n'
+         + '⚠️ すでに受け付けられている可能性があります。\n'
+         + 'LINEのトークに確認のメッセージが届いていないか、先にご覧ください。\n'
+         + '・届いていれば、そのままで大丈夫です\n'
+         + '・届いていなければ、もう一度お願いします';
+  }
+  return netMsg(err, what);
+}
+
+/* 通信の失敗を、原因が分かる言葉にする。電波のせいと決めつけない。 */
+function netMsg(err, what){
+  var m = (err && err.message) || '';
+  if (m === 'timeout') {
+    return (what || 'この画面') + 'を時間内に読み込めませんでした。\n'
+         + 'いま混み合っている可能性があります。少し待ってから開き直してください。';
+  }
+  if (m === 'network') {
+    return (what || 'この画面') + 'に接続できませんでした。\n'
+         + '通信の状態をご確認のうえ、もう一度お試しください。';
+  }
+  return (what || 'この画面') + 'を読み込めませんでした（' + (m || '不明') + '）。\n'
+       + 'もう一度お試しください。';
+}
+
+function jsonpOnce(url){
   return new Promise((resolve,reject)=>{
     const cb='cb_'+Date.now()+'_'+Math.floor(Math.random()*100000);
     const s=document.createElement('script');
-    // ★v5.37 15秒 → 25秒。GAS側は速くしたが、
-    //   電波の弱い現場では往復だけで15秒に届くことがある。
-    //   ここで切れると「報告が開けない」に見える。
+    // ★v5.37 15秒 → 25秒。★v9.88 時間切れは上の jsonp() が1回だけ入れ直す。
     const timer=setTimeout(()=>{ cleanup(); reject(new Error('timeout')); }, 25000);
     function cleanup(){ clearTimeout(timer); delete window[cb]; if(s.parentNode) s.parentNode.removeChild(s); }
     window[cb]=(data)=>{ cleanup(); resolve(data); };
@@ -1246,7 +1303,7 @@ async function openMyCalendar(btn){
     if(window.liff && liff.isInClient()) liff.openWindow({ url: res.url, external: true });
     else window.open(res.url, '_blank');
   }catch(err){
-    showErr('msg-menu','カレンダー情報の取得に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-menu','カレンダー情報の取得に失敗しました。少し待ってからもう一度お試しください。');
   }finally{
     btn.style.pointerEvents=''; btn.innerHTML=label;
   }
@@ -1320,7 +1377,7 @@ async function submitExpense(){
     finishDone();
   }catch(err){
     reset();
-    showErr('msg-expense','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+    showErr('msg-expense', sendTimeoutMsg(err, '立替のご報告'));   // ★v9.89 断定しない
   }
 }
 
@@ -1382,7 +1439,7 @@ async function startPhotoIntake(){
     // ★v5.16【致命バグ修正】ここに &workDate=…+encodeURIComponent(wd) が入っていた。
     //   wd はこの関数のどこにも無い（v5.04 で打刻の後入れから誤って持ち込んだ）。
     //   ReferenceError が try に入るため、画面には
-    //   「通信に失敗しました。電波の良い場所で再度お試しください。」としか出ず、
+    //   「通信できませんでした。少し待ってからもう一度お試しください。」としか出ず、
     //   ずっと通信の問題に見えていた。受付が始まらないので
     //   トークに写真を送っても何も起きない＝「画像がLINEトークから送れない」。
     //   サーバ側 photoIntakeStartJsonp_ は workDate を読んでいないので、送る必要もない。
@@ -1397,7 +1454,7 @@ async function startPhotoIntake(){
     finishDone();
   }catch(err){
     btn.disabled=false; btn.textContent='📷 写真を送る';
-    showErr('msg-photo','通信に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-photo','通信できませんでした。少し待ってからもう一度お試しください。');
   }
 }
 
@@ -1526,7 +1583,7 @@ async function loadOverJobs(){
   }catch(e){
     OVER.state='fail';
     setTextOpts([], '読み込めませんでした');
-    showErr('msg-text','時間内に読み込めませんでした。電波の良い場所で、この画面を開き直してください。');
+    showErr('msg-text','時間内に読み込めませんでした。いま混み合っている可能性があります。少し待ってから開き直してください。');
   }
 }
 
@@ -1596,7 +1653,7 @@ async function loadLate(){
     // ★v5.69 同上
     $('l-date').innerHTML='<option value="">読み込めませんでした</option>';
     $('l-job').innerHTML='<option value="">読み込めませんでした</option>';
-    showErr('msg-late','時間内に読み込めませんでした。\n電波の良い場所で、この画面を開き直してください。');
+    showErr('msg-late','時間内に読み込めませんでした。\nいま混み合っている可能性があります。少し待ってから開き直してください。');
   }
 }
 
@@ -1860,7 +1917,7 @@ async function startQualityPhotoOnly(){
     finishDone();
   }catch(e){
     reset();
-    showErr('msg-quality','写真の受付を始められませんでした。電波の良い場所でお試しください。');
+    showErr('msg-quality','写真の受付を始められませんでした。少し待ってからもう一度お試しください。');
   }
 }
 
@@ -2446,7 +2503,7 @@ async function submitBank(){
             + (_reloaded ? '' : '\n\n※いまの登録内容を読み直せませんでした。申請は受け付けています。'), 'ok');
     window.scrollTo({top:0,behavior:'smooth'});
   }catch(err){
-    showErr('msg-bank','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+    showErr('msg-bank', sendTimeoutMsg(err, '口座のご登録'));   // ★v9.89 断定しない
   }finally{
     // ★v9.49 MAILSKIP が立ったままなのに文言だけ戻ると、ボタンの表示が嘘になる
     btn.disabled = false;
@@ -2667,7 +2724,7 @@ async function submitUnlock(){
     showErr('msg-mykin', (res&&res.message)||'送信できませんでした。');
     btn.disabled = false; btn.textContent = 'この内容でお知らせする';
   }catch(err){
-    showErr('msg-mykin','送信に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-mykin', sendTimeoutMsg(err, 'お知らせ'));   // ★v9.89 断定しない
     btn.disabled = false; btn.textContent = 'この内容でお知らせする';
   }
 }
@@ -2687,7 +2744,7 @@ async function submitKinClose(){
     showErr('msg-mykin', (res&&res.message)||'保存できませんでした。');
     btn.disabled = false; btn.textContent = 'この内容で確定する';
   }catch(err){
-    showErr('msg-mykin','送信に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-mykin', sendTimeoutMsg(err, '勤怠の確定'));   // ★v9.89 断定しない
     btn.disabled = false; btn.textContent = 'この内容で確定する';
   }
 }
@@ -2782,7 +2839,7 @@ async function submitKinFix(){
     finishDone();
   }catch(err){
     reset();
-    showErr('msg-kfix','送信に失敗しました（'+((err&&err.message)||'不明')+'）。電波の良い場所で再度お試しください。');
+    showErr('msg-kfix', sendTimeoutMsg(err, '修正のご依頼'));   // ★v9.89 断定しない
   }
 }
 
@@ -2817,7 +2874,7 @@ async function loadSettings(){
     }).join('');
     $('s-home').value = res.home || '';
     $('s-btn').disabled = false;
-  }catch(e){ showErr('msg-settings','通信に失敗しました。電波の良い場所で再度お試しください。'); $('s-moves').innerHTML=''; }
+  }catch(e){ showErr('msg-settings','通信できませんでした。少し待ってからもう一度お試しください。'); $('s-moves').innerHTML=''; }
 }
 
 async function submitSettings(){
@@ -2852,7 +2909,7 @@ async function loadProps(){
       m.style.background='#e3f2fd'; m.style.color='#0d47a1';
       m.textContent='まだ個別の設定がありません。いまはエリアの物件をオンにして表示しています。内容を確認して保存してください。';
     }
-  }catch(e){ showErr('msg-props','通信に失敗しました。電波の良い場所で再度お試しください。'); $('p-list').innerHTML=''; }
+  }catch(e){ showErr('msg-props','通信できませんでした。少し待ってからもう一度お試しください。'); $('p-list').innerHTML=''; }
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){
@@ -2921,7 +2978,7 @@ async function submitProps(){
     m.textContent=t;
   }catch(e){
     btn.disabled=false; btn.textContent='この内容で保存する';
-    showErr('msg-props','通信に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-props','通信できませんでした。少し待ってからもう一度お試しください。');
   }
 }
 
@@ -2951,7 +3008,7 @@ async function loadCancelList(){
     form.classList.remove('hidden'); btn.classList.remove('hidden');
   }catch(err){
     note.classList.add('hidden');
-    showErr('msg-cancel','取消候補の取得に失敗しました。電波の良い場所で再度お試しください。');
+    showErr('msg-cancel','取消候補の取得に失敗しました。少し待ってからもう一度お試しください。');
   }
 }
 
@@ -2973,7 +3030,7 @@ async function submitCancel(){
     showErr('msg-cancel',(res&&res.message)||'取り消せませんでした。');
     btn.disabled=false; btn.textContent='この報告を取り消す';
   }catch(err){
-    showErr('msg-cancel','送信に失敗しました。電波の良い場所で再度お試しください。取消が済んだかどうかはLINEの通知でご確認ください。');
+    showErr('msg-cancel','送信できませんでした。少し待ってからもう一度お試しください。取消が済んだかどうかはLINEの通知でご確認ください。');
     btn.disabled=false; btn.textContent='この報告を取り消す';
   }
 }
