@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.82</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.83</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -2585,10 +2585,15 @@ function drawKinClose(){
     const why = [];
     if(g.missing) why.push('打刻が入っていない清掃 '+g.missing+'件');
     if((g.over||[]).length) why.push('ご報告の無い超過 '+g.over.length+'件');
+    // ★★★v9.83 これからの清掃が残っているうちは押せない 2026-09-30
+    //   今日のアサインが残ったまま確認すると、その日ぶんが入らない件数で締まる。
+    //   ⚠️ 数えたのは GAS 側（_amyUpcoming_）。画面では数え直していない。
+    if(g.upcoming) why.push('これからの清掃の予定 '+g.upcoming+'件');
     box.innerHTML = '<div class="pnote" style="background:#ffebee;border-color:#ef9a9a">'
       + '🔴 <b>まだ確認できません。</b><br>'
       + esc(why.join(' / ')) + '<br>'
-      + '先に上の分を出してから、もう一度この画面を開いてください。</div>'
+      + (g.upcoming ? '今月の清掃がすべて終わってから、もう一度この画面を開いてください。'
+                    : '先に上の分を出してから、もう一度この画面を開いてください。') + '</div>'
       + '<button class="submit" style="margin-top:10px;opacity:.45" disabled>この月の勤怠を確認しました</button>';
     return;
   }
