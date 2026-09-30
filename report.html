@@ -171,7 +171,7 @@
 </head>
 <body>
 <div class="wrap">
-  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.83</div></div>
+  <div id="loading" class="center"><div class="spinner"></div><div id="loadtext">LINEと接続しています…</div><div style="font-size:11px;color:#bbb;margin-top:10px">v9.86</div></div>
   <!-- ★v5.44 物件リストだけが読めなかったときの案内。画面はふさがない。 -->
   <div id="jobsbar" class="hidden" style="background:#fdecea;border:1px solid #f5c6cb;color:#8a2b2b;
     border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.7;margin-bottom:12px"></div>
@@ -2457,7 +2457,7 @@ async function submitBank(){
 
 // ---- ★v9.14 勤怠の確認 ----
 // 自分の勤怠ログを見る。金額は出さない（単価は個人例外があり、二重の正解を作らないため）。
-let MYKIN = { rows: [], ym: '', closed: false, target: null,
+let MYKIN = { rows: [], ym: '', closed: false, target: null, total: {count:0, work:0},
               gate: { can:true, blockable:false, over:[], missing:0, why:'' } };   // ★v9.82
 const KIND_LIST = ['通常清掃','チェック','その他'];
 
@@ -2483,7 +2483,7 @@ async function loadMyKin(){
                             + (ym ? '&ym='+encodeURIComponent(ym) : ''));
     if(seq !== MYKIN_SEQ) return;                       // ★v9.23 古い応答は捨てる
     if(!res || !res.ok){ showErr('msg-mykin', (res&&res.message)||'読み込めませんでした。'); $('k-list').innerHTML=''; return; }
-    MYKIN.rows = res.rows||[]; MYKIN.ym = res.ym; MYKIN.closed = !!res.closed;
+    MYKIN.rows = res.rows||[]; MYKIN.ym = res.ym; MYKIN.closed = !!res.closed; MYKIN.total = res.total || {count:0, work:0};   // ★v9.84 締めの確認に出す
     MYKIN.gate = res.gate || { can:true, blockable:false, over:[], missing:0, why:'' };   // ★v9.82
 
     const sel = $('k-ym');
@@ -2573,8 +2573,13 @@ function drawKinClose(){
   const box = $('k-close'); if(!box) return;
   if(MYKIN.closed){
     box.innerHTML = '<div class="pnote" style="background:#e8f5e9;border-color:#a5d6a7">'
-      + '✅ <b>この月は確認済みです。</b>ありがとうございます。<br>'
-      + 'あとから違いに気づいたときは、上の［修正を依頼］からお知らせください。</div>';
+      + '✅ <b>'+(Number(String(MYKIN.ym||'').slice(5,7))||'')+'月分は確定しています。</b>ありがとうございます。<br>'
+      // ★★★v9.86 スタッフ向けに「締め」という言い方をしない（菊地さんの指示 2026-09-30）。
+      //   ボタンは機能の名前（締めの解除）ではなく、その人がやりたいことの言葉にする。
+      //   ここで［修正を依頼］を案内すると、押しても弾かれて「言われたとおりやったのに」になります。
+      + '内容に間違いが見つかったときは、下からお知らせください。<br>'
+      + '本部が確認して、直せる状態に戻します。</div>'
+      + '<button class="submit" style="margin-top:10px;background:#6b7683" onclick="askUnlock()">間違いがあったので直したい</button>';
     return;
   }
   // ★★★v9.82 先に出していただくものが残っているときは押せない
@@ -2599,7 +2604,68 @@ function drawKinClose(){
   }
   box.innerHTML = '<div class="pnote">上の内容で合っていれば、下を押してください。<br>'
     + '違うところがあれば、先に［修正を依頼］をお願いします。</div>'
-    + '<button id="k-close-btn" class="submit" style="margin-top:10px" onclick="submitKinClose()">この月の勤怠を確認しました</button>';
+    + '<button class="submit" style="margin-top:10px" onclick="askKinClose()">この月の勤怠を確認しました</button>';
+}
+
+// ★★★v9.84【2段階にする】2026-09-30 菊地さんの確定
+//   「この確認が月末の締めだと伝わっていない」。押した瞬間に確定せず、
+//   何がどの数字で確定するのかを見せてから、もう一度押してもらう。
+//   ⚠️ 件数・実働分は GAS が返した total をそのまま出す。画面では数え直さない。
+function askKinClose(){
+  const box = $('k-close'); if(!box) return;
+  const t = MYKIN.total || {count:0, work:0};
+  const mm = Number(String(MYKIN.ym||'').slice(5,7)) || '';
+  const hh = Math.floor((t.work||0)/60), rr = (t.work||0)%60;
+  const hm = (hh?hh+'時間':'') + (rr?rr+'分':(hh?'':'0分'));
+  box.innerHTML = '<div class="pnote" style="background:#fff8e1;border-color:#ffe082">'
+    + '⚠️ <b>'+mm+'月分の勤怠を、この内容で確定します。</b>'
+    + '<div style="font-size:18px;font-weight:700;margin:8px 0;color:#a06a00">'
+    +   (t.count||0)+'件 / '+hm+'</div>'
+    + '<b>・今月の作業がまだ残っている場合は、すべて終わってから押してください</b><br>'
+    + '・この実働分が業務委託費のもとになります<br>'
+    + '・<b>確定したあとは、ご自身では直せません</b><br>'
+    + '・直したいところがあれば、先に［修正を依頼］をお願いします<br>'
+    + '・確定したあとに間違いに気づいたときは、この画面からお知らせください'
+    + '</div>'
+    + '<button id="k-close-btn" class="submit" style="margin-top:10px" onclick="submitKinClose()">この内容で確定する</button>'
+    + '<button class="submit" style="margin-top:8px;background:#6b7683" onclick="drawKinClose()">戻る</button>';
+}
+
+// ★★★v9.85【締めの解除を申請する】2026-09-30 菊地さんの確定
+//   締めたあとに直したくなったとき、本部が手で外すのではなく本人から申請する。
+//   管理グループのボタンで承認すると「勤怠確認」の行が消え、修正依頼が出せるようになる。
+function askUnlock(){
+  const box = $('k-close'); if(!box) return;
+  const mm = Number(String(MYKIN.ym||'').slice(5,7)) || '';
+  box.innerHTML = '<div class="pnote">'
+    + '<b>'+mm+'月分を直せる状態に戻します。</b><br>'
+    + 'どこが違うかを書いてください。本部が確認したら、［修正を依頼］を出せるようになります。</div>'
+    + '<textarea id="ul-why" rows="3" placeholder="例）9/14 Umito（藤沢）の完了時刻が違います"'
+    +   ' style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px;border:1px solid #e0e0e0;border-radius:6px;font-size:14px"></textarea>'
+    + '<button id="ul-btn" class="submit" style="margin-top:8px" onclick="submitUnlock()">この内容でお知らせする</button>'
+    + '<button class="submit" style="margin-top:8px;background:#6b7683" onclick="drawKinClose()">戻る</button>';
+}
+
+async function submitUnlock(){
+  const btn = $('ul-btn'); if(!btn) return;
+  const why = (($('ul-why')||{}).value || '').trim();
+  if(!why){ showErr('msg-mykin','どこを直したいか、理由を入力してください。'); return; }
+  btn.disabled = true; btn.textContent = '送信中…';
+  try{
+    const res = await jsonp(GAS_URL+'?mode=unlock_submit&userId='+encodeURIComponent(me.userId)
+                            +'&ym='+encodeURIComponent(MYKIN.ym||'')
+                            +'&why='+encodeURIComponent(why));
+    if(res && res.ok){
+      drawKinClose();
+      setMsg2('msg-mykin', res.message||'本部にお知らせしました。確認できたらLINEでお知らせします。', 'ok');
+      return;
+    }
+    showErr('msg-mykin', (res&&res.message)||'送信できませんでした。');
+    btn.disabled = false; btn.textContent = 'この内容でお知らせする';
+  }catch(err){
+    showErr('msg-mykin','送信に失敗しました。電波の良い場所で再度お試しください。');
+    btn.disabled = false; btn.textContent = 'この内容でお知らせする';
+  }
 }
 
 async function submitKinClose(){
@@ -2615,10 +2681,10 @@ async function submitKinClose(){
       return;
     }
     showErr('msg-mykin', (res&&res.message)||'保存できませんでした。');
-    btn.disabled = false; btn.textContent = 'この月の勤怠を確認しました';
+    btn.disabled = false; btn.textContent = 'この内容で確定する';
   }catch(err){
     showErr('msg-mykin','送信に失敗しました。電波の良い場所で再度お試しください。');
-    btn.disabled = false; btn.textContent = 'この月の勤怠を確認しました';
+    btn.disabled = false; btn.textContent = 'この内容で確定する';
   }
 }
 
