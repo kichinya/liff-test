@@ -372,7 +372,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.32';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
+const APP_VER = 'v8.33';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -2162,6 +2162,7 @@ let MJ = null;   // {tab, opt, busy, err, done, form, pick}
 
 function openMJ(){
   MJ = { tab:'add', opt:null, busy:true, err:'', done:'', pick:'',
+         epick:'', euse:'', ebbq:false,          // ★v8.33 オプション編集
          form:{ pid:'', date:todayYmd_(), kind:'', ci:'', co:'', start:'',
                 use:'', bbq:false, need:'', memo:'' } };   // ★v8.31
   drawMJ();
@@ -2186,7 +2187,72 @@ function mjSet(k,v){
   //   持ち越すと、稲村ケ崎で選んだ値が別の物件に付いたまま登録される。
   if(k==='pid'){ MJ.form.use=''; drawMJ(); }
 }
-function mjTab(t){ MJ.tab=t; MJ.err=''; MJ.done=''; MJ.pick=''; drawMJ(); }
+function mjTab(t){ MJ.tab=t; MJ.err=''; MJ.done=''; MJ.pick=''; MJ.epick=''; drawMJ(); }
+
+/* ★★v8.33 オプションを直せる回。
+   ・利用形態が要る物件（稲村ケ崎）の回は【すべて】
+   ・それ以外は、すでにオプションが入っている回だけ
+   全部出すと一覧が長くなり、直したい回が埋もれるため。 */
+function mjOptJobs(){
+  const pids = (MJ.opt && MJ.opt.optionUsePids) || [];
+  const out=[];
+  (DATA && DATA.areas || []).forEach(function(a){
+    (a.jobs||[]).forEach(function(j){
+      if(j.kind === 'check') return;
+      if(pids.indexOf(j.pid) < 0 && !String(j.opt||'')) return;
+      out.push(j);
+    });
+  });
+  out.sort(function(x,y){ return x.ymd<y.ymd?-1:(x.ymd>y.ymd?1:0); });
+  return out;
+}
+
+/* いまのオプション文字列を 利用形態 と BBQ に分ける。
+   並びは「利用形態, BBQ」固定だが、順が入れ替わっても読めるようにする */
+function mjSplitOpt(txt){
+  const t = String(txt||'');
+  const uses = (MJ.opt && MJ.opt.optionUse) || [];
+  const add  = ((MJ.opt && MJ.opt.optionAdd) || ['BBQ'])[0];
+  let use='';
+  uses.forEach(function(u){ if(!use && t.indexOf(u)>=0) use=u; });
+  return { use: use, bbq: t.indexOf(add) >= 0 };
+}
+
+function mjEPick(k){
+  MJ.epick = k; MJ.err=''; MJ.done='';
+  const j = mjOptJobs().find(function(x){ return x.jobKey===k; });
+  const cur = mjSplitOpt(j ? j.opt : '');
+  MJ.euse = cur.use; MJ.ebbq = cur.bbq;
+  drawMJ();
+}
+function mjESet(k,v){ MJ[k]=v; drawMJ(); }
+
+function mjSaveOpt(){
+  if(!MJ || MJ.busy || !MJ.epick) return;
+  const pids = (MJ.opt && MJ.opt.optionUsePids) || [];
+  const j = mjOptJobs().find(function(x){ return x.jobKey===MJ.epick; });
+  if(j && pids.indexOf(j.pid)>=0 && !MJ.euse){
+    MJ.err='この物件は利用形態（①②③）のどれかが要ります。空にはできません。'; drawMJ(); return;
+  }
+  MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
+  jsonp(GAS_URL+'?mode=mj_opt&userId='+encodeURIComponent(me.userId)
+        +'&jobKey='+encodeURIComponent(MJ.epick)
+        +'&use='+encodeURIComponent(MJ.euse||'')
+        +'&bbq='+(MJ.ebbq?'1':'0'))
+    .then(function(r){
+      MJ.busy=false;
+      if(!r || !r.ok){ MJ.err=(r&&r.message)||'変更できませんでした。'; drawMJ(); return; }
+      MJ.done = r.message; MJ.epick='';
+      drawMJ();
+      load(true);
+    }).catch(function(e){
+      MJ.busy=false;
+      MJ.err = (e.message.indexOf('時間内')>=0)
+        ? '時間内に応答がありませんでした。\n変わっている可能性があります。\n一覧を読み直して確かめてください。'
+        : '通信に失敗しました（'+e.message+'）';
+      drawMJ();
+    });
+}
 
 /** 手で登録した回だけを集める（ジョブキーに -MANUAL- を含むもの） */
 function mjManualJobs(){
@@ -2208,6 +2274,7 @@ function drawMJ(){
   let h = '<div class="hd"><b>予定の追加・取消</b><small>手で登録する清掃・ゴミ回収など</small></div>'
     + '<div class="sec"><div class="pills">'
     + '<button class="pill'+(MJ.tab==='add'?' on':'')+'" onclick="mjTab(\'add\')">➕ 追加</button>'
+    + '<button class="pill'+(MJ.tab==='opt'?' on':'')+'" onclick="mjTab(\'opt\')">⚙️ オプション</button>'
     + '<button class="pill'+(MJ.tab==='cancel'?' on':'')+'" onclick="mjTab(\'cancel\')">🚫 取消</button>'
     + '</div></div>';
 
@@ -2293,6 +2360,49 @@ function drawMJ(){
         + '<div class="bar"><button class="c" onclick="closeMJ()">やめる</button>'
         + '<button class="s" onclick="mjAdd()"'+(MJ.busy?' disabled':'')+'>'
         + (MJ.busy?'登録しています…':'この内容で追加')+'</button></div>';
+    }
+  } else if(MJ.tab==='opt'){
+    const list = mjOptJobs();
+    const pids = (o && o.optionUsePids) || [];
+    if(!list.length){
+      h += '<div class="sec"><div class="box info">'
+         + 'この期間に、オプションを直せる回はありません。<br>'
+         + '<span style="font-weight:400">利用形態のある物件の回と、すでにオプションが入っている回だけを出しています。</span>'
+         + '</div></div><div class="bar"><button class="c" onclick="closeMJ()">閉じる</button></div>';
+    } else {
+      h += '<div class="sec"><div class="lb">直す回を選んでください</div><div class="pills">'
+        + list.map(function(j){
+            const q = "mjEPick('"+String(j.jobKey).replace(/'/g,"")+"')";
+            return '<button class="pill'+(MJ.epick===j.jobKey?' on':'')+'" onclick="'+q+'">'
+                 + esc(fmtMD(j.ymd))+'　'+esc(j.prop)+'　'
+                 + '<span style="opacity:.75">'+esc(j.opt||'（なし）')+'</span></button>'; }).join('')
+        + '</div></div>';
+      const cur = list.find(function(x){ return x.jobKey===MJ.epick; });
+      if(cur){
+        const needUse2 = (pids.indexOf(cur.pid) >= 0);
+        h += '<div class="sec"><div class="lb">'+esc(fmtMD(cur.ymd))+'　'+esc(cur.prop)+'</div>'
+          + (needUse2
+              ? '<div class="lb" style="margin-top:8px">利用形態　<span style="color:var(--warn)">必須</span></div>'
+                + '<select class="mji w" onchange="mjESet(\'euse\',this.value)">'
+                + '<option value="">選んでください</option>'
+                + ((o.optionUse)||[]).map(function(u){
+                    return '<option value="'+esc(u)+'"'+(MJ.euse===u?' selected':'')+'>'+esc(u)+'</option>'; }).join('')
+                + '</select>'
+              : '')
+          + ((o.optionAdd)||[]).map(function(a){
+              return '<label style="display:flex;align-items:center;gap:7px;margin-top:10px;font-size:14px">'
+                   + '<input type="checkbox"'+(MJ.ebbq?' checked':'')+' onchange="mjESet(\'ebbq\',this.checked)">'
+                   + '<span>'+esc(a)+'</span></label>'; }).join('')
+          + '<div class="mjs" style="margin-top:9px">'
+          + 'いま: <b>'+esc(cur.opt||'なし')+'</b><br>'
+          + '★<b>標準清掃時間</b>と<b>請求の数量</b>が変わります。保存すると標準清掃時間を入れ直します。'
+          + 'カレンダーは次の同期で直ります。</div></div>'
+          + '<div class="bar"><button class="c" onclick="closeMJ()">やめる</button>'
+          + '<button class="s" onclick="mjSaveOpt()"'+(MJ.busy?' disabled':'')+'>'
+          + (MJ.busy?'保存しています…':'この内容で保存')+'</button></div>';
+      } else {
+        h += '<div class="bar"><button class="c" onclick="closeMJ()">閉じる</button></div>';
+      }
     }
   } else {
     const list = mjManualJobs();
