@@ -372,7 +372,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.33';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
+const APP_VER = 'v8.34';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -2232,7 +2232,7 @@ function mjSaveOpt(){
   const pids = (MJ.opt && MJ.opt.optionUsePids) || [];
   const j = mjOptJobs().find(function(x){ return x.jobKey===MJ.epick; });
   if(j && pids.indexOf(j.pid)>=0 && !MJ.euse){
-    MJ.err='この物件は利用形態（①②③）のどれかが要ります。空にはできません。'; drawMJ(); return;
+    MJ.err='この物件はオプション（①②③）のどれかが要ります。空にはできません。'; drawMJ(); return;
   }
   MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
   jsonp(GAS_URL+'?mode=mj_opt&userId='+encodeURIComponent(me.userId)
@@ -2327,12 +2327,13 @@ function drawMJ(){
         + '</div></div>'
 
         // ★★v8.32 オプション。あなたの確定 2026-10-01
-        //   利用形態（①②③）は【稲村ケ崎だけ・必須】。他の物件には出さない。
+        //   オプション（①②③）は【稲村ケ崎だけ・必須】。他の物件には出さない。
+        //   ⚠️ 清掃ジョブの列名は「オプション」。画面で別の語（利用形態）を作らない。v8.34
         //   BBQ は全物件で出す。
         //   ⚠️ 物件IDは画面に書かない。ManualJob.gs の MANUAL_OPTION_USE_PIDS が唯一の正。
         //      サーバー（submitManualJob）にも同じ検算があります。
         + (needUse
-            ? '<div class="sec"><div class="lb">利用形態　<span style="color:var(--warn)">必須</span></div>'
+            ? '<div class="sec"><div class="lb">オプション　<span style="color:var(--warn)">必須</span></div>'
               + '<select class="mji w" onchange="mjSet(\'use\',this.value)">'
               + '<option value="">選んでください</option>'
               + (o.optionUse||[]).map(function(u){
@@ -2341,7 +2342,7 @@ function drawMJ(){
               + '<div class="mjs" style="margin-top:7px">'
               + '★<b>標準清掃時間</b>と<b>請求の数量</b>が、ここで変わります。</div></div>'
             : '')
-        + '<div class="sec"><div class="lb">オプション</div>'
+        + '<div class="sec"><div class="lb">オプション'+(needUse?'（重ねて付くもの）':'')+'</div>'
         + (o.optionAdd||[]).map(function(a){
             return '<label style="display:flex;align-items:center;gap:7px;font-size:14px">'
                  + '<input type="checkbox"'+(F.bbq?' checked':'')+' onchange="mjSet(\'bbq\',this.checked)">'
@@ -2367,7 +2368,7 @@ function drawMJ(){
     if(!list.length){
       h += '<div class="sec"><div class="box info">'
          + 'この期間に、オプションを直せる回はありません。<br>'
-         + '<span style="font-weight:400">利用形態のある物件の回と、すでにオプションが入っている回だけを出しています。</span>'
+         + '<span style="font-weight:400">オプションが必須の物件の回と、すでにオプションが入っている回だけを出しています。</span>'
          + '</div></div><div class="bar"><button class="c" onclick="closeMJ()">閉じる</button></div>';
     } else {
       h += '<div class="sec"><div class="lb">直す回を選んでください</div><div class="pills">'
@@ -2382,7 +2383,7 @@ function drawMJ(){
         const needUse2 = (pids.indexOf(cur.pid) >= 0);
         h += '<div class="sec"><div class="lb">'+esc(fmtMD(cur.ymd))+'　'+esc(cur.prop)+'</div>'
           + (needUse2
-              ? '<div class="lb" style="margin-top:8px">利用形態　<span style="color:var(--warn)">必須</span></div>'
+              ? '<div class="lb" style="margin-top:8px">オプション　<span style="color:var(--warn)">必須</span></div>'
                 + '<select class="mji w" onchange="mjESet(\'euse\',this.value)">'
                 + '<option value="">選んでください</option>'
                 + ((o.optionUse)||[]).map(function(u){
@@ -2454,7 +2455,7 @@ function mjAdd(){
   if(f.ci && f.co && f.ci >= f.co){ MJ.err='チェックアウト日はチェックイン日より後にしてください。'; drawMJ(); return; }
   // ★v8.32 利用形態が要る物件は、空では送らない（サーバーにも同じ検算があります）
   if(MJ.opt && (MJ.opt.optionUsePids||[]).indexOf(f.pid) >= 0 && !f.use){
-    MJ.err='この物件は利用形態（①②③）のどれかを選んでください。\n'
+    MJ.err='この物件はオプション（①②③）のどれかを選んでください。\n'
          + '空のままだと、標準清掃時間と請求が合いません。';
     drawMJ(); return;
   }
