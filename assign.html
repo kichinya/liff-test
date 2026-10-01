@@ -372,7 +372,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.30';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
+const APP_VER = 'v8.31';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -2146,9 +2146,24 @@ function render(d){
 // ============================================================
 let MJ = null;   // {tab, opt, busy, err, done, form, pick}
 
+/* ★v8.31 入力欄の幅。date / time は中身ぶんだけにする（横いっぱいは押しにくい） */
+(function(){
+  const st = document.createElement('style');
+  st.textContent =
+    '.mjg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}'
+  + '.mjf{display:flex;flex-direction:column;gap:4px}'
+  + '.mjf .lb{margin:0}'
+  + '.mji{padding:9px 10px;font-size:15px;font-family:inherit;'
+  +   'border:1px solid var(--line);border-radius:9px;background:#fff;width:100%;max-width:220px}'
+  + '.mji.w{max-width:none}'
+  + '.mjs{font-size:11.5px;color:var(--mute);line-height:1.5}';
+  document.head.appendChild(st);
+})();
+
 function openMJ(){
   MJ = { tab:'add', opt:null, busy:true, err:'', done:'', pick:'',
-         form:{ pid:'', date:todayYmd_(), kind:'', co:'', start:'', opt:'', need:'' } };
+         form:{ pid:'', date:todayYmd_(), kind:'', ci:'', co:'', start:'',
+                use:'', bbq:false, need:'', memo:'' } };   // ★v8.31
   drawMJ();
   $('ovl').classList.add('on');
   jsonp(GAS_URL+'?mode=mj_options&userId='+encodeURIComponent(me.userId))
@@ -2199,31 +2214,63 @@ function drawMJ(){
   } else if(MJ.tab==='add'){
     if(!o){ h += '<div class="sec"><div class="box ng">選択肢を読めていません。</div></div>'; }
     else {
+      const F = MJ.form;
       h += '<div class="sec"><div class="lb">物件</div>'
-        + '<select id="mj-pid" onchange="mjSet(\'pid\',this.value)" style="width:100%;padding:10px;font-size:15px">'
+        + '<select class="mji w" onchange="mjSet(\'pid\',this.value)">'
         + '<option value="">選んでください</option>'
         + (o.properties||[]).map(function(x){
-            return '<option value="'+esc(x.id)+'"'+(MJ.form.pid===x.id?' selected':'')+'>'
+            return '<option value="'+esc(x.id)+'"'+(F.pid===x.id?' selected':'')+'>'
                  + esc(x.id)+'　'+esc(x.name)+'</option>'; }).join('')
         + '</select></div>'
 
-        + '<div class="sec"><div class="lb">清掃日</div>'
-        + '<input type="date" id="mj-date" value="'+esc(MJ.form.date)+'" '
-        + 'onchange="mjSet(\'date\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
+        // ★v8.31 日付・時刻は中身ぶんの幅にして2列に並べる（横いっぱいは押しにくい）
+        + '<div class="sec"><div class="mjg">'
+        +   '<div class="mjf"><div class="lb">清掃日</div>'
+        +     '<input class="mji" type="date" value="'+esc(F.date)+'" onchange="mjSet(\'date\',this.value)">'
+        +   '</div>'
+        +   '<div class="mjf"><div class="lb">開始時刻</div>'
+        +     '<input class="mji" type="time" value="'+esc(F.start)+'" onchange="mjSet(\'start\',this.value)">'
+        +     '<div class="mjs">空なら物件の標準開始時刻</div>'
+        +   '</div>'
+        +   '<div class="mjf"><div class="lb">チェックイン日</div>'
+        +     '<input class="mji" type="date" value="'+esc(F.ci)+'" onchange="mjSet(\'ci\',this.value)">'
+        +     '<div class="mjs">実際の宿泊を入れるときだけ。同日IN・次回INの判定に使います</div>'
+        +   '</div>'
+        +   '<div class="mjf"><div class="lb">チェックアウト日</div>'
+        +     '<input class="mji" type="date" value="'+esc(F.co)+'" onchange="mjSet(\'co\',this.value)">'
+        +     '<div class="mjs">清掃日と違うときだけ</div>'
+        +   '</div>'
+        +   '<div class="mjf"><div class="lb">清掃種別</div>'
+        +     '<select class="mji" onchange="mjSet(\'kind\',this.value)">'
+        +     (o.cleanTypes||[]).map(function(k){
+                return '<option'+(F.kind===k?' selected':'')+'>'+esc(k)+'</option>'; }).join('')
+        +     '</select>'
+        +   '</div>'
+        +   '<div class="mjf"><div class="lb">必要人数</div>'
+        +     '<input class="mji" type="number" min="1" step="1" placeholder="空＝1名" value="'+esc(F.need)+'" '
+        +       'onchange="mjSet(\'need\',this.value)">'
+        +   '</div>'
+        + '</div></div>'
 
-        + '<div class="sec"><div class="lb">清掃種別</div>'
-        + '<select id="mj-kind" onchange="mjSet(\'kind\',this.value)" style="width:100%;padding:10px;font-size:15px">'
-        + (o.cleanTypes||[]).map(function(k){
-            return '<option'+(MJ.form.kind===k?' selected':'')+'>'+esc(k)+'</option>'; }).join('')
-        + '</select></div>'
+        // ★★v8.31 オプション。稲村ヶ崎の①②③・BBQ は【請求の数量そのもの】。
+        //   空のまま登録すると、その回のオプションが0件として請求される。
+        + '<div class="sec"><div class="lb">オプション（利用形態）</div>'
+        + '<select class="mji w" onchange="mjSet(\'use\',this.value)">'
+        + '<option value="">なし</option>'
+        + (o.optionUse||[]).map(function(u){
+            return '<option value="'+esc(u)+'"'+(F.use===u?' selected':'')+'>'+esc(u)+'</option>'; }).join('')
+        + '</select>'
+        + (o.optionAdd||[]).map(function(a){
+            return '<label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:14px">'
+                 + '<input type="checkbox"'+(F.bbq?' checked':'')+' onchange="mjSet(\'bbq\',this.checked)">'
+                 + '<span>'+esc(a)+'（利用形態と重ねて付きます）</span></label>'; }).join('')
+        + '<div class="mjs" style="margin-top:7px">'
+        + '★この欄は<b>請求の数量</b>になります。該当する物件では必ず選んでください。</div></div>'
 
-        + '<div class="sec"><div class="lb">チェックアウト日（清掃日と違うときだけ）</div>'
-        + '<input type="date" id="mj-co" value="'+esc(MJ.form.co)+'" '
-        + 'onchange="mjSet(\'co\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
-
-        + '<div class="sec"><div class="lb">開始時刻（空なら物件の標準開始時刻）</div>'
-        + '<input type="time" id="mj-start" value="'+esc(MJ.form.start)+'" '
-        + 'onchange="mjSet(\'start\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
+        + '<div class="sec"><div class="lb">メモ・申し送り</div>'
+        + '<textarea class="mji w" rows="3" style="max-width:none;resize:vertical" '
+        + 'placeholder="例）鍵は玄関前のキーボックス（1234）。1階のみ利用。" '
+        + 'oninput="mjSet(\'memo\',this.value)">'+esc(F.memo)+'</textarea></div>'
 
         + '<div class="sec"><div class="box info">'
         + '担当は<b>未定</b>で登録します。決めるのは、いつもどおりこの一覧からです。<br>'
@@ -2278,18 +2325,28 @@ function mjAdd(){
   const f = MJ.form;
   if(!f.pid){  MJ.err='物件を選んでください。'; drawMJ(); return; }
   if(!f.date){ MJ.err='清掃日を入れてください。'; drawMJ(); return; }
+  // ★v8.31 サーバー（AssignAdd.gs）にも同じ検算があります。画面は早く気づかせるため
+  if(f.co && f.co > f.date){ MJ.err='清掃日はチェックアウト日と同じ日以降にしてください。'; drawMJ(); return; }
+  if(f.ci && f.co && f.ci >= f.co){ MJ.err='チェックアウト日はチェックイン日より後にしてください。'; drawMJ(); return; }
+  // ★v8.31 並びは ManualJobForm.html と同じ「利用形態, BBQ」で固定
+  const optStr = (f.use && f.bbq) ? (f.use + ', BBQ') : (f.use ? f.use : (f.bbq ? 'BBQ' : ''));
   MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
   const u = GAS_URL+'?mode=mj_add&userId='+encodeURIComponent(me.userId)
     + '&propertyId='+encodeURIComponent(f.pid)
     + '&cleanDate='+encodeURIComponent(f.date)
     + '&cleanType='+encodeURIComponent(f.kind||'')
+    + '&checkinDate='+encodeURIComponent(f.ci||'')
     + '&checkoutDate='+encodeURIComponent(f.co||'')
-    + '&startTime='+encodeURIComponent(f.start||'');
+    + '&startTime='+encodeURIComponent(f.start||'')
+    + '&option='+encodeURIComponent(optStr)
+    + '&requiredStaff='+encodeURIComponent(f.need||'')
+    + '&memo='+encodeURIComponent(f.memo||'');
   jsonp(u).then(function(r){
     MJ.busy=false;
     if(!r || !r.ok){ MJ.err=(r&&r.message)||'追加できませんでした。'; drawMJ(); return; }
     MJ.done = r.message;
-    MJ.form.pid=''; MJ.form.co=''; MJ.form.start='';
+    MJ.form.pid=''; MJ.form.ci=''; MJ.form.co=''; MJ.form.start='';
+    MJ.form.use=''; MJ.form.bbq=false; MJ.form.need=''; MJ.form.memo='';
     drawMJ();
     load(true);                      // ★一覧を読み直す
   }).catch(function(e){
