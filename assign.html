@@ -349,6 +349,8 @@
 </div>
 <div class="wrap" style="padding-top:0">
   <button class="rel" id="rel" onclick="reload()" style="display:none">🔄 最新の状態にする</button>
+  <!-- ★v8.30 予定の追加・取消（AssignAdd.gs）。読み込めた回だけ出す -->
+  <button class="rel" id="mjbtn" onclick="openMJ()" style="display:none">➕ 予定の追加・取消</button>
   <div class="foot" id="foot"></div>
 </div>
 
@@ -370,7 +372,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v7.81';
+const APP_VER = 'v8.30';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -2129,6 +2131,200 @@ function render(d){
   draw();
 }
 
+// ============================================================
+// ★★★v8.30【予定の追加・取消】あなたの指示 2026-10-01
+//   「アサイン管理リンクから清掃やゴミ回収の予定追加もできるといいんですけどね」
+//   「手動登録した予約はキャンセルになることもあるので、その導線も作っておきたい」
+//
+//   サーバーは AssignAdd.gs（?mode=mj_options / mj_add / mj_cancel）。
+//   権限は ab_apply とまったく同じ mgrWhoAmI_()。
+//
+//   ⚠️ 担当は【未定】で追加します。指名・募集はいつもの画面で決めてください。
+//   ⚠️ 取消にできるのは【この画面から手で登録した回】だけです。
+//      OTAから取り込んだ回は、取消もOTA側の同期で入ります。
+//      見分けはジョブキーに '-MANUAL-' が入っているかどうか（ManualJob.gs と同じ）。
+// ============================================================
+let MJ = null;   // {tab, opt, busy, err, done, form, pick}
+
+function openMJ(){
+  MJ = { tab:'add', opt:null, busy:true, err:'', done:'', pick:'',
+         form:{ pid:'', date:todayYmd_(), kind:'', co:'', start:'', opt:'', need:'' } };
+  drawMJ();
+  $('ovl').classList.add('on');
+  jsonp(GAS_URL+'?mode=mj_options&userId='+encodeURIComponent(me.userId))
+    .then(function(r){
+      MJ.busy=false;
+      if(!r || !r.ok){ MJ.err = (r && r.message) || '選択肢を読めませんでした。'; }
+      else { MJ.opt = r; MJ.form.kind = (r.cleanTypes && r.cleanTypes[0]) || '通常清掃'; }
+      drawMJ();
+    })
+    .catch(function(e){ MJ.busy=false; MJ.err='通信に失敗しました（'+e.message+'）'; drawMJ(); });
+}
+function closeMJ(){ MJ=null; $('ovl').classList.remove('on'); }
+function todayYmd_(){
+  const d=new Date();
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function mjSet(k,v){ MJ.form[k]=v; }
+function mjTab(t){ MJ.tab=t; MJ.err=''; MJ.done=''; MJ.pick=''; drawMJ(); }
+
+/** 手で登録した回だけを集める（ジョブキーに -MANUAL- を含むもの） */
+function mjManualJobs(){
+  const out=[];
+  (DATA && DATA.areas || []).forEach(function(a){
+    (a.jobs||[]).forEach(function(j){
+      if(String(j.jobKey||'').indexOf('-MANUAL-') < 0) return;
+      if(j.kind === 'check') return;
+      out.push(j);
+    });
+  });
+  out.sort(function(x,y){ return x.ymd<y.ymd?-1:(x.ymd>y.ymd?1:0); });
+  return out;
+}
+
+function drawMJ(){
+  if(!MJ) return;
+  const o = MJ.opt;
+  let h = '<div class="hd"><b>予定の追加・取消</b><small>手で登録する清掃・ゴミ回収など</small></div>'
+    + '<div class="sec"><div class="pills">'
+    + '<button class="pill'+(MJ.tab==='add'?' on':'')+'" onclick="mjTab(\'add\')">➕ 追加</button>'
+    + '<button class="pill'+(MJ.tab==='cancel'?' on':'')+'" onclick="mjTab(\'cancel\')">🚫 取消</button>'
+    + '</div></div>';
+
+  if(MJ.err)  h += '<div class="sec"><div class="box ng">'+esc(MJ.err)+'</div></div>';
+  if(MJ.done) h += '<div class="sec"><div class="box info">'+esc(MJ.done)+'</div></div>';
+
+  if(MJ.busy && !o){
+    h += '<div class="sec"><div class="center">読み込んでいます…</div></div>';
+  } else if(MJ.tab==='add'){
+    if(!o){ h += '<div class="sec"><div class="box ng">選択肢を読めていません。</div></div>'; }
+    else {
+      h += '<div class="sec"><div class="lb">物件</div>'
+        + '<select id="mj-pid" onchange="mjSet(\'pid\',this.value)" style="width:100%;padding:10px;font-size:15px">'
+        + '<option value="">選んでください</option>'
+        + (o.properties||[]).map(function(x){
+            return '<option value="'+esc(x.id)+'"'+(MJ.form.pid===x.id?' selected':'')+'>'
+                 + esc(x.id)+'　'+esc(x.name)+'</option>'; }).join('')
+        + '</select></div>'
+
+        + '<div class="sec"><div class="lb">清掃日</div>'
+        + '<input type="date" id="mj-date" value="'+esc(MJ.form.date)+'" '
+        + 'onchange="mjSet(\'date\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
+
+        + '<div class="sec"><div class="lb">清掃種別</div>'
+        + '<select id="mj-kind" onchange="mjSet(\'kind\',this.value)" style="width:100%;padding:10px;font-size:15px">'
+        + (o.cleanTypes||[]).map(function(k){
+            return '<option'+(MJ.form.kind===k?' selected':'')+'>'+esc(k)+'</option>'; }).join('')
+        + '</select></div>'
+
+        + '<div class="sec"><div class="lb">チェックアウト日（清掃日と違うときだけ）</div>'
+        + '<input type="date" id="mj-co" value="'+esc(MJ.form.co)+'" '
+        + 'onchange="mjSet(\'co\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
+
+        + '<div class="sec"><div class="lb">開始時刻（空なら物件の標準開始時刻）</div>'
+        + '<input type="time" id="mj-start" value="'+esc(MJ.form.start)+'" '
+        + 'onchange="mjSet(\'start\',this.value)" style="width:100%;padding:10px;font-size:15px"></div>'
+
+        + '<div class="sec"><div class="box info">'
+        + '担当は<b>未定</b>で登録します。決めるのは、いつもどおりこの一覧からです。<br>'
+        + 'カレンダーには<b>次の同期で</b>出ます。</div></div>'
+
+        + '<div class="bar"><button class="c" onclick="closeMJ()">やめる</button>'
+        + '<button class="s" onclick="mjAdd()"'+(MJ.busy?' disabled':'')+'>'
+        + (MJ.busy?'登録しています…':'この内容で追加')+'</button></div>';
+    }
+  } else {
+    const list = mjManualJobs();
+    if(!list.length){
+      h += '<div class="sec"><div class="box info">'
+         + 'この期間に、手で登録した予定はありません。<br>'
+         + '<span style="font-weight:400">OTAから取り込んだ予約は、ここからは取り消せません。'
+         + 'OTA側で取り消すと、次の同期で反映されます。</span></div></div>'
+         + '<div class="bar"><button class="c" onclick="closeMJ()">閉じる</button></div>';
+    } else {
+      const cur = list.find(function(x){ return x.jobKey===MJ.pick; });
+      h += '<div class="sec"><div class="lb">取り消す予定を選んでください</div><div class="pills">'
+        + list.map(function(j){
+            const q = "mjPick('"+String(j.jobKey).replace(/'/g,"")+"')";
+            return '<button class="pill'+(MJ.pick===j.jobKey?' on':'')+'" onclick="'+q+'">'
+                 + esc(fmtMD(j.ymd))+'　'+esc(j.prop)
+                 + ((j.staff&&j.staff.length)?'　'+esc(j.staff.join('・')):'　担当なし')
+                 + '</button>'; }).join('')
+        + '</div></div>';
+      if(cur){
+        h += '<div class="sec"><div class="box ng">'
+           + '<b>'+esc(fmtMD(cur.ymd))+'　'+esc(cur.prop)+'</b> を取り消します。<br>'
+           + ((cur.staff&&cur.staff.length)
+               ? '📨 <b>'+esc(cur.staff.join('・'))+'</b> さんにLINEでお知らせします。'
+               : '担当はまだ決まっていません。')
+           + '<br><span style="font-weight:400">行は消しません。ステータスを「キャンセル」にします。'
+           + 'カレンダーの予定は次の同期で消えます。<br>'
+           + '打刻がある回は取り消せません（1セルも書かずに止まります）。</span></div></div>'
+           + '<div class="bar"><button class="c" onclick="closeMJ()">やめる</button>'
+           + '<button class="s" onclick="mjCancel()"'+(MJ.busy?' disabled':'')+'>'
+           + (MJ.busy?'取り消しています…':'この予定を取り消す')+'</button></div>';
+      } else {
+        h += '<div class="bar"><button class="c" onclick="closeMJ()">閉じる</button></div>';
+      }
+    }
+  }
+  $('sheet').innerHTML = h;
+}
+
+function mjPick(k){ MJ.pick=k; MJ.err=''; MJ.done=''; drawMJ(); }
+
+function mjAdd(){
+  if(!MJ || MJ.busy) return;
+  const f = MJ.form;
+  if(!f.pid){  MJ.err='物件を選んでください。'; drawMJ(); return; }
+  if(!f.date){ MJ.err='清掃日を入れてください。'; drawMJ(); return; }
+  MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
+  const u = GAS_URL+'?mode=mj_add&userId='+encodeURIComponent(me.userId)
+    + '&propertyId='+encodeURIComponent(f.pid)
+    + '&cleanDate='+encodeURIComponent(f.date)
+    + '&cleanType='+encodeURIComponent(f.kind||'')
+    + '&checkoutDate='+encodeURIComponent(f.co||'')
+    + '&startTime='+encodeURIComponent(f.start||'');
+  jsonp(u).then(function(r){
+    MJ.busy=false;
+    if(!r || !r.ok){ MJ.err=(r&&r.message)||'追加できませんでした。'; drawMJ(); return; }
+    MJ.done = r.message;
+    MJ.form.pid=''; MJ.form.co=''; MJ.form.start='';
+    drawMJ();
+    load(true);                      // ★一覧を読み直す
+  }).catch(function(e){
+    MJ.busy=false;
+    // ★時間切れは「届いていないとは限らない」。二重登録を誘わない書き方にする
+    MJ.err = (e.message.indexOf('時間内')>=0)
+      ? '時間内に応答がありませんでした。\n登録できている可能性があります。\n'
+        + 'もう一度押す前に「やめる」で閉じ、一覧を読み直して確かめてください。'
+      : '通信に失敗しました（'+e.message+'）';
+    drawMJ();
+  });
+}
+
+function mjCancel(){
+  if(!MJ || MJ.busy || !MJ.pick) return;
+  MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
+  jsonp(GAS_URL+'?mode=mj_cancel&userId='+encodeURIComponent(me.userId)
+        +'&jobKey='+encodeURIComponent(MJ.pick))
+    .then(function(r){
+      MJ.busy=false;
+      if(!r || !r.ok){ MJ.err=(r&&r.message)||'取り消せませんでした。'; drawMJ(); return; }
+      MJ.done = r.message; MJ.pick='';
+      drawMJ();
+      load(true);
+    }).catch(function(e){
+      MJ.busy=false;
+      MJ.err = (e.message.indexOf('時間内')>=0)
+        ? '時間内に応答がありませんでした。\n取り消せている可能性があります。\n'
+          + '一覧を読み直して確かめてから、もう一度お試しください。'
+        : '通信に失敗しました（'+e.message+'）';
+      drawMJ();
+    });
+}
+
+
 // ★★v8.29d「🔄 最新の状態にする」はキャッシュを使わない。
 //   通常の表示はマスタのキャッシュ（5分）で速く出し、
 //   最新が要るときだけ読み直す。押した回もキャッシュは書き直すので、次からまた速い。
@@ -2148,6 +2344,7 @@ async function load(fresh){
       showErr(msg); return;
     }
     render(res);
+    $('mjbtn').style.display='block';   // ★v8.30 権限が通った回だけ出す
   }catch(err){
     showErr('読み込みに失敗しました。\n電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）');
   }
