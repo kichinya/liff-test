@@ -372,7 +372,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.34';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
+const APP_VER = 'v8.35';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -2181,11 +2181,26 @@ function todayYmd_(){
   const d=new Date();
   return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
 }
+/* ★★v8.35 オプション（①②③）が要るか。物件 ＋ 清掃種別 で決める。
+   サーバー（ManualJob.gs の manualNeedsOptionUse_）と同じ考え方。
+   ⚠️ 旧 v8.32 は物件だけで見ていたので、稲村ケ崎のゴミ回収（スポット）でも
+      ①②③を要求していた。スポットは標準清掃時間と比べないので誤り。 */
+function mjNeedUse(pid, ctype){
+  const o = MJ && MJ.opt;
+  if(!o) return false;
+  if((o.optionUsePids||[]).indexOf(pid) < 0) return false;
+  const k = String(ctype||'').trim();
+  if(!k) return true;
+  if((o.spotKinds||[]).indexOf(k) >= 0) return false;      // スポット
+  if((o.skipKinds||[]).indexOf(k) >= 0) return false;      // 請求外
+  return true;
+}
+
 function mjSet(k,v){
   MJ.form[k]=v;
   // ★v8.32 物件を変えたら利用形態は捨てる。
   //   持ち越すと、稲村ケ崎で選んだ値が別の物件に付いたまま登録される。
-  if(k==='pid'){ MJ.form.use=''; drawMJ(); }
+  if(k==='pid' || k==='kind'){ MJ.form.use=''; drawMJ(); }   // ★v8.35 種別でも出し分けが変わる
 }
 function mjTab(t){ MJ.tab=t; MJ.err=''; MJ.done=''; MJ.pick=''; MJ.epick=''; drawMJ(); }
 
@@ -2229,9 +2244,8 @@ function mjESet(k,v){ MJ[k]=v; drawMJ(); }
 
 function mjSaveOpt(){
   if(!MJ || MJ.busy || !MJ.epick) return;
-  const pids = (MJ.opt && MJ.opt.optionUsePids) || [];
   const j = mjOptJobs().find(function(x){ return x.jobKey===MJ.epick; });
-  if(j && pids.indexOf(j.pid)>=0 && !MJ.euse){
+  if(j && mjNeedUse(j.pid, j.ctype) && !MJ.euse){
     MJ.err='この物件はオプション（①②③）のどれかが要ります。空にはできません。'; drawMJ(); return;
   }
   MJ.busy=true; MJ.err=''; MJ.done=''; drawMJ();
@@ -2288,7 +2302,7 @@ function drawMJ(){
     else {
       const F = MJ.form;
       // ★v8.32 利用形態を出すかどうか。物件IDは画面に書かず、サーバーの一覧で判定する
-      const needUse = ((o.optionUsePids||[]).indexOf(F.pid) >= 0);
+      const needUse = mjNeedUse(F.pid, F.kind);   // ★v8.35 清掃種別も見る
       h += '<div class="sec"><div class="lb">物件</div>'
         + '<select class="mji w" onchange="mjSet(\'pid\',this.value)">'
         + '<option value="">選んでください</option>'
@@ -2364,7 +2378,6 @@ function drawMJ(){
     }
   } else if(MJ.tab==='opt'){
     const list = mjOptJobs();
-    const pids = (o && o.optionUsePids) || [];
     if(!list.length){
       h += '<div class="sec"><div class="box info">'
          + 'この期間に、オプションを直せる回はありません。<br>'
@@ -2380,7 +2393,7 @@ function drawMJ(){
         + '</div></div>';
       const cur = list.find(function(x){ return x.jobKey===MJ.epick; });
       if(cur){
-        const needUse2 = (pids.indexOf(cur.pid) >= 0);
+        const needUse2 = mjNeedUse(cur.pid, cur.ctype);   // ★v8.35
         h += '<div class="sec"><div class="lb">'+esc(fmtMD(cur.ymd))+'　'+esc(cur.prop)+'</div>'
           + (needUse2
               ? '<div class="lb" style="margin-top:8px">オプション　<span style="color:var(--warn)">必須</span></div>'
@@ -2454,7 +2467,7 @@ function mjAdd(){
   if(f.co && f.co > f.date){ MJ.err='清掃日はチェックアウト日と同じ日以降にしてください。'; drawMJ(); return; }
   if(f.ci && f.co && f.ci >= f.co){ MJ.err='チェックアウト日はチェックイン日より後にしてください。'; drawMJ(); return; }
   // ★v8.32 利用形態が要る物件は、空では送らない（サーバーにも同じ検算があります）
-  if(MJ.opt && (MJ.opt.optionUsePids||[]).indexOf(f.pid) >= 0 && !f.use){
+  if(mjNeedUse(f.pid, f.kind) && !f.use){
     MJ.err='この物件はオプション（①②③）のどれかを選んでください。\n'
          + '空のままだと、標準清掃時間と請求が合いません。';
     drawMJ(); return;

@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.62</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.63</div></div>
     </div>
   </div>
 
@@ -745,7 +745,9 @@
     //   それ以外 … 22:00
     //   上限が取れない／チェックアウトより早い場合は、時刻を選ばせない。
     var FROM = (typeof it.outMin === 'number' && it.outMin >= 0) ? it.outMin : 600;
-    var TO   = (typeof it.maxStartMin === 'number') ? it.maxStartMin : 22 * 60;
+    // ★v19.18 22:00 の上限は撤廃。縛るのは次回IN当日だけ（サーバが計算）。
+    //   ここは【サーバが値を返さなかったとき】の保険。HandRaise.gs の HR_MAX_START_MIN と同じ値。
+    var TO   = (typeof it.maxStartMin === 'number') ? it.maxStartMin : (23 * 60 + 30);
     var canPick = (!it.raised && TO >= FROM);
 
     // ★v4.18 清掃日を選べる案件は日付セレクタを出す。
@@ -775,10 +777,31 @@
       sel.className = 'hidden';
       sel.appendChild(new Option('開始時刻：おまかせ', ''));
 
-      function fillTimes(to){
+      // ★v19.17 その日の窓に合わせた案内文。日を変えたら差し替える。
+      function hintText(from, to, d){
+        var hi = ('0' + Math.floor(to/60)).slice(-2) + ':' + ('0' + (to%60)).slice(-2);
+        var std = it.stdMin
+          ? '（標準' + (it.stdMin % 60 === 0 ? (it.stdMin/60) + '時間' : it.stdMin + '分') + '）' : '';
+        // 次のお客様の到着日は「間に合う最も遅い開始」が効く
+        if ((d && d.nextInDay) || (!d && it.sameDay)) {
+          return '次のお客様に間に合うのは ' + hi + ' 開始まで' + std;
+        }
+        // チェックアウト当日は、お客様が出たあとから
+        if (from > 0) {
+          return 'チェックアウト' + (it.outLabel ? '（' + it.outLabel + '）' : '') + '以降で選べます';
+        }
+        // 翌日以降はお客様がいないので終日
+        return '終日お選びいただけます（' + hi + ' 開始まで）';
+      }
+
+      // ★★★v19.17【下限も日ごとに変える】2026-10-02
+      //   旧: FROM（チェックアウト時刻）を閉じ込めていたため、日を後ろ倒ししても
+      //       チェックアウト後の時刻しか出なかった。
+      //   新: サーバが日ごとに返す minStartMin を使う。翌日以降は 0＝終日。
+      function fillTimes(from, to){
         while (sel.options.length > 1) sel.remove(1);
         var mins = [];
-        for (var t = FROM; t <= to; t += 30) mins.push(t);
+        for (var t = from; t <= to; t += 30) mins.push(t);
         if (mins.length === 0 || mins[mins.length-1] !== to) mins.push(to);
         mins.forEach(function(t){
           var hh = ('0' + Math.floor(t/60)).slice(-2);
@@ -786,16 +809,19 @@
           sel.appendChild(new Option(hh + ':' + mm + ' から希望', hh + mm));
         });
       }
-      fillTimes(TO);
+      fillTimes(FROM, TO);
       // ★v4.18 日付を変えたら、その日の上限で時刻を作り直す
+      // ★v19.17 下限（minStartMin）も作り直す。案内文もその日のものに差し替える。
       if (dsel){
         dsel.addEventListener('change', function(){
           handDate[it.key] = dsel.value;
           var d = null;
           for (var i2 = 0; i2 < DATES.length; i2++) if (DATES[i2].ymd === dsel.value) d = DATES[i2];
-          var to2 = (d && typeof d.maxStartMin === 'number') ? d.maxStartMin : TO;
+          var to2   = (d && typeof d.maxStartMin === 'number') ? d.maxStartMin : TO;
+          var from2 = (d && typeof d.minStartMin === 'number') ? d.minStartMin : FROM;
           sel.value = '';
-          fillTimes(to2);
+          fillTimes(from2, to2);
+          if (sel._hint) sel._hint.textContent = hintText(from2, to2, d);
         });
       }
 
@@ -806,11 +832,7 @@
 
       var hint = document.createElement('div');
       hint.className = 'sub hidden';
-      var hi = ('0' + Math.floor(TO/60)).slice(-2) + ':' + ('0' + (TO%60)).slice(-2);
-      hint.textContent = it.sameDay
-        ? ('次のお客様に間に合うのは ' + hi + ' 開始まで'
-           + (it.stdMin ? '（標準' + (it.stdMin % 60 === 0 ? (it.stdMin/60) + '時間' : it.stdMin + '分') + '）' : ''))
-        : ('チェックアウト' + (it.outLabel ? '（' + it.outLabel + '）' : '') + '以降で選べます');
+      hint.textContent = hintText(FROM, TO, null);
       body.appendChild(hint);
       sel._hint = hint;
     } else if (!it.raised && it.sameDay){
