@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.64</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.65</div></div>
     </div>
   </div>
 
@@ -245,13 +245,19 @@
   function closeLiff(){ if (window.liff && liff.isInClient && liff.isInClient()) liff.closeWindow(); }
 
   // ---- JSONP(report.html と同一パターン) ----
-  function jsonp(url){
+  function jsonp(url, ms){
     return new Promise(function(resolve, reject){
       var cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random()*100000);
       var s = document.createElement('script');
       // ★v5.40 15秒 → 25秒（report.html と揃える）。
       //   GAS側が数秒かかるうえ、現場は電波が弱い。ここで切れると「開けない」に見える。
-      var timer = setTimeout(function(){ cleanup(); reject(new Error('timeout')); }, 25000);
+      // ★★★v5.65【呼び出しごとに待ち時間を変えられるようにした】2026-10-10
+      //   実行ログで hand_submit が 25.506秒 / 27.507秒（どちらも「完了」）だった。
+      //   25秒で諦めていたため、サーバは保存もLINE送信も終えているのに
+      //   画面だけが「送信に失敗しました」と出していた。
+      //   ⚠️ 25秒かかること自体は別の問題。ここは待ち時間を実測に合わせただけ。
+      var timer = setTimeout(function(){ cleanup(); reject(new Error('timeout')); },
+                             (typeof ms === 'number' && ms > 0) ? ms : 25000);
       function cleanup(){ clearTimeout(timer); try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
         if (s.parentNode) s.parentNode.removeChild(s); }
       window[cb] = function(data){ cleanup(); resolve(data); };
@@ -937,8 +943,89 @@
     return why.join(' / ');
   }
 
-  /** 確認が必要な案件があればポップアップを出す。true＝このまま進めてよい */
-  function oaConfirm(keys){
+  /**
+   * ★★★v5.65【案件ごとに「確認済み」をチェックできるポップアップ】あなたの確定 2026-10-10
+   *   「すでにオーナーに確認済みの場合の退避ができない」
+   *
+   *   ⚠️ 3択ボタンにせず、案件ごとのチェックにしています。
+   *      2件まとめて挙手して片方だけ確認済み、というときに嘘にならないため。
+   *   ⚠️ チェックを入れた案件は【その場で確定】します。
+   *      入れた事実は挙手ログと管理グループの通知の両方に残ります（サーバ側 v19.36）。
+   *   @return Promise → { ok:false } ＝選び直す ／ { ok:true, okKeys:[...] }
+   */
+  function oaAsk(hits){
+    return new Promise(function(resolve){
+      var ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;'
+        + 'display:flex;align-items:center;justify-content:center;padding:16px;';
+      var card = document.createElement('div');
+      card.style.cssText = 'background:#fff;border-radius:14px;max-width:420px;width:100%;'
+        + 'max-height:80vh;overflow:auto;padding:18px 16px;box-shadow:0 8px 32px rgba(0,0,0,.3);';
+
+      var h = document.createElement('div');
+      h.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:10px;';
+      h.textContent = 'オーナー様の確認が必要です';
+      card.appendChild(h);
+
+      var boxes = [];
+      hits.forEach(function(x){
+        var row = document.createElement('label');
+        row.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:10px;margin-bottom:8px;'
+          + 'border:1px solid #e3e3e3;border-radius:10px;';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.style.cssText = 'margin-top:3px;width:20px;height:20px;flex:none;';
+        cb._key = x.key;
+        boxes.push(cb);
+        var body = document.createElement('div');
+        var t1 = document.createElement('div');
+        t1.style.cssText = 'font-weight:600;font-size:14px;';
+        t1.textContent = x.head;
+        var t2 = document.createElement('div');
+        t2.style.cssText = 'font-size:12px;color:#666;margin-top:2px;';
+        t2.textContent = x.why;
+        var t3 = document.createElement('div');
+        t3.style.cssText = 'font-size:12px;color:#1a7f37;margin-top:6px;';
+        t3.textContent = 'すでにオーナー様に確認済み';
+        body.appendChild(t1); body.appendChild(t2); body.appendChild(t3);
+        row.appendChild(cb); row.appendChild(body);
+        card.appendChild(row);
+      });
+
+      var note = document.createElement('div');
+      note.style.cssText = 'font-size:12px;color:#666;margin:10px 0 14px;line-height:1.6;';
+      note.textContent = 'チェックを入れた案件はこのまま確定します。'
+        + '入れなかった案件は、本部からオーナー様へ確認し、了承後に確定します。';
+      card.appendChild(note);
+
+      var btns = document.createElement('div');
+      btns.style.cssText = 'display:flex;gap:10px;';
+      var bNg = document.createElement('button');
+      bNg.textContent = '選び直す';
+      bNg.style.cssText = 'flex:1;padding:12px;border-radius:10px;border:1px solid #ccc;'
+        + 'background:#fff;font-size:15px;';
+      var bOk = document.createElement('button');
+      bOk.textContent = '挙手する';
+      bOk.style.cssText = 'flex:1;padding:12px;border-radius:10px;border:0;'
+        + 'background:#2e7d32;color:#fff;font-size:15px;font-weight:700;';
+      btns.appendChild(bNg); btns.appendChild(bOk);
+      card.appendChild(btns);
+
+      function close(r){ if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(r); }
+      bNg.onclick = function(){ close({ ok:false }); };
+      bOk.onclick = function(){
+        var okKeys = [];
+        boxes.forEach(function(cb){ if (cb.checked) okKeys.push(cb._key); });
+        close({ ok:true, okKeys: okKeys });
+      };
+
+      ov.appendChild(card);
+      document.body.appendChild(ov);
+    });
+  }
+
+  /** 確認が必要な案件を並べる。0件なら null */
+  function oaHits(keys){
     var byKey = {};
     HAND_ITEMS.forEach(function(it){ byKey[it.key] = it; });
     var hit = [];
@@ -951,15 +1038,10 @@
       var d = oaDayOf(it, ymd);
       var hhmm = String(handSel[k] || '');
       var when = /^\d{4}$/.test(hhmm) ? (hhmm.slice(0,2) + ':' + hhmm.slice(2,4) + ' から') : 'おまかせ';
-      hit.push('・' + ((d && d.label) || it.dateLabel) + '　' + it.propName + '\n'
-             + '　' + when + '\n'
-             + '　' + why);
+      hit.push({ key: k, head: ((d && d.label) || it.dateLabel) + '　' + it.propName + '　' + when,
+                 why: why });
     });
-    if (!hit.length) return true;
-    return window.confirm(
-      'オーナー様の確認が必要です\n\n' + hit.join('\n') + '\n\n'
-      + 'この' + hit.length + '件は、本部からオーナー様へご確認したあとに確定します。\n'
-      + 'このまま挙手しますか？');
+    return hit.length ? hit : null;
   }
 
   function submitHand(){
@@ -967,16 +1049,34 @@
     var keys = Object.keys(handSel);
     if (!keys.length){ setHandMsg('入れる案件にチェックを入れてください。', 'err'); return; }
 
-    // ★v5.64 ボタンを止める【前】に出す。ここで「選び直す」を押されたら何も送らない。
-    if (!oaConfirm(keys)){ setHandMsg('選び直してください。', ''); return; }
+    // ★v5.65 ボタンを止める【前】に出す。「選び直す」なら1件も送らない。
+    var hits = oaHits(keys);
+    if (hits){
+      oaAsk(hits).then(function(r){
+        if (!r.ok){ setHandMsg('選び直してください。', ''); return; }
+        var okMap = {};
+        r.okKeys.forEach(function(k){ okMap[k] = true; });
+        handSendNow(keys, okMap);
+      });
+      return;
+    }
+    handSendNow(keys, {});
+  }
 
+  /**
+   * ★v5.65 実際に送る部分を分けた（ポップアップが非同期になったため）。
+   *   @param okMap ジョブキー -> true（本人が「オーナー様に確認済み」とチェックしたもの）
+   */
+  function handSendNow(keys, okMap){
     var btn = $('h-send');
-    btn.disabled = true; setHandMsg('送信中…','');
+    btn.disabled = true; setHandMsg('送信中…　そのままお待ちください','');
 
     // ★v4.18 ジョブキー|希望開始時刻|希望清掃日
     // ★v5.34 4つ目に「1名で対応する申告」を足す（KEY|HHMM|YMD|1）
+    // ★v5.65 5つ目に「オーナー様に確認済みという本人の申告」を足す（KEY|HHMM|YMD|solo|oa）
     var items = keys.map(function(k){
-      return k + '|' + (handSel[k] || '') + '|' + (handDate[k] || '') + '|' + (handSolo[k] ? '1' : '');
+      return k + '|' + (handSel[k] || '') + '|' + (handDate[k] || '') + '|' + (handSolo[k] ? '1' : '')
+               + '|' + (okMap[k] ? '1' : '');
     }).join(',');
     var note = ($('h-memo').value || '').trim().slice(0, 200);
 
@@ -984,7 +1084,12 @@
             + '&items=' + encodeURIComponent(items)
             + '&note=' + encodeURIComponent(note);
 
-    jsonp(url).then(function(res){
+    // ★★★v5.65【送信だけ待ち時間を60秒にする】2026-10-10
+    //   実行ログの実測: hand_submit は 25.506秒 / 27.507秒（どちらも「完了」）。
+    //   既定の25秒では、サーバが保存もLINE送信も終えているのに
+    //   画面だけが「送信に失敗しました」と出していた。
+    //   ⚠️ 25秒かかること自体は別に直す。ここは待ち時間を実測に合わせただけ。
+    jsonp(url, 60000).then(function(res){
       btn.disabled = false;
       if (res && res.ok){
         setHandMsg(res.message || '挙手を受け付けました。', 'ok');
