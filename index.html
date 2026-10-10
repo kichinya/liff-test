@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.65</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.66</div></div>
     </div>
   </div>
 
@@ -944,14 +944,18 @@
   }
 
   /**
-   * ★★★v5.65【案件ごとに「確認済み」をチェックできるポップアップ】あなたの確定 2026-10-10
-   *   「すでにオーナーに確認済みの場合の退避ができない」
+   * ★★★v5.66【チェックボックスをやめて二択のボタンにした】あなたの指摘 2026-10-10
+   *   「よく読まずにチェックを入れる人がいそうです。
+   *     選び直すではなく、オーナー確認済みと挙手するの二択のほうがいい」
    *
-   *   ⚠️ 3択ボタンにせず、案件ごとのチェックにしています。
-   *      2件まとめて挙手して片方だけ確認済み、というときに嘘にならないため。
-   *   ⚠️ チェックを入れた案件は【その場で確定】します。
-   *      入れた事実は挙手ログと管理グループの通知の両方に残ります（サーバ側 v19.36）。
-   *   @return Promise → { ok:false } ＝選び直す ／ { ok:true, okKeys:[...] }
+   *   チェックは【読まずに触れる】形。ボタンなら押す瞬間に何をするかを読む。
+   *   ⚠️「選び直す」は小さく残しています。二択だけにすると、時刻の選び間違いに
+   *      気づいても戻れず、押した内容がそのまま記録に残るためです。
+   *   ⚠️「オーナー様に確認済み」は目立たせません。既定は本部が確認する側。
+   *      退避のほうを押しやすくすると、ゲートが意味を失います。
+   *   ⚠️ 2件以上あるときはボタンの文言に件数を入れます（「2件ともオーナー様に確認済み」）。
+   *      片方しか確認していないのに押すと、嘘がそのまま記録に残るため。
+   *   @return Promise → { ok:false } ／ { ok:true, okKeys:[...] }
    */
   function oaAsk(hits){
     return new Promise(function(resolve){
@@ -960,63 +964,62 @@
         + 'display:flex;align-items:center;justify-content:center;padding:16px;';
       var card = document.createElement('div');
       card.style.cssText = 'background:#fff;border-radius:14px;max-width:420px;width:100%;'
-        + 'max-height:80vh;overflow:auto;padding:18px 16px;box-shadow:0 8px 32px rgba(0,0,0,.3);';
+        + 'max-height:82vh;overflow:auto;padding:18px 16px;box-shadow:0 8px 32px rgba(0,0,0,.3);';
 
       var h = document.createElement('div');
       h.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:10px;';
       h.textContent = 'オーナー様の確認が必要です';
       card.appendChild(h);
 
-      var boxes = [];
       hits.forEach(function(x){
-        var row = document.createElement('label');
-        row.style.cssText = 'display:flex;gap:10px;align-items:flex-start;padding:10px;margin-bottom:8px;'
-          + 'border:1px solid #e3e3e3;border-radius:10px;';
-        var cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.style.cssText = 'margin-top:3px;width:20px;height:20px;flex:none;';
-        cb._key = x.key;
-        boxes.push(cb);
-        var body = document.createElement('div');
+        var row = document.createElement('div');
+        row.style.cssText = 'padding:10px;margin-bottom:8px;border:1px solid #e3e3e3;border-radius:10px;';
         var t1 = document.createElement('div');
         t1.style.cssText = 'font-weight:600;font-size:14px;';
         t1.textContent = x.head;
         var t2 = document.createElement('div');
         t2.style.cssText = 'font-size:12px;color:#666;margin-top:2px;';
         t2.textContent = x.why;
-        var t3 = document.createElement('div');
-        t3.style.cssText = 'font-size:12px;color:#1a7f37;margin-top:6px;';
-        t3.textContent = 'すでにオーナー様に確認済み';
-        body.appendChild(t1); body.appendChild(t2); body.appendChild(t3);
-        row.appendChild(cb); row.appendChild(body);
+        row.appendChild(t1); row.appendChild(t2);
         card.appendChild(row);
       });
 
-      var note = document.createElement('div');
-      note.style.cssText = 'font-size:12px;color:#666;margin:10px 0 14px;line-height:1.6;';
-      note.textContent = 'チェックを入れた案件はこのまま確定します。'
-        + '入れなかった案件は、本部からオーナー様へ確認し、了承後に確定します。';
-      card.appendChild(note);
+      function mkBtn(label, sub, primary){
+        var b = document.createElement('button');
+        b.style.cssText = 'display:block;width:100%;padding:13px 12px;border-radius:10px;'
+          + 'margin-bottom:10px;font-size:15px;line-height:1.4;text-align:center;'
+          + (primary ? 'border:0;background:#2e7d32;color:#fff;font-weight:700;'
+                     : 'border:1px solid #2e7d32;background:#fff;color:#2e7d32;font-weight:600;');
+        var l1 = document.createElement('div'); l1.textContent = label;
+        var l2 = document.createElement('div');
+        l2.style.cssText = 'font-size:11px;font-weight:400;margin-top:3px;opacity:.85;';
+        l2.textContent = sub;
+        b.appendChild(l1); b.appendChild(l2);
+        return b;
+      }
 
-      var btns = document.createElement('div');
-      btns.style.cssText = 'display:flex;gap:10px;';
-      var bNg = document.createElement('button');
-      bNg.textContent = '選び直す';
-      bNg.style.cssText = 'flex:1;padding:12px;border-radius:10px;border:1px solid #ccc;'
-        + 'background:#fff;font-size:15px;';
-      var bOk = document.createElement('button');
-      bOk.textContent = '挙手する';
-      bOk.style.cssText = 'flex:1;padding:12px;border-radius:10px;border:0;'
-        + 'background:#2e7d32;color:#fff;font-size:15px;font-weight:700;';
-      btns.appendChild(bNg); btns.appendChild(bOk);
-      card.appendChild(btns);
+      var sp = document.createElement('div');
+      sp.style.cssText = 'height:4px;';
+      card.appendChild(sp);
+
+      var bGo = mkBtn('挙手する', '本部からオーナー様へ確認し、了承後に確定します', true);
+      var bOk = mkBtn(
+        (hits.length > 1 ? (hits.length + '件とも') : '') + 'オーナー様に確認済み',
+        'このまま確定します。確認済みと申告したことが記録に残ります', false);
+      card.appendChild(bGo);
+      card.appendChild(bOk);
+
+      var back = document.createElement('div');
+      back.textContent = '選び直す';
+      back.style.cssText = 'text-align:center;color:#888;font-size:13px;padding:8px;'
+        + 'text-decoration:underline;cursor:pointer;';
+      card.appendChild(back);
 
       function close(r){ if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(r); }
-      bNg.onclick = function(){ close({ ok:false }); };
-      bOk.onclick = function(){
-        var okKeys = [];
-        boxes.forEach(function(cb){ if (cb.checked) okKeys.push(cb._key); });
-        close({ ok:true, okKeys: okKeys });
+      back.onclick = function(){ close({ ok:false }); };
+      bGo.onclick  = function(){ close({ ok:true, okKeys: [] }); };
+      bOk.onclick  = function(){
+        close({ ok:true, okKeys: hits.map(function(x){ return x.key; }) });
       };
 
       ov.appendChild(card);
