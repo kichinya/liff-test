@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.63</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.64</div></div>
     </div>
   </div>
 
@@ -895,10 +895,80 @@
     $('h-cnt').textContent = Object.keys(handSel).length;
   }
 
+  // ============================================================
+  //  ★★★v5.64【オーナー様の確認が必要な挙手を、押す前に知らせる】
+  //    あなたの確定 2026-10-10
+  //      「挙手は通すが承認まで確定しない」「本部からオーナーへ連絡する」
+  //
+  //    ⚠️ ここは【ポップアップを出すためだけ】の写しです。
+  //       保存して良いかどうかはサーバが決めます（HandRaiseAuto.gs のゲート）。
+  //       式を変えるときは HandRaiseOwnerApproval.gs の hroaNeeded_ と必ず両方直す。
+  //    ⚠️ 「おまかせ」のときは、その日の【最も早く置ける時刻】で見ます。
+  //       実際の開始はサーバが当日の他の清掃と組み直して決めるので、
+  //       ここで出なくてもサーバ側で承認待ちになることがあります。
+  //       そのときは送信後のメッセージに出ます。
+  // ============================================================
+  var OA_IN_FALLBACK_MIN = 16 * 60;   // ★ HandRaiseOwnerApproval.gs の HROA_IN_FALLBACK_MIN と同じ値
+
+  function oaDayOf(it, ymd){
+    var ds = it.dates || [];
+    for (var i = 0; i < ds.length; i++) if (ds[i].ymd === ymd) return ds[i];
+    return ds.length ? ds[0] : null;
+  }
+
+  /** 選んだ内容がオーナー様の確認を必要とするか。'' ＝不要 / 文字列＝理由 */
+  function oaWhy(it, ymd, hhmm){
+    var why = [];
+    var ds = it.dates || [];
+    if (ds.length && ymd && ymd !== ds[0].ymd) why.push('清掃日の変更');
+
+    var d = oaDayOf(it, ymd);
+    var start = null;
+    var m = String(hhmm || '').match(/^(\d{2})(\d{2})$/);
+    if (m) start = Number(m[1]) * 60 + Number(m[2]);
+    else if (d && typeof d.minStartMin === 'number') start = d.minStartMin;      // おまかせ
+    else if (typeof it.outMin === 'number' && it.outMin >= 0) start = it.outMin;
+
+    var hasIn = (typeof it.inMin === 'number' && it.inMin >= 0);
+    var inMin = hasIn ? it.inMin : OA_IN_FALLBACK_MIN;
+    if (start != null && it.stdMin > 0 && (start + it.stdMin) > inMin){
+      why.push('チェックイン ' + m2hm(inMin) + ' を過ぎる見込み');
+    }
+    return why.join(' / ');
+  }
+
+  /** 確認が必要な案件があればポップアップを出す。true＝このまま進めてよい */
+  function oaConfirm(keys){
+    var byKey = {};
+    HAND_ITEMS.forEach(function(it){ byKey[it.key] = it; });
+    var hit = [];
+    keys.forEach(function(k){
+      var it = byKey[k];
+      if (!it) return;
+      var ymd = handDate[k] || ((it.dates && it.dates.length) ? it.dates[0].ymd : '');
+      var why = oaWhy(it, ymd, handSel[k]);
+      if (!why) return;
+      var d = oaDayOf(it, ymd);
+      var hhmm = String(handSel[k] || '');
+      var when = /^\d{4}$/.test(hhmm) ? (hhmm.slice(0,2) + ':' + hhmm.slice(2,4) + ' から') : 'おまかせ';
+      hit.push('・' + ((d && d.label) || it.dateLabel) + '　' + it.propName + '\n'
+             + '　' + when + '\n'
+             + '　' + why);
+    });
+    if (!hit.length) return true;
+    return window.confirm(
+      'オーナー様の確認が必要です\n\n' + hit.join('\n') + '\n\n'
+      + 'この' + hit.length + '件は、本部からオーナー様へご確認したあとに確定します。\n'
+      + 'このまま挙手しますか？');
+  }
+
   function submitHand(){
     if (!ME || !ME.userId){ setHandMsg('ユーザー情報が取得できていません。', 'err'); return; }
     var keys = Object.keys(handSel);
     if (!keys.length){ setHandMsg('入れる案件にチェックを入れてください。', 'err'); return; }
+
+    // ★v5.64 ボタンを止める【前】に出す。ここで「選び直す」を押されたら何も送らない。
+    if (!oaConfirm(keys)){ setHandMsg('選び直してください。', ''); return; }
 
     var btn = $('h-send');
     btn.disabled = true; setHandMsg('送信中…','');
