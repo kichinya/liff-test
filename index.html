@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.68</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.69</div></div>
     </div>
   </div>
 
@@ -848,6 +848,17 @@
       body.appendChild(ng);
     }
 
+    // ★★★v5.69【なぜ日や時間を選べないのかを出す】GAS v19.39
+    //   清掃日まで10日より先は、後ろ倒しとチェックインを過ぎる時刻を出していません。
+    //   理由を書かないと「選べない」だけが残り、本部に問い合わせが来ます。
+    //   ⚠️ 書くのは決まっている事実と、その人が動かせることだけ。
+    if (!it.raised && it.shiftLocked){
+      var lk = document.createElement('div');
+      lk.className = 'sub';
+      lk.textContent = '入れる日の変更は、清掃日の10日前からお選びいただけます。';
+      body.appendChild(lk);
+    }
+
     // ★v5.34【対応人数】※v5.35 チェックボックスからプルダウンへ
     //   人数の目安は暫定。正しいかどうかは現場にしか分からない。
     //   管理側が物件ごとに決め打ちする前に、まず現場の判断を集める。
@@ -914,7 +925,9 @@
   //       ここで出なくてもサーバ側で承認待ちになることがあります。
   //       そのときは送信後のメッセージに出ます。
   // ============================================================
-  var OA_IN_FALLBACK_MIN = 16 * 60;   // ★ HandRaiseOwnerApproval.gs の HROA_IN_FALLBACK_MIN と同じ値
+  // ★v5.69 16:00 の代替は廃止（GAS v19.39）。
+  //   チェックイン時刻が空＝縛りが無い物件（稲村ケ崎など同日インが無い物件）なので、
+  //   超過は判定しない。判定の正は HandRaiseOwnerApproval.gs の hroaNeeded_。
 
   function oaDayOf(it, ymd){
     var ds = it.dates || [];
@@ -936,9 +949,8 @@
     else if (typeof it.outMin === 'number' && it.outMin >= 0) start = it.outMin;
 
     var hasIn = (typeof it.inMin === 'number' && it.inMin >= 0);
-    var inMin = hasIn ? it.inMin : OA_IN_FALLBACK_MIN;
-    if (start != null && it.stdMin > 0 && (start + it.stdMin) > inMin){
-      why.push('チェックイン ' + m2hm(inMin) + ' を過ぎる見込み');
+    if (hasIn && start != null && it.stdMin > 0 && (start + it.stdMin) > it.inMin){
+      why.push('チェックイン ' + m2hm(it.inMin) + ' を過ぎる見込み');
     }
     return why.join(' / ');
   }
