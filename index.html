@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.67</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.68</div></div>
     </div>
   </div>
 
@@ -1053,6 +1053,18 @@
         }
         return b;
       }
+
+      // ★★★v5.68【待っている間は通常どおり入れる方が優先されることを伝える】
+      //   あなたの確定 2026-10-10
+      //     「通常通り作業できる方がいる場合はそちらを優先させていただく」
+      //   ⚠️ 仕組みはすでにそうなっている（承認前は清掃ジョブに1セルも書かないので枠は空いたまま）。
+      //      ここは【伝えていなかった】ぶんを足すだけ。文言と実装がずれないよう、
+      //      書いているのは起きる事実だけにする。見込みの待ち日数などは書かない。
+      var pri = document.createElement('div');
+      pri.style.cssText = 'font-size:12px;color:#b26a00;background:#fff8ec;border-radius:8px;'
+        + 'padding:9px 10px;margin:4px 0 12px;line-height:1.6;';
+      pri.textContent = '本部の確認を待つ間に、本来の日・時間で入れる方がいた場合は、そちらを優先します。';
+      card.appendChild(pri);
 
       var bGo, bOk = null;
       if (multi){
