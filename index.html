@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.69</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.70</div></div>
     </div>
   </div>
 
@@ -929,6 +929,23 @@
   //   チェックイン時刻が空＝縛りが無い物件（稲村ケ崎など同日インが無い物件）なので、
   //   超過は判定しない。判定の正は HandRaiseOwnerApproval.gs の hroaNeeded_。
 
+  // ★★★v5.70【前日・当日はポップアップを出さない】GAS v19.40
+  //   前日・当日の変更は、サーバがその場で確定します（_hrCanStillBook_ が false のとき）。
+  //   それなのに「了承後に確定します」と出していたので、画面が嘘をついていました。
+  //   ⚠️ ここの 1 は GAS の HR_BOOK_CUTOFF_DAYS と同じ値です。片方だけ変えないこと。
+  //   ⚠️ 端末の時計で数えます。実際に確定するかどうかを決めるのはサーバです。
+  //      ずれても、出す／出さないが1日変わるだけで、保存の結果は変わりません。
+  var OA_BOOK_CUTOFF_DAYS = 1;
+
+  function oaDaysLeft(ymd){
+    var m = String(ymd || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return null;
+    var n = new Date();
+    var t0 = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+    var d0 = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    return Math.round((d0.getTime() - t0.getTime()) / 86400000);
+  }
+
   function oaDayOf(it, ymd){
     var ds = it.dates || [];
     for (var i = 0; i < ds.length; i++) if (ds[i].ymd === ymd) return ds[i];
@@ -1126,6 +1143,9 @@
       var ymd = handDate[k] || ((it.dates && it.dates.length) ? it.dates[0].ymd : '');
       var why = oaWhy(it, ymd, handSel[k]);
       if (!why) return;
+      // ★v5.70 前日・当日はその場で確定するので、確認の画面を出さない。
+      var dl = oaDaysLeft(ymd);
+      if (dl != null && dl <= OA_BOOK_CUTOFF_DAYS) return;
       var d = oaDayOf(it, ymd);
       var hhmm = String(handSel[k] || '');
       var when = /^\d{4}$/.test(hhmm) ? (hhmm.slice(0,2) + ':' + hhmm.slice(2,4) + ' から') : 'おまかせ';
