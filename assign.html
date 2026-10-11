@@ -308,6 +308,9 @@
   <div class="lead" id="lead">読み込み中…</div>
   <div id="msg" class="msg"></div>
 
+  <!-- ★★★v8.36 オーナー承認待ち。1件以上あるときだけ出します。0件なら何も出しません。 -->
+  <div id="oa"></div>
+
   <div class="tabs" id="tabs" style="display:none">
     <button id="tb-jobs"  class="on" onclick="tab('jobs')">📋 予定</button>
     <button id="tb-staff"        onclick="tab('staff')">👥 スタッフ</button>
@@ -372,7 +375,7 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.35';   // ★v8.30 予定の追加・取消（AssignAdd.gs）
+const APP_VER = 'v8.36';   // ★v8.36 オーナー承認待ちの一覧と承認（HandRaiseOwnerApproval.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -452,11 +455,16 @@ let me = null;
 let DATA = null;
 let TAB = 'jobs';
 
-function jsonp(url){
+// ★★★v8.36 呼び出しごとに待ち時間を変えられるようにした。
+//   承認（oa_act）は中で自動確定をやり直すため、挙手の送信と同じくらい時間がかかる。
+//   実測: hand_submit は 25.506秒 / 27.507秒（2026-10-10 の実行ログ）。
+//   既定の25秒のままだと、サーバは反映を終えているのに画面だけが失敗と出る。
+function jsonp(url, ms){
   return new Promise(function(resolve,reject){
     const cb = 'ab_'+Date.now()+'_'+Math.floor(Math.random()*100000);
     const s = document.createElement('script');
-    const t = setTimeout(function(){ cleanup(); reject(new Error('時間内に応答がありませんでした')); }, 25000);
+    const t = setTimeout(function(){ cleanup(); reject(new Error('時間内に応答がありませんでした')); },
+                         (typeof ms === 'number' && ms > 0) ? ms : 25000);
     function cleanup(){
       clearTimeout(t);
       try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
@@ -2531,6 +2539,112 @@ function mjCancel(){
 //   最新が要るときだけ読み直す。押した回もキャッシュは書き直すので、次からまた速い。
 async function reload(){ await load(true); }
 
+// ============================================================
+// ★★★v8.36【オーナー承認待ち】2026-10-11
+//   挙手で清掃日を変えた／チェックイン時刻を過ぎる時刻にした案件は、
+//   清掃ジョブに1セルも書かずに止まっています（GAS v19.33）。
+//   ここで本部が承認すると、そこで初めて反映されます。
+//
+//   ⚠️ 0件のときは何も出しません。鳴り続ける表示を作らない。
+//   ⚠️ 承認は【自動確定のやり直し】です。清掃日の移動も時刻の組み直しもサーバが行います。
+//      画面は行番号を渡すだけで、判定は一切していません。
+//   ⚠️ 承認・見送りの前に必ず確認を出します。どちらも本人にLINEが飛びます。
+// ============================================================
+var OA_ITEMS = [];
+
+function oaEsc(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadOa(){
+  if(!me || !me.userId) return;
+  jsonp(GAS_URL+'?mode=oa_list&userId='+encodeURIComponent(me.userId))
+    .then(function(res){
+      if(!res || res.ok !== true){ $('oa').innerHTML=''; return; }
+      OA_ITEMS = res.items || [];
+      drawOa();
+    })
+    .catch(function(){ /* 本体の表示は止めない */ });
+}
+
+function drawOa(){
+  var box = $('oa');
+  if(!OA_ITEMS.length){ box.innerHTML=''; return; }   // ★0件なら1文字も出さない
+  var h = '<div style="border:1px solid #e0a23c;background:#fffaf0;border-radius:12px;'
+        + 'padding:12px 13px;margin:0 0 14px;">'
+        + '<div style="font-weight:700;font-size:14px;color:#8a5a00;margin-bottom:4px;">'
+        + '📋 オーナー様の了承待ち ' + OA_ITEMS.length + '件</div>'
+        + '<div style="font-size:12px;color:#7a6a50;line-height:1.6;margin-bottom:10px;">'
+        + 'この案件は確定していません。清掃ジョブには何も書いていないので、担当者も清掃日もそのままです。</div>';
+  OA_ITEMS.forEach(function(it, i){
+    h += '<div style="background:#fff;border:1px solid #eee;border-radius:10px;padding:10px;margin-bottom:8px;">'
+       + '<div style="font-weight:600;font-size:14px;">' + oaEsc(it.prop) + '　' + oaEsc(it.who) + ' さん</div>'
+       + '<div style="font-size:12.5px;color:#555;margin-top:3px;">'
+       +   '本来 ' + oaEsc(it.cd || '-')
+       +   (it.wy ? ('　→　希望 <b>' + oaEsc(it.wy) + '</b>') : '　（日は変えていません）')
+       +   '　／　開始 ' + oaEsc(it.wt || 'おまかせ')
+       + '</div>'
+       + '<div style="font-size:12px;color:#8a5a00;margin-top:3px;">' + oaEsc(it.why) + '</div>'
+       + '<div style="font-size:11px;color:#999;margin-top:3px;">挙手ログ ' + it.row + '行目</div>'
+       + '<div style="display:flex;gap:8px;margin-top:10px;">'
+       +   '<button onclick="oaAct(' + i + ',\'approve\')" '
+       +     'style="flex:1;padding:10px;border:0;border-radius:8px;background:#2e7d32;color:#fff;'
+       +     'font-size:13px;font-weight:700;">了承がとれた（確定する）</button>'
+       +   '<button onclick="oaAct(' + i + ',\'reject\')" '
+       +     'style="flex:1;padding:10px;border:1px solid #c62828;border-radius:8px;background:#fff;'
+       +     'color:#c62828;font-size:13px;font-weight:600;">見送りにする</button>'
+       + '</div>'
+       + '</div>';
+  });
+  h += '<div style="font-size:11.5px;color:#7a6a50;line-height:1.7;">'
+     + 'オーナー様へのご連絡は本部から行ってください。システムは自動で送りません。</div>'
+     + '</div>';
+  box.innerHTML = h;
+}
+
+function oaAct(i, act){
+  var it = OA_ITEMS[i];
+  if(!it) return;
+  var ask = (act === 'approve')
+    ? (it.prop + '\n' + (it.wy || it.cd) + '　' + (it.wt || 'おまかせ') + '\n\n'
+       + 'この内容で確定します。' + it.who + ' さんに「担当が決まりました」が届きます。\n'
+       + 'オーナー様の了承はとれていますか？')
+    : (it.prop + '\n' + it.who + ' さん\n\n'
+       + '見送りにします。' + it.who + ' さんに見送りのお知らせが届きます。\n'
+       + 'よろしいですか？');
+  if(!window.confirm(ask)) return;
+
+  $('oa').innerHTML = '<div class="center" style="padding:14px;">処理中…　そのままお待ちください</div>';
+  // ★v8.36 承認は中で自動確定をやり直すので時間がかかる。60秒待つ。
+  jsonp(GAS_URL+'?mode=oa_act&userId='+encodeURIComponent(me.userId)
+        +'&row='+encodeURIComponent(it.row)+'&act='+encodeURIComponent(act), 60000)
+    .then(function(res){
+      if(res && res.ok){
+        oaMsg(res.message || '処理しました。', false);
+        reload();   // 承認すると予定の表示も変わるので、画面ごと取り直す
+      }else{
+        // ⚠️ showErr は画面を消してタブも閉じてしまう。失敗しただけでそこまでしない。
+        oaMsg((res && res.message) ? res.message : '処理できませんでした。', true);
+        loadOa();
+      }
+    })
+    .catch(function(err){
+      oaMsg('応答がありませんでした。反映されたかどうかは「🔄 最新の状態にする」で確かめてください。（'
+            + err.message + '）', true);
+      loadOa();
+    });
+}
+
+/** ★v8.36 画面上部のひとこと。既存の #msg の使い方に合わせる */
+function oaMsg(text, isNg){
+  $('msg').className = isNg ? 'msg ng' : 'msg';
+  $('msg').textContent = text;
+  if(!isNg) setTimeout(function(){
+    if($('msg').textContent === text){ $('msg').textContent=''; $('msg').className='msg'; }
+  }, 8000);
+}
+
 async function load(fresh){
   $('body').innerHTML='<div class="center">読み込み中…</div>';
   try{
@@ -2546,6 +2660,7 @@ async function load(fresh){
     }
     render(res);
     $('mjbtn').style.display='block';   // ★v8.30 権限が通った回だけ出す
+    loadOa();                           // ★v8.36 オーナー承認待ち（失敗しても本体は出す）
   }catch(err){
     showErr('読み込みに失敗しました。\n電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）');
   }
