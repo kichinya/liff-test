@@ -164,7 +164,7 @@
   <!-- シフト提出（既存） -->
   <div id="view-shift">
     <div id="app">
-      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.66</div></div>
+      <div class="loading" id="loading">LINEと接続しています…<div style="font-size:11px;color:#bbb;margin-top:8px">v5.67</div></div>
     </div>
   </div>
 
@@ -944,33 +944,73 @@
   }
 
   /**
-   * ★★★v5.66【チェックボックスをやめて二択のボタンにした】あなたの指摘 2026-10-10
-   *   「よく読まずにチェックを入れる人がいそうです。
-   *     選び直すではなく、オーナー確認済みと挙手するの二択のほうがいい」
+   * ★★★v5.67【1件なら二択、2件以上は案件ごとに選ぶ】あなたの指摘 2026-10-10
+   *   「複数物件の挙手を一度に行った場合でもそれぞれの確認がされるのでしょうか」
+   *   「１件は通常の時間内で、他の２件がチェックアウト日以外だとして、
+   *     さらにそのうちの１件はオーナーに確認済みなどのパターン」
    *
-   *   チェックは【読まずに触れる】形。ボタンなら押す瞬間に何をするかを読む。
-   *   ⚠️「選び直す」は小さく残しています。二択だけにすると、時刻の選び間違いに
-   *      気づいても戻れず、押した内容がそのまま記録に残るためです。
-   *   ⚠️「オーナー様に確認済み」は目立たせません。既定は本部が確認する側。
-   *      退避のほうを押しやすくすると、ゲートが意味を失います。
-   *   ⚠️ 2件以上あるときはボタンの文言に件数を入れます（「2件ともオーナー様に確認済み」）。
-   *      片方しか確認していないのに押すと、嘘がそのまま記録に残るため。
+   *   ■ v5.66 の欠陥
+   *     二択ボタンは全件まとめてだった。2件該当して1件だけ確認済み、が表現できず、
+   *     押せば確認していない分まで「確認済み」として記録に残っていた。
+   *
+   *   ■ 直し方
+   *     該当1件 … 二択ボタン（1タップ）。いちばん多いケースを軽いままにする。
+   *     該当2件以上 … 案件ごとに［本部が確認］［確認済み］を選ぶ。
+   *                  全部選ぶまで「挙手する」は押せない。
+   *   ⚠️ チェックボックスには戻しません（v5.66 のご指摘「読まずにチェックを入れる」）。
+   *      どちらの形でも、押す側が必ず1回は選ぶ形になっています。
+   *   ⚠️「確認済み」は常に目立たせません。既定は本部が確認する側です。
    *   @return Promise → { ok:false } ／ { ok:true, okKeys:[...] }
    */
   function oaAsk(hits){
     return new Promise(function(resolve){
+      var multi = (hits.length > 1);
+      var picks = {};   // ジョブキー -> 'go'（本部が確認） / 'ok'（確認済み）
+
       var ov = document.createElement('div');
       ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;'
         + 'display:flex;align-items:center;justify-content:center;padding:16px;';
       var card = document.createElement('div');
       card.style.cssText = 'background:#fff;border-radius:14px;max-width:420px;width:100%;'
-        + 'max-height:82vh;overflow:auto;padding:18px 16px;box-shadow:0 8px 32px rgba(0,0,0,.3);';
+        + 'max-height:84vh;overflow:auto;padding:18px 16px;box-shadow:0 8px 32px rgba(0,0,0,.3);';
 
       var h = document.createElement('div');
-      h.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:10px;';
+      h.style.cssText = 'font-weight:700;font-size:16px;margin-bottom:4px;';
       h.textContent = 'オーナー様の確認が必要です';
       card.appendChild(h);
 
+      if (multi){
+        var lead = document.createElement('div');
+        lead.style.cssText = 'font-size:12px;color:#666;margin-bottom:10px;line-height:1.6;';
+        lead.textContent = hits.length + '件あります。1件ずつお選びください。';
+        card.appendChild(lead);
+      } else {
+        var sp0 = document.createElement('div'); sp0.style.cssText = 'height:8px;';
+        card.appendChild(sp0);
+      }
+
+      function paint(){
+        Object.keys(segs).forEach(function(k){
+          var g = segs[k];
+          var sel = picks[k];
+          g.go.style.cssText  = segCss(sel === 'go', true);
+          g.ok.style.cssText  = segCss(sel === 'ok', false);
+        });
+        if (multi) {
+          var done = hits.every(function(x){ return !!picks[x.key]; });
+          bGo.disabled = !done;
+          bGo.style.opacity = done ? '1' : '.45';
+        }
+      }
+      function segCss(on, isGo){
+        return 'flex:1;padding:9px 6px;border-radius:8px;font-size:13px;line-height:1.3;'
+          + (on
+              ? (isGo ? 'border:1px solid #2e7d32;background:#2e7d32;color:#fff;font-weight:700;'
+                      : 'border:1px solid #b26a00;background:#b26a00;color:#fff;font-weight:700;')
+              : 'border:1px solid #ccc;background:#fff;color:#777;');
+      }
+
+      var segs = {};
       hits.forEach(function(x){
         var row = document.createElement('div');
         row.style.cssText = 'padding:10px;margin-bottom:8px;border:1px solid #e3e3e3;border-radius:10px;';
@@ -981,6 +1021,18 @@
         t2.style.cssText = 'font-size:12px;color:#666;margin-top:2px;';
         t2.textContent = x.why;
         row.appendChild(t1); row.appendChild(t2);
+
+        if (multi){
+          var seg = document.createElement('div');
+          seg.style.cssText = 'display:flex;gap:8px;margin-top:10px;';
+          var bg = document.createElement('button'); bg.textContent = '本部が確認';
+          var bo = document.createElement('button'); bo.textContent = 'オーナー様に確認済み';
+          seg.appendChild(bg); seg.appendChild(bo);
+          row.appendChild(seg);
+          segs[x.key] = { go: bg, ok: bo };
+          bg.onclick = function(){ picks[x.key] = 'go'; paint(); };
+          bo.onclick = function(){ picks[x.key] = 'ok'; paint(); };
+        }
         card.appendChild(row);
       });
 
@@ -991,23 +1043,28 @@
           + (primary ? 'border:0;background:#2e7d32;color:#fff;font-weight:700;'
                      : 'border:1px solid #2e7d32;background:#fff;color:#2e7d32;font-weight:600;');
         var l1 = document.createElement('div'); l1.textContent = label;
-        var l2 = document.createElement('div');
-        l2.style.cssText = 'font-size:11px;font-weight:400;margin-top:3px;opacity:.85;';
-        l2.textContent = sub;
-        b.appendChild(l1); b.appendChild(l2);
+        if (sub){
+          var l2 = document.createElement('div');
+          l2.style.cssText = 'font-size:11px;font-weight:400;margin-top:3px;opacity:.85;';
+          l2.textContent = sub;
+          b.appendChild(l1); b.appendChild(l2);
+        } else {
+          b.appendChild(l1);
+        }
         return b;
       }
 
-      var sp = document.createElement('div');
-      sp.style.cssText = 'height:4px;';
-      card.appendChild(sp);
-
-      var bGo = mkBtn('挙手する', '本部からオーナー様へ確認し、了承後に確定します', true);
-      var bOk = mkBtn(
-        (hits.length > 1 ? (hits.length + '件とも') : '') + 'オーナー様に確認済み',
-        'このまま確定します。確認済みと申告したことが記録に残ります', false);
-      card.appendChild(bGo);
-      card.appendChild(bOk);
+      var bGo, bOk = null;
+      if (multi){
+        bGo = mkBtn('挙手する', '選んだ内容で送ります', true);
+        card.appendChild(bGo);
+      } else {
+        bGo = mkBtn('挙手する', '本部からオーナー様へ確認し、了承後に確定します', true);
+        bOk = mkBtn('オーナー様に確認済み',
+                    'このまま確定します。確認済みと申告したことが記録に残ります', false);
+        card.appendChild(bGo);
+        card.appendChild(bOk);
+      }
 
       var back = document.createElement('div');
       back.textContent = '選び直す';
@@ -1017,10 +1074,17 @@
 
       function close(r){ if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(r); }
       back.onclick = function(){ close({ ok:false }); };
-      bGo.onclick  = function(){ close({ ok:true, okKeys: [] }); };
-      bOk.onclick  = function(){
-        close({ ok:true, okKeys: hits.map(function(x){ return x.key; }) });
-      };
+      if (multi){
+        bGo.onclick = function(){
+          if (!hits.every(function(x){ return !!picks[x.key]; })) return;
+          close({ ok:true, okKeys: hits.filter(function(x){ return picks[x.key] === 'ok'; })
+                                      .map(function(x){ return x.key; }) });
+        };
+        paint();
+      } else {
+        bGo.onclick = function(){ close({ ok:true, okKeys: [] }); };
+        bOk.onclick = function(){ close({ ok:true, okKeys: [hits[0].key] }); };
+      }
 
       ov.appendChild(card);
       document.body.appendChild(ov);
