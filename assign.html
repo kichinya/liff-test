@@ -375,7 +375,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.39';   // ★v8.39 対応物件に足す送信を fetch に（失敗の理由を出す）
+const APP_VER = 'v8.40';   // ★v8.40 予約語 sid をやめて staffId で送る
+// 旧: 'v8.39'   // ★v8.39 対応物件に足す送信を fetch に（失敗の理由を出す）
 // 旧: 'v8.38'   // ★v8.38 対応物件にない方の開閉を「清掃の欄を閉じる」と同じボタンに
 // 旧: 'v8.37'   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
 // ============================================================
@@ -1245,7 +1246,8 @@ function addPropPick(sid){
   //   （2026-10-24 OKを押した瞬間にこの表示が出て、サーバに記録が1行も残らなかった）。
   //   fetch なら HTTP の状態と返ってきた中身の頭を画面に出せる。
   fetchJson(GAS_URL+'?mode=ab_addprop&userId='+encodeURIComponent(me.userId)
-        +'&sid='+encodeURIComponent(sid)+'&pid='+encodeURIComponent(j.pid), 30000)
+        // ★v8.40 パラメータ名 sid は Apps Script の予約語（c と sid）。使うとサーバに届かず即エラーになる
+        +'&staffId='+encodeURIComponent(sid)+'&pid='+encodeURIComponent(j.pid), 30000)
     .then(function(r){
       ED.addPropBusy = '';
       if(!r || !r.ok){ ED.addPropErr = (r&&r.message)||'足せませんでした。'; drawEdit(); return; }
