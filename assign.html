@@ -375,7 +375,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.36';   // ★v8.36 オーナー承認待ちの一覧と承認（HandRaiseOwnerApproval.gs）
+const APP_VER = 'v8.37';   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
+const APP_VER_PREV = 'v8.36';   // ★v8.36 オーナー承認待ちの一覧と承認（HandRaiseOwnerApproval.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -1189,6 +1190,51 @@ function togStaff(n){
   }
   tog(ED.staff, n); drawEdit();
 }
+// ★★v8.37【対応物件に入っていない方も選べるようにする】2026-10-24
+//   これまで対応可物件に無い人は候補に出ず、スプレッドシートを直すしかなかった。
+//   ・開いたときだけ一覧を出す（ふだんは1行。候補の欄を長くしない）
+//   ・押すと確認 → その人の対応可物件にこの物件を足して（管理マスタにも書く）、担当に入れる
+//   ・本人へのLINEは送らない（担当が決まれば別に届くため）
+//   ⚠️ 判定は pickable() に出た人以外、で作る。対応可かどうかの式をここに2つ目として書かない。
+function outPropHtml(j, P){
+  const inP = {};
+  [P.shiftFree, P.shiftBusy, P.noShiftBusy, P.noShiftFree].forEach(function(g){ g.forEach(function(s){ inP[s.sid]=1; }); });
+  const outs = (DATA.staff||[]).filter(function(s){ return s.active && !inP[s.sid]; })
+                 .sort(function(a,b){ return a.disp < b.disp ? -1 : 1; });
+  if(!outs.length) return '';
+  const head = '<div style="font-size:11px;color:#666;margin:11px 0 6px;cursor:pointer" onclick="ED.showOutProp=!ED.showOutProp;drawEdit()">'
+             + (ED.showOutProp ? '▼' : '▶')+' 対応物件に入っていない方　<span style="color:#999">'+outs.length+'名</span></div>';
+  if(!ED.showOutProp) return head;
+  return head
+    + '<div style="font-size:11px;color:#a06a00;margin:0 0 6px">選ぶと、その方の対応物件にこの物件を足してから担当に入れます</div>'
+    + (ED.addPropErr ? '<div style="font-size:12px;color:#c62828;margin:0 0 6px;white-space:pre-wrap">'+esc(ED.addPropErr)+'</div>' : '')
+    + '<div class="pills">'+outs.map(function(s){
+        return pillHtml(s.disp, false, 'addPropPick(\''+String(s.sid).replace(/'/g,'')+'\')',
+                        ED.addPropBusy===s.sid ? '保存中…' : '');
+      }).join('')+'</div>';
+}
+function addPropPick(sid){
+  if(ED.addPropBusy) return;
+  const s = (DATA.staff||[]).find(function(x){ return x.sid===sid; });
+  const j = ED.j;
+  if(!s || !j) return;
+  if(!window.confirm(s.disp+'さんの対応物件に「'+j.prop+'」を足して、担当に入れます。よろしいですか？')) return;
+  ED.addPropBusy = sid; ED.addPropErr = ''; drawEdit();
+  jsonp(GAS_URL+'?mode=ab_addprop&userId='+encodeURIComponent(me.userId)
+        +'&sid='+encodeURIComponent(sid)+'&pid='+encodeURIComponent(j.pid), 30000)
+    .then(function(r){
+      ED.addPropBusy = '';
+      if(!r || !r.ok){ ED.addPropErr = (r&&r.message)||'足せませんでした。'; drawEdit(); return; }
+      s.props = r.props || s.props; s.propsAll = false; if(r.areas) s.areas = r.areas;
+      if(ED.staff.indexOf(s.disp) < 0) togStaff(s.disp); else drawEdit();
+    }).catch(function(e){
+      ED.addPropBusy = '';
+      ED.addPropErr = (String(e.message).indexOf('時間内')>=0)
+        ? '時間内に応答がありませんでした。足せている可能性があります。一覧を読み直して確かめてください。'
+        : '通信に失敗しました（'+e.message+'）';
+      drawEdit();
+    });
+}
 function togChk(n){
   tog(ED.chk, n);
   // ★v7.57 チェック担当を決めたら、日と時刻に既定を入れておく（空のまま保存されると意味がない）
@@ -1849,6 +1895,7 @@ function drawEdit(){
                + (g[2] ? '<br><span style="color:#a06a00">'+g[2]+'</span>' : '')+'</div>'
                + '<div class="pills">'+staffCands(g[1])+'</div>';
         }).join('')
+    +   outPropHtml(j, P)   // ★v8.37 対応物件に入っていない方
     +   chosenDetail
     +   '<div style="font-size:11px;color:#666;margin:9px 0 5px">人以外の枠</div>'
     +   '<div class="pills">'+OUTSIDE.map(function(n){
