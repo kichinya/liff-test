@@ -375,7 +375,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.37';   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
+const APP_VER = 'v8.38';   // ★v8.38 対応物件にない方の開閉を「清掃の欄を閉じる」と同じボタンに
+// 旧: 'v8.37'   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
 //   土日は色を分けていたのに祝日は平日と同じ色だった。
@@ -1201,8 +1202,10 @@ function outPropHtml(j, P){
   const outs = (DATA.staff||[]).filter(function(s){ return s.active && !inP[s.sid]; })
                  .sort(function(a,b){ return a.disp < b.disp ? -1 : 1; });
   if(!outs.length) return '';
-  const head = '<div style="font-size:11px;color:#666;margin:11px 0 6px;cursor:pointer" onclick="ED.showOutProp=!ED.showOutProp;drawEdit()">'
-             + (ED.showOutProp ? '▼' : '▶')+' 対応物件に入っていない方　<span style="color:#999">'+outs.length+'名</span></div>';
+  // ★v8.38 「清掃の欄を閉じる」と同じボタンにする（小さな文字では気づけなかった・社長指摘 2026-10-24）
+  const head = '<div class="pills" style="margin:11px 0 6px"><button class="pill" onclick="ED.showOutProp=!ED.showOutProp;drawEdit()">'
+             + (ED.showOutProp ? '▲ 対応物件に入っていない方を閉じる' : '▼ 対応物件に入っていない方（'+outs.length+'名）')
+             + '</button></div>';
   if(!ED.showOutProp) return head;
   return head
     + '<div style="font-size:11px;color:#a06a00;margin:0 0 6px">選ぶと、その方の対応物件にこの物件を足してから担当に入れます</div>'
