@@ -375,7 +375,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.38';   // ★v8.38 対応物件にない方の開閉を「清掃の欄を閉じる」と同じボタンに
+const APP_VER = 'v8.39';   // ★v8.39 対応物件に足す送信を fetch に（失敗の理由を出す）
+// 旧: 'v8.38'   // ★v8.38 対応物件にない方の開閉を「清掃の欄を閉じる」と同じボタンに
 // 旧: 'v8.37'   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
 // ============================================================
 // ★v7.78【祝日を赤で出す】社長指摘 2026-08-27
@@ -476,6 +477,24 @@ function jsonp(url, ms){
     s.src = url + '&callback=' + cb;
     document.body.appendChild(s);
   });
+}
+
+// ★v8.39 失敗したら理由（HTTP状態・返ってきた中身の頭）を Error に入れて返す
+function fetchJson(url, ms){
+  const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const t = setTimeout(function(){ if(ctl) ctl.abort(); }, (typeof ms === 'number' && ms > 0) ? ms : 25000);
+  return fetch(url, ctl ? { signal: ctl.signal, redirect: 'follow' } : { redirect: 'follow' })
+    .then(function(res){
+      return res.text().then(function(txt){
+        clearTimeout(t);
+        if(!res.ok) throw new Error('HTTP '+res.status+' '+String(txt).slice(0,120));
+        try { return JSON.parse(txt); }
+        catch(e){ throw new Error('返事を読めません: '+String(txt).slice(0,120)); }
+      });
+    }, function(err){
+      clearTimeout(t);
+      throw new Error((err && err.name === 'AbortError') ? '時間内に応答がありませんでした' : ('通信できません: '+((err && err.message) || err)));
+    });
 }
 
 function showErr(text){
@@ -1222,7 +1241,10 @@ function addPropPick(sid){
   if(!s || !j) return;
   if(!window.confirm(s.disp+'さんの対応物件に「'+j.prop+'」を足して、担当に入れます。よろしいですか？')) return;
   ED.addPropBusy = sid; ED.addPropErr = ''; drawEdit();
-  jsonp(GAS_URL+'?mode=ab_addprop&userId='+encodeURIComponent(me.userId)
+  // ★v8.39 JSONP をやめて fetch にする。JSONP は失敗の理由が「通信に失敗しました」しか分からない
+  //   （2026-10-24 OKを押した瞬間にこの表示が出て、サーバに記録が1行も残らなかった）。
+  //   fetch なら HTTP の状態と返ってきた中身の頭を画面に出せる。
+  fetchJson(GAS_URL+'?mode=ab_addprop&userId='+encodeURIComponent(me.userId)
         +'&sid='+encodeURIComponent(sid)+'&pid='+encodeURIComponent(j.pid), 30000)
     .then(function(r){
       ED.addPropBusy = '';
@@ -1233,7 +1255,7 @@ function addPropPick(sid){
       ED.addPropBusy = '';
       ED.addPropErr = (String(e.message).indexOf('時間内')>=0)
         ? '時間内に応答がありませんでした。足せている可能性があります。一覧を読み直して確かめてください。'
-        : '通信に失敗しました（'+e.message+'）';
+        : '送れませんでした（'+e.message+'）';
       drawEdit();
     });
 }
