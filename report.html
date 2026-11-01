@@ -950,9 +950,10 @@
       <div id="f-head" style="font-weight:700;margin-bottom:10px"></div>
       <div id="f-now" style="font-size:13px;color:#6b7683;line-height:1.8;margin-bottom:14px"></div>
       <label>開始時刻（変えないときは空欄のまま）</label>
-      <input id="f-st" type="text" inputmode="numeric" placeholder="例）9:30" maxlength="5">
+      <!-- ★2026-11-01 数字キーボードでは「:」が打てないスタッフがいたため、後入れと同じ時刻選択にした -->
+      <input id="f-st" type="time" step="60">
       <label>完了時刻（変えないときは空欄のまま）</label>
-      <input id="f-en" type="text" inputmode="numeric" placeholder="例）11:00" maxlength="5">
+      <input id="f-en" type="time" step="60">
       <label>作業区分（変えないときはそのまま）</label>
       <select id="f-kind"></select>
       <label class="req">理由</label>
