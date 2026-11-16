@@ -386,7 +386,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
+const APP_VER = 'v8.42';   // ★v8.42 スタッフタブから独り立ちを申請（代表が承認）
+// const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
 //   起動はこれまでどおり（昨日〜）。過去分は「過去の予定を直す」を押したときだけ読む（起動を遅くしない）
 let PAST_ON = false;       // ★v8.41 過去の予定を読み込んでいるか（保存のあとも読み直す）
 // const APP_VER = 'v8.40';   // ★v8.40 予約語 sid をやめて staffId で送る
@@ -1083,8 +1084,19 @@ function drawStaff(){
               + ' <span class="t">（この日から時給が変わります）</span></span>';
     }else if(s.kind==='研修'){
       soloRow = '<span class="k">独り立ち予定</span>'
-              + '<span><span style="color:#a06a00;font-weight:700">未設定</span>'
-              + ' <span class="t">スタッフマスタ P列「独り立ち日」</span></span>';
+              + '<span><span style="color:#a06a00;font-weight:700">未設定</span></span>';
+    }
+    // ★v8.42 研修中の人は、ここから独り立ちを申請できる（代表が管理グループで承認して反映）
+    if(s.kind==='研修'){
+      const t0 = DATA.today || '';
+      const mx = (function(){ const d = new Date(t0+'T00:00:00'); d.setDate(d.getDate()+60);
+        return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); })();
+      const sidQ = String(s.sid||'').replace(/[^A-Za-z0-9]/g,'');
+      soloRow += '<span class="k">独り立ち申請</span><span>'
+              +  '<input type="date" id="so-'+sidQ+'" value="'+esc(t0)+'" min="'+esc(DATA.editFrom||t0)+'" max="'+mx+'" '
+              +  'style="font-size:14px;padding:4px 6px;border:1px solid var(--line);border-radius:8px">'
+              +  ' <button class="pill" id="sob-'+sidQ+'" onclick="soloReq(\''+sidQ+'\')">申請する</button>'
+              +  '<br><span class="t">承認されるとこの日から独り立ち（本人にLINEでお知らせ）</span></span>';
     }
 
     // ★v7.35 稼働回数は勤怠ログから毎回その場で数えた最新値
@@ -2804,6 +2816,24 @@ async function loadPast(keepDay){
     oaMsg('過去の予定を読み込めませんでした。\n（'+err.message+'）', true);
   }finally{
     if(b){ b.disabled = false; b.textContent = '🕘 過去の予定を直す（今月）'; }
+  }
+}
+
+// ★v8.42 独り立ちの申請（SoloReq.gs）。反映は代表の承認後
+async function soloReq(sid){
+  const inp = $('so-'+sid), btn = $('sob-'+sid);
+  const d = inp ? inp.value : '';
+  if(!d){ oaMsg('独り立ちの日付を選んでください。', true); return; }
+  if(btn){ btn.disabled = true; btn.textContent = '送信中…'; }
+  try{
+    const res = await jsonp(GAS_URL+'?mode=solo_req&userId='+encodeURIComponent(me.userId)
+                 +'&staffId='+encodeURIComponent(sid)+'&date='+encodeURIComponent(d));
+    oaMsg((res && res.message) || '申請できませんでした。', !(res && res.ok));
+    try { window.scrollTo(0,0); } catch(e){}
+  }catch(err){
+    oaMsg('通信できませんでした。もう一度お試しください。\n（'+err.message+'）', true);
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = '申請する'; }
   }
 }
 
