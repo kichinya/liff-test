@@ -150,6 +150,10 @@
   /* ★v7.73 返事待ちの箱。未アサインでも確定でもない「宙ぶらりん」を可視化する */
   .tray .th.w{ color:#8a6d00; margin-top:11px; padding-top:10px; border-top:1px dashed var(--line); }
   .tcard.w{ background:#fffdf5; border:1px dashed #d8c48a; }
+  /* ★v8.43 キャンセル（切り替えたときだけ出す） */
+  .tcard.cn{ background:#f4f4f4; border:1px dashed #bbb; opacity:.8; }
+  .tcard.cn .p{ text-decoration:line-through; color:#666; }
+  .tcard.cn .n{ color:#666; }
   .tcard.w .n{ color:#8a6d00; }
   .tcard.w.ov{ background:var(--redbg); border:1px solid #ef9a9a; }
   .tcard.w.ov .n{ color:var(--red); }
@@ -386,7 +390,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.42';   // ★v8.42 スタッフタブから独り立ちを申請（代表が承認）
+const APP_VER = 'v8.43';   // ★v8.43 キャンセルを別の箱に取り消し線で出す（人ごとの予定・件数には入れない）
+// const APP_VER = 'v8.42';   // ★v8.42 スタッフタブから独り立ちを申請（代表が承認）
 // const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
 //   起動はこれまでどおり（昨日〜）。過去分は「過去の予定を直す」を押したときだけ読む（起動を遅くしない）
 let PAST_ON = false;       // ★v8.41 過去の予定を読み込んでいるか（保存のあとも読み直す）
@@ -682,8 +687,20 @@ function jobsOf(ymd){
   (DATA.areas||[]).forEach(function(a){
     if(fa && a.id !== fa) return;
     a.jobs.forEach(function(j){
-      if(!showCan() && j.cancelled) return;   // ★v8.41 キャンセルは切り替えたときだけ
+      if(j.cancelled) return;   // ★v8.43 キャンセルは件数・人ごとの予定・箱には入れない（cancelledOf で別に出す）
       if(j.ymd===ymd) out.push(Object.assign({area:a.id, areaLabel:a.label}, j)); });
+  });
+  return out;
+}
+// ★v8.43 その日のキャンセル（「キャンセルも表示」のときだけ、別の箱で取り消し線つきに出す）
+function cancelledOf(ymd){
+  const fa = $('f-area').value, fp = $('f-prop').value;
+  const out = [];
+  (DATA.areas||[]).forEach(function(a){
+    if(fa && a.id !== fa) return;
+    a.jobs.forEach(function(j){
+      if(j.cancelled && j.kind!=='check' && j.ymd===ymd && (!fp || j.pid===fp)) out.push(j);
+    });
   });
   return out;
 }
@@ -989,7 +1006,22 @@ function drawJobs(){
     + '<small>'+clean.length+'件'
     + (nBad?'　🔴'+nBad:'')+(nChk?'　🟡'+nChk:'')+'</small></div>';
 
-  $('body').innerHTML = strip + head + tray
+  // ★v8.43 キャンセル（「キャンセルも表示」のときだけ）。取り消し線で別の箱に出し、件数には数えない
+  let canHtml = '';
+  if(showCan()){
+    const cs = cancelledOf(DAY);
+    if(cs.length){
+      canHtml = '<div class="tray"><div class="th" style="color:#666">✖ キャンセル '+cs.length+'件</div>'
+        + cs.map(function(j){
+            return '<div class="tcard cn"'+(canEdit(j)?' onclick="openEdit(\''+esc(j.jobKey)+'\')"':'')+'>'
+                 + '<span class="p">'+esc(j.prop)
+                 +   '<small>'+esc(j.start||'--:--')+'〜'+esc(j.end||'--:--')
+                 +   ((j.staff||[]).length?' ／ '+esc(j.staff.join('・')):'')+'</small></span>'
+                 + '<span class="n">キャンセル'+(canEdit(j)&&j.isPast?'<em>タップで実施に戻せます</em>':'')+'</span></div>';
+          }).join('') + '</div>';
+    }
+  }
+  $('body').innerHTML = strip + head + tray + canHtml
     + (body || '<div class="center">この日はまだ誰も入っていません。</div>') + freeHtml;
 }
 
