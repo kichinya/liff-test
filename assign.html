@@ -59,6 +59,10 @@
         padding:11px 12px; margin-bottom:8px; }
   .job.bad{ border-color:#ef9a9a; background:#fffafa; }
   .job.past{ opacity:.62; }
+  /* ★v8.41 キャンセル（切り替えたときだけ出る） */
+  .job.can{ opacity:.55; border-style:dashed; }
+  .job.can .p{ text-decoration:line-through; }
+  .tag.can{ background:#eee; color:#555; }
   .job .top{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
   .job .d{ font-size:13px; font-weight:700; }
   .job .d .today{ color:#fff; background:var(--green); border-radius:6px;
@@ -337,6 +341,11 @@
       <label class="chk"><input type="checkbox" id="f-bad" onchange="draw()">
         <span>決まっていない日だけ</span></label>
     </div>
+    <!-- ★v8.41 キャンセルは切り替えたときだけ出す（件数には数えない） -->
+    <div class="r" id="r-can">
+      <label class="chk"><input type="checkbox" id="f-can" onchange="draw()">
+        <span>キャンセルも表示</span></label>
+    </div>
   </div>
 
   <div id="body"><div class="center">読み込み中…</div></div>
@@ -352,6 +361,8 @@
 </div>
 <div class="wrap" style="padding-top:0">
   <button class="rel" id="rel" onclick="reload()" style="display:none">🔄 最新の状態にする</button>
+  <!-- ★v8.41 過去の予定は押したときだけ読む -->
+  <button class="rel" id="pastbtn" onclick="loadPast()" style="display:none">🕘 過去の予定を直す（今月）</button>
   <!-- ★v8.30 予定の追加・取消（AssignAdd.gs）。読み込めた回だけ出す -->
   <button class="rel" id="mjbtn" onclick="openMJ()" style="display:none">➕ 予定の追加・取消</button>
   <div class="foot" id="foot"></div>
@@ -375,7 +386,10 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.40';   // ★v8.40 予約語 sid をやめて staffId で送る
+const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
+//   起動はこれまでどおり（昨日〜）。過去分は「過去の予定を直す」を押したときだけ読む（起動を遅くしない）
+let PAST_ON = false;       // ★v8.41 過去の予定を読み込んでいるか（保存のあとも読み直す）
+// const APP_VER = 'v8.40';   // ★v8.40 予約語 sid をやめて staffId で送る
 // 旧: 'v8.39'   // ★v8.39 対応物件に足す送信を fetch に（失敗の理由を出す）
 // 旧: 'v8.38'   // ★v8.38 対応物件にない方の開閉を「清掃の欄を閉じる」と同じボタンに
 // 旧: 'v8.37'   // ★v8.37 対応物件にない人を選んで、対応可物件に足してから担当に入れる（AssignAddProp.gs）
@@ -512,6 +526,7 @@ function tab(name){
   $('filt').style.display = 'block';
   $('r-prop').style.display = (name==='jobs') ? 'flex' : 'none';
   $('r-bad').style.display  = (name==='jobs') ? 'flex' : 'none';
+  $('r-can').style.display  = (name==='jobs') ? 'flex' : 'none';   // ★v8.41
   draw();
 }
 
@@ -561,8 +576,9 @@ function checkHtml(j){
 function jobHtml(j){
   if(j.kind === 'check') return checkHtml(j);
   const noStaff = !j.staff || !j.staff.length;
-  const editable = !j.isPast;                       // ★v7.45 過去は編集できない（F-8）
-  const cls = 'job' + (noStaff ? ' bad' : '') + (j.isPast ? ' past' : '') + (editable ? ' tap' : '');
+  const editable = canEdit(j);                      // ★v8.41 勤怠の締めまでは過去も直せる
+  const cls = 'job' + (noStaff && !j.cancelled ? ' bad' : '') + (j.isPast ? ' past' : '')
+            + (j.cancelled ? ' can' : '') + (editable ? ' tap' : '');
   const time = (j.start || '--:--') + '〜' + (j.end || '--:--');
   // ★v7.37 同日INは一番の事故要因（次のゲストが来るまでに終わらせないといけない）
   const isSameDay = !!(j.sameDay && j.sameDay!=='' && j.sameDay!=='×' && j.sameDay!=='なし');
@@ -614,6 +630,7 @@ function jobHtml(j){
     +     '<span class="d">'+esc(fmtMD(j.ymd))+'('+esc(j.wd)+')'
     +        (j.isToday ? '<span class="today">本日</span>' : '')+'</span>'
     +     '<span class="p">'+esc(j.prop)+'</span>'
+    +     (j.cancelled ? '<span class="tag can">キャンセル</span>' : '')   // ★v8.41
     +   '</div>'
     +   '<div class="rows">'
     +     '<span class="k">時間</span><span class="v">'+esc(time)
@@ -653,7 +670,8 @@ function dayList(){
   const seen = {}, out = [];
   (DATA.areas||[]).forEach(function(a){
     if(fa && a.id !== fa) return;
-    a.jobs.forEach(function(j){ if(!seen[j.ymd]){ seen[j.ymd]=1; out.push(j.ymd); } });
+    a.jobs.forEach(function(j){ if(!showCan() && j.cancelled) return;   // ★v8.41
+      if(!seen[j.ymd]){ seen[j.ymd]=1; out.push(j.ymd); } });
   });
   return out.sort();
 }
@@ -662,10 +680,16 @@ function jobsOf(ymd){
   const out = [];
   (DATA.areas||[]).forEach(function(a){
     if(fa && a.id !== fa) return;
-    a.jobs.forEach(function(j){ if(j.ymd===ymd) out.push(Object.assign({area:a.id, areaLabel:a.label}, j)); });
+    a.jobs.forEach(function(j){
+      if(!showCan() && j.cancelled) return;   // ★v8.41 キャンセルは切り替えたときだけ
+      if(j.ymd===ymd) out.push(Object.assign({area:a.id, areaLabel:a.label}, j)); });
   });
   return out;
 }
+// ★v8.41 キャンセルを出すか
+function showCan(){ try { return !!$('f-can').checked; } catch(e){ return false; } }
+// ★v8.41 直せるか。サーバーの editable を正とする（無い古い版は従来どおり過去は不可）
+function canEdit(j){ return (j.editable === undefined) ? !j.isPast : !!j.editable; }
 function staffOf(name){
   return (DATA.staff||[]).find(function(s){ return s.disp===name || s.name===name; });
 }
@@ -1195,6 +1219,7 @@ function openEdit(jobKey, fromCheck){
          memo:  '',                               // 縮めた理由
          note:  '',                               // ★v7.56 依頼するときの特記事項
          chkDate: j.chkDate||'', chkTime: j.chkTime||'',   // ★v7.57
+         setCancel: false, revive: false,           // ★v8.41 キャンセル↔実施（過去だけ）
          busy:  false, err: '' };
   drawEdit();
   $('ovl').classList.add('on');
@@ -1680,7 +1705,7 @@ function saveReorder(){
   var items = plan.filter(function(p){
     return p.start !== p.x.origStart || p.end !== p.x.origEnd;
   }).map(function(p){
-    return { row: p.x.j.row, jobKey: p.x.j.jobKey,
+    return { row: p.x.j.row, jobKey: p.x.j.jobKey, src: (p.x.j.src||'job'),   // ★v8.41
              ver: (p.x.j.ver==null?'':String(p.x.j.ver)),
              start: p.start, end: p.end };
   });
@@ -2091,6 +2116,7 @@ function drawEdit(){
           + '<br><span style="font-weight:400">押されるまでは「指名済（返事待ち）」です。'
           + '断られた場合はその方だけ担当から外れ、管理グループへ通知します。</span></div></div>'
         : '')
+    + pastHtml(j)   // ★v8.41 過去の予定：キャンセル↔実施
     + (info ? '<div class="sec">'+info+'</div>' : '')
     + (ED.err ? '<div class="sec"><div class="box ng">'+esc(ED.err)+'</div></div>' : '')
 
@@ -2117,10 +2143,22 @@ function showOwner(){
 function openOwner(jobKey){
   const o = (DATA.ownerJobs||[]).find(function(x){ return x.jobKey===jobKey; });
   if(!o) return;
-  ED = { j: { row:o.row, jobKey:o.jobKey, ver:o.ver, ymd:o.ymd, wd:'', prop:o.prop, pid:o.pid,
+  ED = { j: { row:o.row, src:(o.src||'job'), jobKey:o.jobKey, ver:o.ver, ymd:o.ymd, wd:'', prop:o.prop, pid:o.pid,
               start:'', end:'', std:'', staff:['オーナー'], chk:[], need:'' },
          staff:['オーナー'], chk:[], need:'', busy:false, err:'' };
   drawEdit();
+}
+
+// ★v8.41 過去の予定だけ。キャンセル↔実施の切り替えと、通知を送らないことの案内
+function pastHtml(j){
+  if(!j || !j.isPast) return '';
+  const b = j.cancelled
+    ? pillHtml(ED.revive ? '✅ 実施した（保存で戻します）' : '実施した（キャンセルを取り消す）', ED.revive, 'ED.revive=!ED.revive;drawEdit()')
+    : pillHtml(ED.setCancel ? '✅ キャンセルにする（保存で変わります）' : 'この清掃はキャンセルになった', ED.setCancel, 'ED.setCancel=!ED.setCancel;drawEdit()');
+  return '<div class="sec"><div class="lb">過去の予定</div>'
+       + '<div class="pills">'+b+'</div>'
+       + '<div class="box info" style="margin-top:9px;font-weight:400">過去の予定なので、保存しても本人への通知は送りません。'
+       + (j.cancelled ? '' : '<br>打刻が入っている清掃はキャンセルにできません。')+'</div></div>';
 }
 
 function saveEdit(){
@@ -2131,6 +2169,8 @@ function saveEdit(){
   //   触っていない項目まで送ると、サーバー側が「変更した」と誤判定する。
   //   清掃日が空の行は ymd がチェックアウト日で埋まるため、毎回「日付を変えた」ことになっていた。
   const it = { row: j.row, jobKey: j.jobKey, ver: (j.ver==null?'':String(j.ver)) };
+  if(j.src) it.src = j.src;                       // ★v8.41 job=清掃ジョブ / ar=実績アーカイブ
+  const baseN = Object.keys(it).length;           // ★v8.41 この数より多ければ変更あり
   const same = function(a,b){ return JSON.stringify(a)===JSON.stringify(b); };
   if(!same(ED.staff, j.staff||[]))    it.staff = ED.staff;
   if(!same(ED.chk,   j.chk||[]))      it.chk   = ED.chk;
@@ -2143,8 +2183,10 @@ function saveEdit(){
   if(!same(ED.times||{}, j.times||{}))     it.times   = ED.times||{};   // ★v8.42 人別の時刻
   if(ED.memo) it.memo = ED.memo;
   if(ED.note) it.note = ED.note;
+  if(ED.setCancel) it.cancel = true;              // ★v8.41
+  if(ED.revive)    it.revive = true;              // ★v8.41
 
-  if(Object.keys(it).length <= 3){
+  if(Object.keys(it).length <= baseN){
     ED.busy = false; ED.err = '変更されていません。'; drawEdit(); return;
   }
   const payload = { items: [it] };
@@ -2188,6 +2230,7 @@ function render(d){
   $('filt').style.display = 'block';
   $('r-prop').style.display = (TAB==='jobs') ? 'flex' : 'none';
   $('r-bad').style.display  = (TAB==='jobs') ? 'flex' : 'none';
+  $('r-can').style.display  = (TAB==='jobs') ? 'flex' : 'none';   // ★v8.41
 
   // ★v7.51 エリア → 物件 の順で絞る。エリアが1つだけの人には出さない
   const labels = d.areaLabels || {};
@@ -2208,7 +2251,9 @@ function render(d){
   //   ＝ 使える機能を、案内が塞いでいた。
   $('foot').innerHTML =
       '予定や未アサインの箱をタップすると<b>担当・募集人数・清掃日・時刻・チェック担当</b>を変えられます。<br>'
-    + '過去の予定は変更できません。移動時間は実測（Googleマップ）です。';
+    + '過去の予定は「過去の予定を直す」から、<b>'+esc(fmtMD(d.editFrom||d.today))+'</b> 以降なら直せます（勤怠の締めまで）。移動時間は実測（Googleマップ）です。';
+  // ★v8.41 アーカイブを読めなかったときだけ出す
+  if(d.archiveWarn){ $('msg').className='msg'; $('msg').textContent = d.archiveWarn; }
   draw();
 }
 
@@ -2718,6 +2763,39 @@ function oaMsg(text, isNg){
   }, 8000);
 }
 
+// ★v8.41 過去の予定（今月1日〜昨日）を読み、ふだんの予定に足す。スタッフ・候補は最初に読んだものを使う
+async function loadPast(keepDay){
+  if(!DATA) return;
+  const b = $('pastbtn'); if(b){ b.disabled = true; b.textContent = '過去の予定を読み込み中…'; }
+  try{
+    const res = await jsonp(GAS_URL+'?mode=ab_board&past=1&userId='+encodeURIComponent(me.userId));
+    if(!res || !res.ok){ oaMsg((res && res.message) || '過去の予定を読み込めませんでした。', true); return; }
+    const have = {};
+    (DATA.areas||[]).forEach(function(a){ a.jobs.forEach(function(j){ have[j.kind+'|'+j.jobKey+'|'+j.ymd] = 1; }); });
+    let n = 0;
+    (res.areas||[]).forEach(function(pa){
+      let a = (DATA.areas||[]).find(function(x){ return x.id===pa.id; });
+      if(!a){ a = { id: pa.id, label: pa.label, jobs: [] }; (DATA.areas = DATA.areas||[]).push(a); }
+      pa.jobs.forEach(function(j){
+        const k = j.kind+'|'+j.jobKey+'|'+j.ymd;
+        if(have[k]) return;                       // ふだんの表示と重なった分（昨日）は足さない
+        have[k] = 1; a.jobs.push(j); n++;
+      });
+    });
+    PAST_ON = true;
+    if(res.from && (!DATA.from || res.from < DATA.from)) DATA.from = res.from;
+    $('lead').textContent = DATA.name+' さん　'+fmtMD(DATA.from)+'〜'+fmtMD(DATA.to)+' の予定　'+APP_VER;
+    if(b) b.style.display = 'none';
+    if(res.archiveWarn) oaMsg(res.archiveWarn, true);
+    else if(!keepDay) oaMsg('過去の予定 '+n+'件を読み込みました（'+fmtMD(res.editFrom)+' 以降は直せます）。');
+    draw();
+  }catch(err){
+    oaMsg('過去の予定を読み込めませんでした。\n（'+err.message+'）', true);
+  }finally{
+    if(b){ b.disabled = false; b.textContent = '🕘 過去の予定を直す（今月）'; }
+  }
+}
+
 async function load(fresh){
   $('body').innerHTML='<div class="center">読み込み中…</div>';
   try{
@@ -2733,7 +2811,9 @@ async function load(fresh){
     }
     render(res);
     $('mjbtn').style.display='block';   // ★v8.30 権限が通った回だけ出す
+    $('pastbtn').style.display = PAST_ON ? 'none' : 'block';   // ★v8.41
     loadOa();                           // ★v8.36 オーナー承認待ち（失敗しても本体は出す）
+    if(PAST_ON) loadPast(true);         // ★v8.41 過去を開いていたら、保存のあとも読み直して足す
   }catch(err){
     showErr('読み込みに失敗しました。\n電波の良い場所でもう一度お試しください。\n\n（'+err.message+'）');
   }
