@@ -1379,7 +1379,15 @@ function stdMin(std){
 }
 // 清掃日として選べる範囲: チェックアウト日 〜 次回IN
 function dateRange(j){
-  const from = j.outD || j.ymd, to = j.nextIn || '';
+  let from = j.outD || j.ymd;
+  const to = j.nextIn || '';
+  // ★v8.41 手動で足した予定はチェックアウト日＝作業日。前の日にも動かせるよう、7日前（直せる最初の日まで）から出す
+  if(String(j.jobKey||'').indexOf('-MANUAL-') >= 0){
+    const b = new Date(new Date(j.ymd+'T00:00:00').getTime()-7*86400000);
+    let f = b.getFullYear()+'-'+('0'+(b.getMonth()+1)).slice(-2)+'-'+('0'+b.getDate()).slice(-2);
+    if(DATA && DATA.editFrom && f < DATA.editFrom) f = DATA.editFrom;
+    if(f < from) from = f;
+  }
   const out = [];
   let d = new Date((from<j.ymd?from:j.ymd)+'T00:00:00');
   const end = to ? new Date(to+'T00:00:00') : new Date(new Date(j.ymd+'T00:00:00').getTime()+3*86400000);
@@ -1846,7 +1854,9 @@ function drawEdit(){
     if(k === '研修' || k === '稼働前') return false;
     return (k === '独り立ち') || !datesOk;   // ★v7.80 列が読めていないときは従来どおり
   });
-  const needChk = nowN > 0 && !hasSolo;
+  // ★v8.41 外注が入っている回はチェック不要（あなたの確定 2026-11-16・サーバー AssignBoard.gs と同じ判定）
+  const hasGai = ED.staff.indexOf('外注') >= 0;
+  const needChk = nowN > 0 && !hasSolo && !hasGai;
   const isOwner = ED.staff.indexOf('オーナー') >= 0;
 
   // ★v7.57 チェック欄を出すかどうか
@@ -2035,7 +2045,8 @@ function drawEdit(){
                           hn || '', isRedDay(d) ? 'hol' : ''); }).join('')
     +   '</div>'
     +   (j.outD ? '<div style="font-size:11px;color:#666;margin-top:6px">'
-        + 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません</div>' : '')
+        + (String(j.jobKey||'').indexOf('-MANUAL-') >= 0 ? '手動で足した予定は前後の日に動かせます（次回INより後には動かせません）'
+           : 'チェックアウト '+esc(fmtMD(j.outD))+' より前、次回INより後には動かせません')+'</div>' : '')
     + '</div>'
     + '<div class="sec" style="padding-top:0"><button class="pill" onclick="toggleClean()">'
     +   '▲ 清掃の欄を閉じる</button></div>'
