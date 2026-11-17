@@ -390,7 +390,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.43';   // ★v8.43 キャンセルを別の箱に取り消し線で出す（人ごとの予定・件数には入れない）
+const APP_VER = 'v8.44';   // ★v8.44 予定の編集画面からオプション（BBQ等）を変えられる
+// const APP_VER = 'v8.43';   // ★v8.43 キャンセルを別の箱に取り消し線で出す（人ごとの予定・件数には入れない）
 // const APP_VER = 'v8.42';   // ★v8.42 スタッフタブから独り立ちを申請（代表が承認）
 // const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
 //   起動はこれまでどおり（昨日〜）。過去分は「過去の予定を直す」を押したときだけ読む（起動を遅くしない）
@@ -2171,6 +2172,7 @@ function drawEdit(){
           + '<br><span style="font-weight:400">押されるまでは「指名済（返事待ち）」です。'
           + '断られた場合はその方だけ担当から外れ、管理グループへ通知します。</span></div></div>'
         : '')
+    + optHtml(j)    // ★v8.44 オプション（BBQ等）。保存は ⚙️ オプションの画面と同じ mj_opt
     + pastHtml(j)   // ★v8.41 過去の予定：キャンセル↔実施
     + (info ? '<div class="sec">'+info+'</div>' : '')
     + (ED.err ? '<div class="sec"><div class="box ng">'+esc(ED.err)+'</div></div>' : '')
@@ -2205,6 +2207,24 @@ function openOwner(jobKey){
 }
 
 // ★v8.41 過去の予定だけ。キャンセル↔実施の切り替えと、通知を送らないことの案内
+/* ★v8.44 予定の編集画面から、オプションを変える入口。
+   あなたの指示 2026-11-17「稲村ヶ崎で後からBBQが追加になったが清掃ジョブからしか変更できなかった」
+   ・変える処理は ➕ 予定の追加・取消 → ⚙️ オプション と同じもの（mj_opt）を使う。2か所に作らない。
+   ・出さない回：チェック／キャンセル／実績アーカイブに移った回（サーバーが清掃ジョブしか直さないため） */
+function optEditable(j){
+  return j && j.kind !== 'check' && !j.cancelled && j.src !== 'ar';
+}
+function optHtml(j){
+  if(!optEditable(j)) return '';
+  return '<div class="sec"><div class="lb">オプション</div>'
+       + '<div style="display:flex;align-items:center;gap:8px">'
+       +   '<span style="flex:1;font-size:14px">いま: <b>'+esc(j.opt||'なし')+'</b></span>'
+       +   '<button class="pill" onclick="openOptFromEdit(\''+esc(j.jobKey)+'\')">⚙️ 変更する</button></div></div>';
+}
+function openOptFromEdit(jobKey){
+  closeEdit();
+  openMJ({ tab:'opt', key: jobKey });
+}
 function pastHtml(j){
   if(!j || !j.isPast) return '';
   const b = j.cancelled
@@ -2341,8 +2361,9 @@ let MJ = null;   // {tab, opt, busy, err, done, form, pick}
   document.head.appendChild(st);
 })();
 
-function openMJ(){
-  MJ = { tab:'add', opt:null, busy:true, err:'', done:'', pick:'',
+function openMJ(preset){
+  const pre = preset || null;   // ★v8.44 {tab:'opt', key} … 予定の編集画面から来たとき
+  MJ = { tab:(pre && pre.tab) || 'add', forceKey:(pre && pre.key) || '', opt:null, busy:true, err:'', done:'', pick:'',
          epick:'', euse:'', ebbq:false,          // ★v8.33 オプション編集
          form:{ pid:'', date:todayYmd_(), kind:'', ci:'', co:'', start:'',
                 use:'', bbq:false, need:'', memo:'' } };   // ★v8.31
@@ -2353,6 +2374,7 @@ function openMJ(){
       MJ.busy=false;
       if(!r || !r.ok){ MJ.err = (r && r.message) || '選択肢を読めませんでした。'; }
       else { MJ.opt = r; MJ.form.kind = (r.cleanTypes && r.cleanTypes[0]) || '通常清掃'; }
+      if(MJ.opt && MJ.forceKey){ mjEPick(MJ.forceKey); return; }   // ★v8.44 その回を選んだ状態で開く
       drawMJ();
     })
     .catch(function(e){ MJ.busy=false; MJ.err='通信に失敗しました（'+e.message+'）'; drawMJ(); });
@@ -2395,7 +2417,9 @@ function mjOptJobs(){
   (DATA && DATA.areas || []).forEach(function(a){
     (a.jobs||[]).forEach(function(j){
       if(j.kind === 'check') return;
-      if(pids.indexOf(j.pid) < 0 && !String(j.opt||'')) return;
+      if(j.cancelled || j.src === 'ar') return;   // ★v8.44 サーバーが直せない回は出さない
+      // ★v8.44 予定の編集画面から来た回は、オプションが空でも出す（後からBBQを足す）
+      if(pids.indexOf(j.pid) < 0 && !String(j.opt||'') && j.jobKey !== MJ.forceKey) return;
       out.push(j);
     });
   });
