@@ -390,7 +390,8 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.47';   // ★v8.47 新人登録は公式LINEのボタン→入力画面→管理グループで承認。ここは一覧だけ
+const APP_VER = 'v8.48';   // ★v8.48 新人の一覧に「いま何番目のお願いか」を出す
+// const APP_VER = 'v8.47';   // ★v8.47 新人登録は公式LINEのボタン→入力画面→管理グループで承認。ここは一覧だけ
 // const APP_VER = 'v8.46';   // ★v8.46 新人登録は番号の発行だけ（氏名・Gmailは本人がLINEで送る）
 // const APP_VER = 'v8.45';   // ★v8.45 スタッフタブから新しいスタッフを登録（登録コードでLINEを結び付け）
 // const APP_VER = 'v8.44';   // ★v8.44 予定の編集画面からオプション（BBQ等）を変えられる
@@ -2900,7 +2901,7 @@ function sobHtml(){
     + items.map(function(x){
         return '<div style="font-size:13px;margin:4px 0">'+esc(x.id)+'　<b>'+esc(x.st)+'</b>　'
           + (x.sid ? esc(x.sid)+' ' : '') + esc(x.name || '')
-          + (x.st==='登録済' ? '　案内 '+(x.welcome?'✓':'未')+'・契約書 '+(x.contract?'✓':'未') : '')
+          + (x.st==='案内中' ? '　'+esc(x.welcome||'') : '')   // ★v8.48 いま何番目のお願いか（例 2/5 対応できる物件）
           + '</div>'; }).join('')
     + (items.some(function(x){ return x.st==='承認待ち'; }) ? '<div style="font-size:12px;color:#888;margin-top:4px">承認待ちは、管理グループの［登録する］［登録しない］で判断します。</div>' : '')
     + '</div>';
