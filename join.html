@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>清掃スタッフの登録</title>
-<!-- ★v1.00 2026-11-17 新規（StaffOnboard.gs v20.85）
+<!-- ★v1.01 Gmailの説明を、これまでのあいさつメッセージと同じ用途（清掃カレンダー）に直した
+     ★v1.00 2026-11-17 新規（StaffOnboard.gs v20.85）
      公式LINEの［清掃スタッフとして登録する］ボタンから開く。姓・名・Gmail を送ると、管理グループに承認ボタンが届く。
      本人のLINEかどうかは、URLの t（GASが署名した文字列）で GAS 側が判定する。この画面では判定しない。 -->
 <style>
@@ -31,7 +32,7 @@
     <input id="mei" autocomplete="given-name" maxlength="15" placeholder="花子">
     <label for="mail">Gmail</label>
     <input id="mail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="hanako.yamada@gmail.com">
-    <div class="ex">業務の連絡と書類の共有に使います。</div>
+    <div class="ex">あなた専用の清掃カレンダーをお渡しするために使います。</div>
     <button id="go" onclick="send()">送信する</button>
   </div>
   <div id="msg"></div>
