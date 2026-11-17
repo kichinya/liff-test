@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>清掃スタッフの登録</title>
+<!-- ★v1.00 2026-11-17 新規（StaffOnboard.gs v20.85）
+     公式LINEの［清掃スタッフとして登録する］ボタンから開く。姓・名・Gmail を送ると、管理グループに承認ボタンが届く。
+     本人のLINEかどうかは、URLの t（GASが署名した文字列）で GAS 側が判定する。この画面では判定しない。 -->
+<style>
+  body{font-family:-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;margin:0;background:#f6f7f9;color:#222}
+  .wrap{max-width:480px;margin:0 auto;padding:20px 16px 40px}
+  h1{font-size:19px;margin:6px 0 18px}
+  label{display:block;font-size:14px;font-weight:600;margin:14px 0 6px}
+  input{width:100%;box-sizing:border-box;font-size:17px;padding:12px;border:1px solid #ccd;border-radius:8px;background:#fff}
+  .ex{font-size:12px;color:#888;margin-top:4px}
+  button{width:100%;margin-top:24px;font-size:17px;font-weight:700;padding:14px;border:0;border-radius:10px;background:#06c755;color:#fff}
+  button:disabled{background:#9bd8b3}
+  .box{margin-top:16px;padding:12px;border-radius:8px;font-size:14px;line-height:1.6;white-space:pre-wrap}
+  .ng{background:#fdecea;color:#a12622}
+  .ok{background:#e8f6ee;color:#14633a;font-size:15px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>清掃スタッフの登録</h1>
+  <div id="form">
+    <label for="sei">姓</label>
+    <input id="sei" autocomplete="family-name" maxlength="15" placeholder="山田">
+    <label for="mei">名</label>
+    <input id="mei" autocomplete="given-name" maxlength="15" placeholder="花子">
+    <label for="mail">Gmail</label>
+    <input id="mail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" placeholder="hanako.yamada@gmail.com">
+    <div class="ex">業務の連絡と書類の共有に使います。</div>
+    <button id="go" onclick="send()">送信する</button>
+  </div>
+  <div id="msg"></div>
+</div>
+<script>
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx_ubqKRZeQfNL7qIiElNzE0iTjvq7487Hzx3xor8P4M-u55hF7-EL0n8G-5nYofc_sXg/exec';
+const T = new URLSearchParams(location.search).get('t') || '';
+function $(id){ return document.getElementById(id); }
+function show(text, ok){ $('msg').innerHTML = '<div class="box '+(ok?'ok':'ng')+'"></div>'; $('msg').firstChild.textContent = text; }
+function jsonp(url){
+  return new Promise(function(resolve, reject){
+    const cb = '_cb' + Date.now() + Math.floor(Math.random()*1000);
+    const s = document.createElement('script');
+    const timer = setTimeout(function(){ cleanup(); reject(new Error('timeout')); }, 30000);
+    function cleanup(){ clearTimeout(timer); try{ delete window[cb]; }catch(e){ window[cb]=undefined; } s.remove(); }
+    window[cb] = function(d){ cleanup(); resolve(d); };
+    s.onerror = function(){ cleanup(); reject(new Error('network')); };
+    s.src = url + '&callback=' + cb;
+    document.body.appendChild(s);
+  });
+}
+if(!T){ $('form').style.display='none'; show('このページは開けません。公式LINEのトークに「登録」と送ると、登録ボタンが届きます。', false); }
+async function send(){
+  const sei = $('sei').value.trim(), mei = $('mei').value.trim(), mail = $('mail').value.trim();
+  if(!sei || !mei){ show('「姓」と「名」を入力してください。', false); return; }
+  if(!/@(gmail|googlemail)\.com$/i.test(mail)){ show('Gmailのアドレス（@gmail.com）を入力してください。', false); return; }
+  const btn = $('go'); btn.disabled = true; btn.textContent = '送信しています…';
+  try{
+    const r = await jsonp(GAS_URL+'?mode=sob_apply&t='+encodeURIComponent(T)+'&sei='+encodeURIComponent(sei)
+                          +'&mei='+encodeURIComponent(mei)+'&mail='+encodeURIComponent(mail));
+    if(r && r.ok){ $('form').style.display='none'; show(r.message, true); return; }
+    show((r && r.message) || '送信できませんでした。', false);
+  }catch(e){ show('通信できませんでした。電波の良いところで、もう一度送信してください。', false); }
+  btn.disabled = false; btn.textContent = '送信する';
+}
+</script>
+</body>
+</html>

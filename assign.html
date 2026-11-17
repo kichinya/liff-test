@@ -390,7 +390,10 @@ const $ = function(id){ return document.getElementById(id); };
 // ★v7.42 日付の書き方を1か所に集約。予定=8/29(土) / シフト=8/29（0詰めなし）
 // ★v7.43 画面に版数を出す。LINEはキャッシュが強く「どのファイルを見ているか」が分からなくなる。
 //   ここが古いままなら、エンドポイントURLの ?v= を上げてください。
-const APP_VER = 'v8.44';   // ★v8.44 予定の編集画面からオプション（BBQ等）を変えられる
+const APP_VER = 'v8.47';   // ★v8.47 新人登録は公式LINEのボタン→入力画面→管理グループで承認。ここは一覧だけ
+// const APP_VER = 'v8.46';   // ★v8.46 新人登録は番号の発行だけ（氏名・Gmailは本人がLINEで送る）
+// const APP_VER = 'v8.45';   // ★v8.45 スタッフタブから新しいスタッフを登録（登録コードでLINEを結び付け）
+// const APP_VER = 'v8.44';   // ★v8.44 予定の編集画面からオプション（BBQ等）を変えられる
 // const APP_VER = 'v8.43';   // ★v8.43 キャンセルを別の箱に取り消し線で出す（人ごとの予定・件数には入れない）
 // const APP_VER = 'v8.42';   // ★v8.42 スタッフタブから独り立ちを申請（代表が承認）
 // const APP_VER = 'v8.41';   // ★v8.41 過去の予定（勤怠の締めまで）を直せる／キャンセルは切り替えで表示
@@ -1064,7 +1067,8 @@ function drawStaff(){
   })();
 
   // ★v7.36 稼働していない人はサーバー側で外してあるので、ここは全員が稼働中
-  let h = '<div class="sum">'
+  if(SOB.items === null && !SOB.loading) sobLoad();   // ★v8.45 登録中の新人
+  let h = sobHtml() + '<div class="sum">'
     + '<div><b>'+st.length+'</b><span>稼働中</span></div>'
     + '<div class="warn"><b>'+st.filter(function(x){return x.kind==='研修';}).length+'</b><span>研修中</span></div>'
     + '<div class="bad"><b>'+st.filter(function(x){return !x.move;}).length+'</b><span>移動手段 未設定</span></div>'
@@ -2876,6 +2880,32 @@ async function loadPast(keepDay){
 }
 
 // ★v8.42 独り立ちの申請（SoloReq.gs）。反映は代表の承認後
+/* ★★v8.45 新しいスタッフの登録（StaffOnboard.gs）あなたの確定 2026-11-17
+   ★v8.47 番号の発行をやめた。新人は公式LINEの［清掃スタッフとして登録する］から申請し、
+     管理グループの［登録する］で登録される。ここは「申請中・送付中」の一覧を見るだけ（無ければ何も出さない） */
+let SOB = { loading:false, items:null };
+async function sobLoad(){
+  SOB.loading = true;
+  try{
+    const r = await jsonp(GAS_URL+'?mode=sob_list&userId='+encodeURIComponent(me.userId));
+    SOB.items = (r && r.ok) ? (r.items||[]) : [];
+  }catch(e){ SOB.items = []; }
+  SOB.loading = false;
+  if(TAB==='staff') drawStaff();
+}
+function sobHtml(){
+  const items = SOB.items || [];
+  if(!items.length) return '';
+  return '<div class="sec"><div class="lb">登録の申請中・送付中の新人</div>'
+    + items.map(function(x){
+        return '<div style="font-size:13px;margin:4px 0">'+esc(x.id)+'　<b>'+esc(x.st)+'</b>　'
+          + (x.sid ? esc(x.sid)+' ' : '') + esc(x.name || '')
+          + (x.st==='登録済' ? '　案内 '+(x.welcome?'✓':'未')+'・契約書 '+(x.contract?'✓':'未') : '')
+          + '</div>'; }).join('')
+    + (items.some(function(x){ return x.st==='承認待ち'; }) ? '<div style="font-size:12px;color:#888;margin-top:4px">承認待ちは、管理グループの［登録する］［登録しない］で判断します。</div>' : '')
+    + '</div>';
+}
+
 async function soloReq(sid){
   const inp = $('so-'+sid), btn = $('sob-'+sid);
   const d = inp ? inp.value : '';
